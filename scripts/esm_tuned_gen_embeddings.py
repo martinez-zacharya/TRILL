@@ -3,7 +3,6 @@ import pandas as pd
 import numpy as np
 import glob
 import re
-import requests
 import io
 import torch
 from argparse import Namespace
