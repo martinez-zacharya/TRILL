@@ -55,6 +55,6 @@ def generate_embedding_transformer_t12(model,batch_converter,dat,dat_name,out_di
     return
 
 batch_converter = alphabet.get_batch_converter()
-out_dir = "../data/kif"
+out_dir = "../data"
 generate_embedding_transformer_t12(model_t12,batch_converter,vp1s,"vp1s",out_dir,seq_col = 1)
 
