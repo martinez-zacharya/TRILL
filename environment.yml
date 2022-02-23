@@ -103,7 +103,7 @@ dependencies:
   - pysocks=1.7.1=py38h06a4308_0
   - python=3.8.12=h12debd9_0
   - python-dateutil=2.8.2=pyhd3eb1b0_0
-  - pytorch=1.10.2
+  - pytorch
   - pytz=2021.3=pyhd3eb1b0_0
   - pyviz_comms=2.0.2=pyhd3eb1b0_0
   - pyyaml=6.0=py38h7f8727e_1
