@@ -4,7 +4,7 @@ channels:
 dependencies:
   - biopython
   - tqdm
-  - torch
+  - pytorch
   - bokeh
   - holoviews
   - pandas
