@@ -1,5 +1,5 @@
 # DistantHomologyDetection
-Detecting distant homologies using DL
+Detecting functional relationships between proteins using DL
 
 ## Quick Tutorial:
 
