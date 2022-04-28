@@ -63,15 +63,15 @@ if __name__ == "__main__":
 	lr = int(args.lr)
 	epochs = int(args.epochs)
 
-	FineTuneQueryValidation(query)
-	FineTuneDatabaseValidation(database)
+	FineTuneQueryValidation(name, query)
+	FineTuneDatabaseValidation(name, database)
 
-	finetune('query_df.csv', name, lr, epochs)
+	finetune(f'{name}_query_df.csv', name, lr, epochs)
 
 	model_name = 'esm_t12_85M_UR50S_' + name + '.pt'
-	embed(model_name, 'query_df.csv', 'database_df.csv', name)
+	embed(model_name, f'{name}_query_df.csv', f'{name}_database_df.csv', name)
 
-	master_db = pd.concat([pd.read_csv('query_df_labeled.csv'), pd.read_csv('database_df_labeled.csv')], axis = 0).reset_index(drop = True)
+	master_db = pd.concat([pd.read_csv(f'{name}_query_df_labeled.csv'), pd.read_csv(f'{name}_database_df_labeled.csv')], axis = 0).reset_index(drop = True)
 
 	tsnedf = tsne(name, master_db)
 
