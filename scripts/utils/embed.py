@@ -21,6 +21,7 @@ def generate_embedding_transformer_t12(model,batch_converter,dat,name,seq_col):
 	if device == 'gpu':
 		model.cuda()
 	sequence_embeddings = []
+	model = nn.DataParallel(model)
 	for epoch in range(dat.shape[0]):
 		data = [(dat.iloc[epoch, 1], dat.iloc[epoch, seq_col])]
 		_, _, batch_tokens = batch_converter(data)

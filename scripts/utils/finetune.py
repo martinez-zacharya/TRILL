@@ -37,6 +37,8 @@ def finetune(infile, tuned_name, lr, epochs):
 	model.load_state_dict(model_state)
 	if device == 'gpu':
 		model.cuda()
+
+	model = nn.DataParallel(model)
 	model.train()
 
 	batch_converter = alphabet.get_batch_converter()

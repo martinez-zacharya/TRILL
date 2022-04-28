@@ -3,7 +3,7 @@ import os
 from Bio import SeqIO
 
 
-def FineTuneQueryValidation(fastaInput):
+def FineTuneQueryValidation(name, fastaInput):
     if not fastaInput.endswith('.fasta'):
         raise ValueError('Input needs to be in .fasta format.')
     if os.stat(fastaInput).st_size == 0:
@@ -13,7 +13,7 @@ def FineTuneQueryValidation(fastaInput):
         raise ValueError("Invalid space in either header or sequence")
 
     fastas = SeqIO.parse(fastaInput, 'fasta')
-    output_df = open('query_df.csv', 'w')
+    output_df = open(f'{name}_query_df.csv', 'w')
     output_df.write('Gene,Sequence\n')
     
     for fasta in fastas:
@@ -23,13 +23,13 @@ def FineTuneQueryValidation(fastaInput):
         output_df.write(name + ',' + seq + '\n')
     output_df.close()
 
-    query = pd.read_csv('query_df.csv')
+    query = pd.read_csv(f'{name}_query_df.csv')
     query['Label'] = 1
-    query.to_csv('query_df_labeled.csv')
+    query.to_csv(f'{name}_query_df_labeled.csv')
 
     return True
 
-def FineTuneDatabaseValidation(fastaInput):
+def FineTuneDatabaseValidation(name, fastaInput):
     if not fastaInput.endswith('.fasta'):
         raise ValueError('Input needs to be in .fasta format.')
     if os.stat(fastaInput).st_size == 0:
@@ -39,7 +39,7 @@ def FineTuneDatabaseValidation(fastaInput):
         raise ValueError("Invalid space in either header or sequence")
 
     fastas = SeqIO.parse(fastaInput, 'fasta')
-    output_df = open('database_df.csv', 'w')
+    output_df = open(f'{name}_database_df.csv', 'w')
     output_df.write('Gene,Sequence\n')
     
     for fasta in fastas:
@@ -49,9 +49,9 @@ def FineTuneDatabaseValidation(fastaInput):
         output_df.write(name + ',' + seq + '\n')
     output_df.close()
 
-    database = pd.read_csv('database_df.csv')
+    database = pd.read_csv(f'{name}_database_df.csv')
     database['Label'] = 0
-    database.to_csv('database_df_labeled.csv')
+    database.to_csv(f'{name}_database_df_labeled.csv')
 
     return True
 
