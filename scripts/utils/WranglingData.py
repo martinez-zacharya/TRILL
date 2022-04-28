@@ -17,10 +17,10 @@ def FineTuneQueryValidation(name, fastaInput):
     output_df.write('Gene,Sequence\n')
     
     for fasta in fastas:
-        name, seq = fasta.id, str(fasta.seq)
-        if ',' in name or ',' in seq:
+        header, seq = fasta.id, str(fasta.seq)
+        if ',' in header or ',' in seq:
             raise ValueError("Invalid character in file - ','")
-        output_df.write(name + ',' + seq + '\n')
+        output_df.write(header + ',' + seq + '\n')
     output_df.close()
 
     query = pd.read_csv(f'{name}_query_df.csv')
@@ -43,10 +43,10 @@ def FineTuneDatabaseValidation(name, fastaInput):
     output_df.write('Gene,Sequence\n')
     
     for fasta in fastas:
-        name, seq = fasta.id, str(fasta.seq)
-        if ',' in name or ',' in seq:
+        header, seq = fasta.id, str(fasta.seq)
+        if ',' in header or ',' in seq:
             raise ValueError("Invalid character in file - ','")
-        output_df.write(name + ',' + seq + '\n')
+        output_df.write(header + ',' + seq + '\n')
     output_df.close()
 
     database = pd.read_csv(f'{name}_database_df.csv')
