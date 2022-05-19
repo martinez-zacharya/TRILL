@@ -54,6 +54,18 @@ if __name__ == "__main__":
 		default=300,
 		dest="epochs",
 )
+	parser.add_argument(
+		"--noTrain",
+		help="Skips the fine-tuning and embeds the query and database sequences with the raw model",
+ 		action="store_true",
+		dest="noTrain",
+)
+	parser.add_argument(
+		"--preTrained_model",
+		help="Input path to your own pre-trained ESM model",
+		action="store",
+		dest="preTrained_model",
+)
 
 	args = parser.parse_args()
 
@@ -62,17 +74,43 @@ if __name__ == "__main__":
 	database = args.database
 	lr = int(args.lr)
 	epochs = int(args.epochs)
+	noTrain_flag = args.noTrain
+	preTrained_model = args.preTrained_model
 
-	FineTuneQueryValidation(name, query)
-	FineTuneDatabaseValidation(name, database)
+	# This is for when you just want to embed the raw sequences
+	if noTrain_flag == True:
+		FineTuneQueryValidation(name, query)
+		FineTuneDatabaseValidation(name, database)
 
-	finetune(f'{name}_query_df.csv', name, lr, epochs)
+		embed('N', f'{name}_query_df.csv', f'{name}_database_df.csv', name)
 
-	model_name = 'esm_t12_85M_UR50S_' + name + '.pt'
-	embed(model_name, f'{name}_query_df.csv', f'{name}_database_df.csv', name)
+		master_db = pd.concat([pd.read_csv(f'{name}_query_df_labeled.csv'), pd.read_csv(f'{name}_database_df_labeled.csv')], axis = 0).reset_index(drop = True)
 
-	master_db = pd.concat([pd.read_csv(f'{name}_query_df_labeled.csv'), pd.read_csv(f'{name}_database_df_labeled.csv')], axis = 0).reset_index(drop = True)
+		tsnedf = tsne(name, master_db)
 
-	tsnedf = tsne(name, master_db)
+		scatter_viz(tsnedf)
+	elif preTrained_model != '':
+		FineTuneQueryValidation(name, query)
+		FineTuneDatabaseValidation(name, database)
 
-	scatter_viz(tsnedf)
+		embed(preTrained_model, f'{name}_query_df.csv', f'{name}_database_df.csv', name)
+
+		master_db = pd.concat([pd.read_csv(f'{name}_query_df_labeled.csv'), pd.read_csv(f'{name}_database_df_labeled.csv')], axis = 0).reset_index(drop = True)
+
+		tsnedf = tsne(name, master_db)
+
+		scatter_viz(tsnedf)
+	else:
+		FineTuneQueryValidation(name, query)
+		FineTuneDatabaseValidation(name, database)
+
+		finetune(f'{name}_query_df.csv', name, lr, epochs)
+
+		model_name = 'esm_t12_85M_UR50S_' + name + '.pt'
+		embed(model_name, f'{name}_query_df.csv', f'{name}_database_df.csv', name)
+
+		master_db = pd.concat([pd.read_csv(f'{name}_query_df_labeled.csv'), pd.read_csv(f'{name}_database_df_labeled.csv')], axis = 0).reset_index(drop = True)
+
+		tsnedf = tsne(name, master_db)
+
+		scatter_viz(tsnedf)
