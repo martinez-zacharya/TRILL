@@ -89,7 +89,7 @@ if __name__ == "__main__":
 		tsnedf = tsne(name, master_db)
 
 		scatter_viz(tsnedf)
-	elif preTrained_model != '':
+	elif preTrained_model != False:
 		FineTuneQueryValidation(name, query)
 		FineTuneDatabaseValidation(name, database)
 
