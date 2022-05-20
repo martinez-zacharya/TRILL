@@ -38,7 +38,7 @@ def finetune(infile, tuned_name, lr, epochs):
 	if device == 'gpu':
 		model.cuda()
 
-	dat_loader = torch.utils.data.DataLoader(dat, batch_size = 100, shuffle = True, num_workers=64)
+	dat_loader = torch.utils.data.DataLoader(dat, batch_size = 100, shuffle = True, num_workers=64, pin_memory = True)
 	model = nn.DataParallel(model)
 	model.train()
 
