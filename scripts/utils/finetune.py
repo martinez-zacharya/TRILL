@@ -38,6 +38,7 @@ def finetune(infile, tuned_name, lr, epochs):
 	if device == 'gpu':
 		model.cuda()
 
+	dat_loader = torch.utils.data.DataLoader(dat, batch_size = 100, shuffle = True, num_workers=64)
 	model = nn.DataParallel(model)
 	model.train()
 
@@ -48,15 +49,15 @@ def finetune(infile, tuned_name, lr, epochs):
 	start_time = time.time()
 
 	for j in tqdm(range(epochs)):
-		dat = dat.sample(frac = 1)
-		for i in range(dat.shape[0]):
-			if len(dat.iloc[i,1])>1024:
-				seq = dat.iloc[i,1][:1023]
+		# dat = dat.sample(frac = 1)
+		for i, data in enumerate(dat_loader):
+			label, seq = data
+			if len(seq)>1024:
+				seq = seq[:1023]
 			else:
-				seq = dat.iloc[i,1]
-			lab = dat.iloc[i,0]
-			data = [(lab, seq)]
-			batch_labels, batch_strs, batch_tokens = batch_converter(data)
+				seq = seq
+			processed_data = [(label, seq)]
+			batch_labels, batch_strs, batch_tokens = batch_converter(processed_data)
 			true_aa,target_ind,masked_batch_tokens = prepare_mlm_mask(alphabet,batch_tokens)
 			optimizer.zero_grad()
 			if device == 'gpu':
@@ -69,7 +70,7 @@ def finetune(infile, tuned_name, lr, epochs):
 			loss = criterion(pred.cpu(),target)
 			loss.backward()
 			optimizer.step()
-
+		print(j, loss)
 			torch.save(model.state_dict(), f"esm_t12_85M_UR50S_{tuned_name}.pt")
 
 	return True
