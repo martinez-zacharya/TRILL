@@ -27,10 +27,10 @@ def generate_embedding_transformer_t12(model,batch_converter,dat,name,seq_col):
 		_, _, batch_tokens = batch_converter(data)
 		with torch.no_grad():
 			if device == 'gpu':
-				results = model(batch_tokens.to('cuda'), repr_layers=[12])
+				results = model(batch_tokens.to('cuda'), repr_layers=[34])
 			else:
-				results = model(batch_tokens.to('cpu'), repr_layers=[12])
-			token_embeddings = results["representations"][12]
+				results = model(batch_tokens.to('cpu'), repr_layers=[34])
+			token_embeddings = results["representations"][34]
 			seq = dat.iloc[epoch,seq_col]
 			sequence_embeddings.append(token_embeddings[0, 1:len(seq) + 1].mean(0).cpu().detach().numpy())
 
@@ -54,17 +54,20 @@ def embed(tuned_model, query, database, name):
 	model_args = {pra(arg[0]): arg[1] for arg in vars(model_data["args"]).items()}
 	if tuned_model != 'N' or '':
 		model_state_12 = torch.load(tuned_model)
-	else:
-		model_state_12 = {prs(arg[0]): arg[1] for arg in model_data["model"].items()}
+		model_t12 = esm.ProteinBertModel(Namespace(**model_args), len(alphabet), padding_idx=alphabet.padding_idx)
+		model_t12.load_state_dict(model_state_12)
+	# else:
+	# 	model_state_12 = {prs(arg[0]): arg[1] for arg in model_data["model"].items()}
 
-	model_t12 = esm.ProteinBertModel(Namespace(**model_args), len(alphabet), padding_idx=alphabet.padding_idx)
-	model_t12.load_state_dict(model_state_12)
+	# model_t12 = esm.ProteinBertModel(Namespace(**model_args), len(alphabet), padding_idx=alphabet.padding_idx)
+	# model_t12.load_state_dict(model_state_12)
 
 	q = pd.read_csv(query)
 	db = pd.read_csv(database)
 
 	master_db = pd.concat([q, db], axis = 0)
 	batch_converter = alphabet.get_batch_converter()
+
 	generate_embedding_transformer_t12(model_t12,batch_converter,master_db,name,seq_col = 1)
 
 	return True
