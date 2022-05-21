@@ -70,7 +70,7 @@ def finetune(infile, tuned_name, lr, epochs):
 			loss = criterion(pred.cpu(),target)
 			loss.backward()
 			optimizer.step()
-		print(j, loss)
 			torch.save(model.state_dict(), f"esm_t12_85M_UR50S_{tuned_name}.pt")
+		print(j, loss)
 
 	return True
