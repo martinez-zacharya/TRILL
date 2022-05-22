@@ -27,10 +27,10 @@ def generate_embedding_transformer_t12(model,batch_converter,dat,name,seq_col):
 		_, _, batch_tokens = batch_converter(data)
 		with torch.no_grad():
 			if device == 'gpu':
-				results = model(batch_tokens.to('cuda'), repr_layers=[34])
+				results = model(batch_tokens.to('cuda'), repr_layers=[12])
 			else:
-				results = model(batch_tokens.to('cpu'), repr_layers=[34])
-			token_embeddings = results["representations"][34]
+				results = model(batch_tokens.to('cpu'), repr_layers=[12])
+			token_embeddings = results["representations"][12]
 			seq = dat.iloc[epoch,seq_col]
 			sequence_embeddings.append(token_embeddings[0, 1:len(seq) + 1].mean(0).cpu().detach().numpy())
 
