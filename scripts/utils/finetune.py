@@ -49,28 +49,28 @@ def finetune(infile, tuned_name, lr, epochs):
 	start_time = time.time()
 
 	for j in tqdm(range(epochs)):
-		# dat = dat.sample(frac = 1)
 		for i, data in enumerate(dat_loader):
 			label, seq = data
-			if len(seq)>1024:
-				seq = seq[:1023]
-			else:
-				seq = seq
-			processed_data = [(label, seq)]
-			batch_labels, batch_strs, batch_tokens = batch_converter(processed_data)
-			true_aa,target_ind,masked_batch_tokens = prepare_mlm_mask(alphabet,batch_tokens)
-			optimizer.zero_grad()
-			if device == 'gpu':
-				results = model(masked_batch_tokens.to('cuda'), repr_layers=[34])   
-			else:
-				results = model(masked_batch_tokens.to('cpu'), repr_layers=[34])   
+			print(data)
+	# 		if len(seq) > 1024:
+	# 			seq = seq[:1023]
+	# 		else:
+	# 			seq = seq
+	# 		processed_data = [(label, seq)]
+	# 		batch_labels, batch_strs, batch_tokens = batch_converter(processed_data)
+	# 		true_aa,target_ind,masked_batch_tokens = prepare_mlm_mask(alphabet,batch_tokens)
+	# 		optimizer.zero_grad()
+	# 		if device == 'gpu':
+	# 			results = model(masked_batch_tokens.to('cuda'), repr_layers=[34])   
+	# 		else:
+	# 			results = model(masked_batch_tokens.to('cpu'), repr_layers=[34])   
 
-			pred = results["logits"].squeeze(0)[target_ind,:]   
-			target = true_aa.squeeze(0)
-			loss = criterion(pred.cpu(),target)
-			loss.backward()
-			optimizer.step()
-			torch.save(model.state_dict(), f"esm_t12_85M_UR50S_{tuned_name}.pt")
-		print(j, loss)
+	# 		pred = results["logits"].squeeze(0)[target_ind,:]   
+	# 		target = true_aa.squeeze(0)
+	# 		loss = criterion(pred.cpu(),target)
+	# 		loss.backward()
+	# 		optimizer.step()
+	# 		torch.save(model.state_dict(), f"esm_t12_85M_UR50S_{tuned_name}.pt")
+	# 	print(j, loss)
 
-	return True
+	# return True
