@@ -57,7 +57,7 @@ def embed(tuned_model, query, database, name):
 	model_t12 = esm.ProteinBertModel(Namespace(**model_args), len(alphabet), padding_idx=alphabet.padding_idx)
 
 	if tuned_model != 'N' or '':
-		model_t12.load_state_dict(torch.load(tuned_model))
+		model_t12.torch.load(tuned_model)
 	else:
 		model_state_12 = {prs(arg[0]): arg[1] for arg in model_data["model"].items()}
 		model_t12.load_state_dict(model_state_12)
