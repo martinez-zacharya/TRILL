@@ -40,6 +40,7 @@ def generate_embedding_transformer_t12(model,batch_converter,dat,name,seq_col):
 	np.save('../data/' + name + ".npy", sequence_embeddings)
 
 def embed(tuned_model, query, database, name):
+	torch.save(tuned_model.state_dict(), .)
 	alphabet = esm.Alphabet.from_dict(proteinseq_toks)
 	if torch.cuda.is_available():
 		device = 'gpu'
@@ -54,11 +55,11 @@ def embed(tuned_model, query, database, name):
 	pra = lambda s: ''.join(s.split('decoder_')[1:] if 'decoder' in s else s)
 	prs = lambda s: ''.join(s.split('decoder.')[1:] if 'decoder' in s else s)
 	model_args = {pra(arg[0]): arg[1] for arg in vars(model_data["args"]).items()}
-	model_t12 = esm.ProteinBertModel(Namespace(**model_args), len(alphabet), padding_idx=alphabet.padding_idx)
 
 	if tuned_model != 'N' or '':
-		model_t12.load(tuned_model)
+		model_t12 = torch.load(tuned_model)
 	else:
+		model_t12 = esm.ProteinBertModel(Namespace(**model_args), len(alphabet), padding_idx=alphabet.padding_idx)
 		model_state_12 = {prs(arg[0]): arg[1] for arg in model_data["model"].items()}
 		model_t12.load_state_dict(model_state_12)
 
