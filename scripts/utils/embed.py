@@ -12,6 +12,8 @@ from argparse import Namespace
 from esm.constants import proteinseq_toks
 from esm.modules import TransformerLayer, PositionalEmbedding  # noqa
 from esm.model import ProteinBertModel
+from tqdm import tqdm
+
 
 def generate_embedding_transformer_t12(model,batch_converter,dat,name,seq_col):
 	if torch.cuda.is_available():
@@ -22,7 +24,7 @@ def generate_embedding_transformer_t12(model,batch_converter,dat,name,seq_col):
 		model.cuda()
 	sequence_embeddings = []
 	model = nn.DataParallel(model)
-	for epoch in range(dat.shape[0]):
+	for epoch in tqdm(range(dat.shape[0])):
 		data = [(dat.iloc[epoch, 1], dat.iloc[epoch, seq_col])]
 		_, _, batch_tokens = batch_converter(data)
 		with torch.no_grad():
@@ -52,12 +54,13 @@ def embed(tuned_model, query, database, name):
 	pra = lambda s: ''.join(s.split('decoder_')[1:] if 'decoder' in s else s)
 	prs = lambda s: ''.join(s.split('decoder.')[1:] if 'decoder' in s else s)
 	model_args = {pra(arg[0]): arg[1] for arg in vars(model_data["args"]).items()}
+	model_t12 = esm.ProteinBertModel(Namespace(**model_args), len(alphabet), padding_idx=alphabet.padding_idx)
+
 	if tuned_model != 'N' or '':
-		model_t12 = torch.load(tuned_model)
+		model_t12.load_state_dict(torch.load(tuned_model))
 	else:
 		model_state_12 = {prs(arg[0]): arg[1] for arg in model_data["model"].items()}
 		model_t12.load_state_dict(model_state_12)
-		model_t12 = esm.ProteinBertModel(Namespace(**model_args), len(alphabet), padding_idx=alphabet.padding_idx)
 
 
 	# model_t12 = esm.ProteinBertModel(Namespace(**model_args), len(alphabet), padding_idx=alphabet.padding_idx)
