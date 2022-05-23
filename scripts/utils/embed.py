@@ -40,7 +40,7 @@ def generate_embedding_transformer_t12(model,batch_converter,dat,name,seq_col):
 	np.save('../data/' + name + ".npy", sequence_embeddings)
 
 def embed(tuned_model, query, database, name):
-	torch.save(tuned_model.state_dict(), .)
+	torch.save(tuned_model.state_dict(), 'pre-trained.pth')
 	alphabet = esm.Alphabet.from_dict(proteinseq_toks)
 	if torch.cuda.is_available():
 		device = 'gpu'
