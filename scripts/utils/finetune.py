@@ -20,7 +20,7 @@ def finetune(infile, tuned_name, lr, epochs):
 		device = 'gpu'
 	else:
 		device = 'cpu'
-	url = "https://dl.fbaipublicfiles.com/fair-esm/models/esm1_t12_85M_UR50S.pt"
+	url = "https://dl.fbaipublicfiles.com/fair-esm/models/esm1b_t33_650M_UR50S.pt"
 	if device == 'gpu':
 		model_data = torch.hub.load_state_dict_from_url(url, progress=False)
 	else:
