@@ -84,15 +84,15 @@ def load_model_and_alphabet_core(model_data, regression_data=None):
     if model_data["args"].arch == "roberta_large":
         # upgrade state dict
         pra = lambda s: "".join(s.split("encoder_")[1:] if "encoder" in s else s)
-        prs1 = lambda s: "".join(s.split("encoder.")[1:] if "encoder" in s else s)
-        prs2 = lambda s: "".join(
-            s.split("sentence_encoder.")[1:] if "sentence_encoder" in s else s
-        )
-        model_args = {pra(arg[0]): arg[1] for arg in vars(model_data["args"]).items()}
-        model_state = {prs1(prs2(arg[0])): arg[1] for arg in model_data["model"].items()}
-        model_state["embed_tokens.weight"][alphabet.mask_idx].zero_()  # For token drop
-        model_args["emb_layer_norm_before"] = has_emb_layer_norm_before(model_state)
-        model_type = esm.ProteinBertModel
+        # prs1 = lambda s: "".join(s.split("encoder.")[1:] if "encoder" in s else s)
+        # prs2 = lambda s: "".join(
+        #     s.split("sentence_encoder.")[1:] if "sentence_encoder" in s else s
+        # )
+        # model_args = {pra(arg[0]): arg[1] for arg in vars(model_data["args"]).items()}
+        # model_state = {prs1(prs2(arg[0])): arg[1] for arg in model_data["model"].items()}
+        # model_state["embed_tokens.weight"][alphabet.mask_idx].zero_()  # For token drop
+        # model_args["emb_layer_norm_before"] = has_emb_layer_norm_before(model_state)
+        # model_type = esm.ProteinBertModel
 
     elif model_data["args"].arch == "protein_bert_base":
 
