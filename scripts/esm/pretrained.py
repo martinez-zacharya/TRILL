@@ -61,13 +61,12 @@ def load_model_and_alphabet_local(model_location):
     model_location = Path(model_location)
     model_data = torch.load(str(model_location), map_location="cpu")
     model_name = model_location.stem
-    # if _has_regression_weights(model_name):
-    #     regression_location = str(model_location.with_suffix("")) + "-contact-regression.pt"
-    #     regression_data = torch.load(regression_location, map_location="cpu")
-    # else:
-    #     regression_data = None
-    # return load_model_and_alphabet_core(model_data, regression_data)
-    return load_model_and_alphabet_core(model_data, None)
+    if _has_regression_weights(model_name):
+        regression_location = str(model_location.with_suffix("")) + "-contact-regression.pt"
+        regression_data = torch.load(regression_location, map_location="cpu")
+    else:
+        regression_data = None
+    return load_model_and_alphabet_core(model_data, regression_data)
 
 
 def has_emb_layer_norm_before(model_state):
@@ -82,71 +81,71 @@ def load_model_and_alphabet_core(model_data, regression_data=None):
 
     alphabet = esm.Alphabet.from_dict(proteinseq_toks)
 
-    # if model_data["args"].arch == "roberta_large":
-    #     # upgrade state dict
-    #     pra = lambda s: "".join(s.split("encoder_")[1:] if "encoder" in s else s)
-    #     prs1 = lambda s: "".join(s.split("encoder.")[1:] if "encoder" in s else s)
-    #     prs2 = lambda s: "".join(
-    #         s.split("sentence_encoder.")[1:] if "sentence_encoder" in s else s
-    #     )
-    #     model_args = {pra(arg[0]): arg[1] for arg in vars(model_data["args"]).items()}
-    #     model_state = {prs1(prs2(arg[0])): arg[1] for arg in model_data["model"].items()}
-    #     model_state["embed_tokens.weight"][alphabet.mask_idx].zero_()  # For token drop
-    #     model_args["emb_layer_norm_before"] = has_emb_layer_norm_before(model_state)
-    #     model_type = esm.ProteinBertModel
+    if model_data["args"].arch == "roberta_large":
+        # upgrade state dict
+        pra = lambda s: "".join(s.split("encoder_")[1:] if "encoder" in s else s)
+        prs1 = lambda s: "".join(s.split("encoder.")[1:] if "encoder" in s else s)
+        prs2 = lambda s: "".join(
+            s.split("sentence_encoder.")[1:] if "sentence_encoder" in s else s
+        )
+        model_args = {pra(arg[0]): arg[1] for arg in vars(model_data["args"]).items()}
+        model_state = {prs1(prs2(arg[0])): arg[1] for arg in model_data["model"].items()}
+        model_state["embed_tokens.weight"][alphabet.mask_idx].zero_()  # For token drop
+        model_args["emb_layer_norm_before"] = has_emb_layer_norm_before(model_state)
+        model_type = esm.ProteinBertModel
 
-    # elif model_data["args"].arch == "protein_bert_base":
+    elif model_data["args"].arch == "protein_bert_base":
 
     # upgrade state dict
-    pra = lambda s: "".join(s.split("decoder_")[1:] if "decoder" in s else s)
-    prs = lambda s: "".join(s.split("decoder.")[1:] if "decoder" in s else s)
-    model_args = {pra(arg[0]): arg[1] for arg in vars(model_data["args"]).items()}
-    model_state = {prs(arg[0]): arg[1] for arg in model_data["model"].items()}
-    model_type = esm.ProteinBertModel
-#     elif model_data["args"].arch == "msa_transformer":
+        pra = lambda s: "".join(s.split("decoder_")[1:] if "decoder" in s else s)
+        prs = lambda s: "".join(s.split("decoder.")[1:] if "decoder" in s else s)
+        model_args = {pra(arg[0]): arg[1] for arg in vars(model_data["args"]).items()}
+        model_state = {prs(arg[0]): arg[1] for arg in model_data["model"].items()}
+        model_type = esm.ProteinBertModel
+    elif model_data["args"].arch == "msa_transformer":
 
 #         # upgrade state dict
-#         pra = lambda s: "".join(s.split("encoder_")[1:] if "encoder" in s else s)
-#         prs1 = lambda s: "".join(s.split("encoder.")[1:] if "encoder" in s else s)
-#         prs2 = lambda s: "".join(
-#             s.split("sentence_encoder.")[1:] if "sentence_encoder" in s else s
-#         )
-#         prs3 = lambda s: s.replace("row", "column") if "row" in s else s.replace("column", "row")
-#         model_args = {pra(arg[0]): arg[1] for arg in vars(model_data["args"]).items()}
-#         model_state = {prs1(prs2(prs3(arg[0]))): arg[1] for arg in model_data["model"].items()}
-#         if model_args.get("embed_positions_msa", False):
-#             emb_dim = model_state["msa_position_embedding"].size(-1)
-#             model_args["embed_positions_msa_dim"] = emb_dim  # initial release, bug: emb_dim==1
+        pra = lambda s: "".join(s.split("encoder_")[1:] if "encoder" in s else s)
+        prs1 = lambda s: "".join(s.split("encoder.")[1:] if "encoder" in s else s)
+        prs2 = lambda s: "".join(
+            s.split("sentence_encoder.")[1:] if "sentence_encoder" in s else s
+        )
+        prs3 = lambda s: s.replace("row", "column") if "row" in s else s.replace("column", "row")
+        model_args = {pra(arg[0]): arg[1] for arg in vars(model_data["args"]).items()}
+        model_state = {prs1(prs2(prs3(arg[0]))): arg[1] for arg in model_data["model"].items()}
+        if model_args.get("embed_positions_msa", False):
+            emb_dim = model_state["msa_position_embedding"].size(-1)
+            model_args["embed_positions_msa_dim"] = emb_dim  # initial release, bug: emb_dim==1
 
-#         model_type = esm.MSATransformer
+        model_type = esm.MSATransformer
 
-#     elif "invariant_gvp" in model_data["args"].arch:
-#         import esm.inverse_folding
-#         model_type = esm.inverse_folding.gvp_transformer.GVPTransformerModel 
-#         model_args = vars(model_data["args"]) # convert Namespace -> dict
+    elif "invariant_gvp" in model_data["args"].arch:
+        import esm.inverse_folding
+        model_type = esm.inverse_folding.gvp_transformer.GVPTransformerModel 
+        model_args = vars(model_data["args"]) # convert Namespace -> dict
 
-#         def update_name(s):
-#             # Map the module names in checkpoints trained with internal code to
-#             # the updated module names in open source code
-#             s = s.replace("W_v", "embed_graph.embed_node")
-#             s = s.replace("W_e", "embed_graph.embed_edge")
-#             s = s.replace("embed_scores.0", "embed_confidence")
-#             s = s.replace("embed_score.", "embed_graph.embed_confidence.")
-#             s = s.replace("seq_logits_projection.", "")
-#             s = s.replace("embed_ingraham_features", "embed_dihedrals")
-#             s = s.replace("embed_gvp_in_local_frame.0", "embed_gvp_output")
-#             s = s.replace("embed_features_in_local_frame.0",
-#             "embed_gvp_input_features")
-#             return s
+        def update_name(s):
+            # Map the module names in checkpoints trained with internal code to
+            # the updated module names in open source code
+            s = s.replace("W_v", "embed_graph.embed_node")
+            s = s.replace("W_e", "embed_graph.embed_edge")
+            s = s.replace("embed_scores.0", "embed_confidence")
+            s = s.replace("embed_score.", "embed_graph.embed_confidence.")
+            s = s.replace("seq_logits_projection.", "")
+            s = s.replace("embed_ingraham_features", "embed_dihedrals")
+            s = s.replace("embed_gvp_in_local_frame.0", "embed_gvp_output")
+            s = s.replace("embed_features_in_local_frame.0",
+            "embed_gvp_input_features")
+            return s
 
-        # model_state = {
-        #     update_name(sname): svalue for sname, svalue in
-        #     model_data["model"].items()
-        #     if "version" not in sname
-        # }
+        model_state = {
+            update_name(sname): svalue for sname, svalue in
+            model_data["model"].items()
+            if "version" not in sname
+        }
 
-    # else:
-    #     raise ValueError("Unknown architecture selected")
+    else:
+        raise ValueError("Unknown architecture selected")
 
     model = model_type(
         Namespace(**model_args),
