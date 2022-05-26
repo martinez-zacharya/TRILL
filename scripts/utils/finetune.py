@@ -9,7 +9,7 @@ from tqdm import tqdm
 from argparse import Namespace
 from esm.constants import proteinseq_toks
 from esm.pretrained import esm1b_t33_650M_UR50S
-from esm.modules import TransformerLayer, PositionalEmbedding
+from esm.modules import TransformerLayer
 from esm.model import ProteinBertModel
 from ych_util import prepare_mlm_mask
 
