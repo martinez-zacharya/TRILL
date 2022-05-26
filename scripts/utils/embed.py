@@ -10,7 +10,7 @@ import torch.nn.functional as F
 import esm
 from argparse import Namespace
 from esm.constants import proteinseq_toks
-from esm.modules import TransformerLayer, PositionalEmbedding  # noqa
+from esm.modules import TransformerLayer # noqa
 from esm.model import ProteinBertModel
 from tqdm import tqdm
 
