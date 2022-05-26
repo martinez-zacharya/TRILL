@@ -17,7 +17,7 @@ def finetune(infile, tuned_name, lr, epochs):
 	dat = pd.read_csv(infile)
 	dat = dat.sample(frac = 1)
 
-	model, alphabet = esm.pretrained.esm1b_t33_650M_UR50S()
+	model, alphabet = esm1b_t33_650M_UR50S()
 
 	# alphabet = esm.Alphabet.from_dict(proteinseq_toks)
 	if torch.cuda.is_available():
