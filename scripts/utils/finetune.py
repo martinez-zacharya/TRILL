@@ -15,16 +15,19 @@ from ych_util import prepare_mlm_mask
 def finetune(infile, tuned_name, lr, epochs):
 	dat = pd.read_csv(infile)
 	dat = dat.sample(frac = 1)
-	alphabet = esm.Alphabet.from_dict(proteinseq_toks)
+
+	model, alphabet = esm.pretrained.esm1b_t33_650M_UR50S()
+
+	# alphabet = esm.Alphabet.from_dict(proteinseq_toks)
 	if torch.cuda.is_available():
 		device = 'gpu'
 	else:
 		device = 'cpu'
-	url = "https://dl.fbaipublicfiles.com/fair-esm/models/esm1b_t33_650M_UR50S.pt"
-	if device == 'gpu':
-		model_data = torch.hub.load_state_dict_from_url(url, progress=False)
-	else:
-		model_data = torch.hub.load_state_dict_from_url(url, progress=False, map_location=torch.device('cpu'))
+	# url = "https://dl.fbaipublicfiles.com/fair-esm/models/esm1b_t33_650M_UR50S.pt"
+	# if device == 'gpu':
+	# 	model_data = torch.hub.load_state_dict_from_url(url, progress=False)
+	# else:
+	# 	model_data = torch.hub.load_state_dict_from_url(url, progress=False, map_location=torch.device('cpu'))
 
 	pra = lambda s: ''.join(s.split('decoder_')[1:] if 'decoder' in s else s)
 	prs = lambda s: ''.join(s.split('decoder.')[1:] if 'decoder' in s else s)
@@ -60,16 +63,16 @@ def finetune(infile, tuned_name, lr, epochs):
 			true_aa,target_ind,masked_batch_tokens = prepare_mlm_mask(alphabet,batch_tokens)
 			optimizer.zero_grad()
 			if device == 'gpu':
-				results = model(masked_batch_tokens.to('cuda'), repr_layers=[34])   
+				results = model(masked_batch_tokens.to('cuda'), repr_layers=[33])   
 			else:
-				results = model(masked_batch_tokens.to('cpu'), repr_layers=[34])   
+				results = model(masked_batch_tokens.to('cpu'), repr_layers=[33])   
 
 			pred = results["logits"].squeeze(0)[target_ind,:]   
 			target = true_aa.squeeze(0)
 			loss = criterion(pred.cpu(),target)
 			loss.backward()
 			optimizer.step()
-			torch.save(model.state_dict(), f"esm_t12_85M_UR50S_{tuned_name}.pt")
+			torch.save(model.state_dict(), f"esm1b_t33_650M_UR50S_{tuned_name}.pt")
 		print(j, loss)
 
 	return True
