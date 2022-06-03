@@ -104,13 +104,15 @@ if __name__ == "__main__":
 		FineTuneQueryValidation(name, query)
 		FineTuneDatabaseValidation(name, database)
 
-		finetune(f'{name}_query_df.csv', name, lr, epochs)
+		# finetune(f'{name}_query_df.csv', name, lr, epochs)
+		finetune(query, name, lr, epochs)
+
 
 		model_name = 'esm_t12_85M_UR50S_' + name + '.pt'
 		embed(model_name, f'{name}_query_df.csv', f'{name}_database_df.csv', name)
 
-		master_db = pd.concat([pd.read_csv(f'{name}_query_df_labeled.csv'), pd.read_csv(f'{name}_database_df_labeled.csv')], axis = 0).reset_index(drop = True)
+		# master_db = pd.concat([pd.read_csv(f'{name}_query_df_labeled.csv'), pd.read_csv(f'{name}_database_df_labeled.csv')], axis = 0).reset_index(drop = True)
 
-		tsnedf = tsne(name, master_db)
+		# tsnedf = tsne(name, master_db)
 
-		scatter_viz(tsnedf)
+		# scatter_viz(tsnedf)
