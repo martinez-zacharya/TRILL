@@ -5,75 +5,63 @@ import torch.nn.functional as F
 import esm
 import pandas as pd
 import time
+import sys
+import numpy as np
 from tqdm import tqdm
+sys.path.insert(0, '../esm')
 from argparse import Namespace
 from esm.constants import proteinseq_toks
-from esm.pretrained import esm1b_t33_650M_UR50S
+from esm.pretrained import esm1b_t33_650M_UR50S, esm1_t12_85M_UR50S
 from esm.modules import TransformerLayer
 from esm.model import ProteinBertModel
+from esm.data import FastaBatchedDataset
 from ych_util import prepare_mlm_mask
+from torch.utils.data import Dataset
 
 def finetune(infile, tuned_name, lr, epochs):
-	dat = pd.read_csv(infile)
-	dat = dat.sample(frac = 1)
+# 	dat = pd.read_csv(infile, names = ['Protein', 'Seq'])
+	dat = FastaBatchedDataset.from_file('some_proteins.fasta')
+# 	model, alphabet = esm1b_t33_650M_UR50S()
+	model_, alphabet = esm1_t12_85M_UR50S()
 
-	model, alphabet = esm1b_t33_650M_UR50S()
-
-	# alphabet = esm.Alphabet.from_dict(proteinseq_toks)
 	if torch.cuda.is_available():
-		device = 'gpu'
+		device = "cuda"
+		model_ = model_.cuda()
 	else:
-		device = 'cpu'
-	# url = "https://dl.fbaipublicfiles.com/fair-esm/models/esm1b_t33_650M_UR50S.pt"
-	# if device == 'gpu':
-	# 	model_data = torch.hub.load_state_dict_from_url(url, progress=False)
-	# else:
-	# 	model_data = torch.hub.load_state_dict_from_url(url, progress=False, map_location=torch.device('cpu'))
+		device = "cpu"
 
-	pra = lambda s: ''.join(s.split('decoder_')[1:] if 'decoder' in s else s)
-	prs = lambda s: ''.join(s.split('decoder.')[1:] if 'decoder' in s else s)
-	model_args = {pra(arg[0]): arg[1] for arg in vars(model_data["args"]).items()}
-	model_state = {prs(arg[0]): arg[1] for arg in model_data["model"].items()}
-	model = esm.ProteinBertModel(
-		Namespace(**model_args), len(alphabet), padding_idx=alphabet.padding_idx
-    )
+	dat_loader = torch.utils.data.DataLoader(dat, batch_size = 1, num_workers=1, shuffle = True, collate_fn=alphabet.get_batch_converter())
 
-	model.load_state_dict(model_state)
-	if device == 'gpu':
-		model.cuda()
+	model_ = nn.DataParallel(model_)
+	model_.train()
 
-	dat_loader = torch.utils.data.DataLoader(dat, batch_size = 100, shuffle = True, num_workers=64, pin_memory = True)
-	model = nn.DataParallel(model)
-	model.train()
-
-	batch_converter = alphabet.get_batch_converter()
 	criterion = nn.CrossEntropyLoss()
-	optimizer = torch.optim.Adam(model.parameters(), lr=lr)
+	optimizer = torch.optim.Adam(model_.parameters(), lr=lr)
 	scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer)
-	start_time = time.time()
 
 	for j in tqdm(range(epochs)):
-		for i, data in enumerate(dat_loader):
-			label, seq = data
+		for i, (labels, seq, toks) in enumerate(dat_loader):
 			if len(seq) > 1024:
-				seq = seq[:1023]
+				seq = seq[:1022]
+				toks = toks[:1022]
 			else:
 				seq = seq
-			processed_data = [(label, seq)]
-			batch_labels, batch_strs, batch_tokens = batch_converter(processed_data)
-			true_aa,target_ind,masked_batch_tokens = prepare_mlm_mask(alphabet,batch_tokens)
+				toks = toks
+			true_aa,target_ind,masked_batch_tokens = prepare_mlm_mask(alphabet,toks)
 			optimizer.zero_grad()
-			if device == 'gpu':
-				results = model(masked_batch_tokens.to('cuda'), repr_layers=[33])   
-			else:
-				results = model(masked_batch_tokens.to('cpu'), repr_layers=[33])   
+			if device == 'cuda':
+				masked_batch_tokens = masked_batch_tokens.to(device = 'cuda', non_blocking=True)
+				results = model_(tokens = masked_batch_tokens, repr_layers=[12])   
 
+			else:
+				results = model_(masked_batch_tokens.to('cpu'), repr_layers=[12])
+                
 			pred = results["logits"].squeeze(0)[target_ind,:]   
 			target = true_aa.squeeze(0)
-			loss = criterion(pred.cpu(),target)
+			loss = criterion(pred.cuda(),target.cuda())
 			loss.backward()
 			optimizer.step()
-			torch.save(model.state_dict(), f"esm1b_t33_650M_UR50S_{tuned_name}.pt")
+			torch.save(model_.state_dict(), f"esm1_t12_85M_UR50S_{tuned_name}.pt")
 		print(j, loss)
 
 	return True
