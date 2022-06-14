@@ -26,7 +26,7 @@ from torch.nn.parallel import DistributedDataParallel as DDP
 os.environ['CUDA_LAUNCH_BLOCKING'] = '1'
 os.environ['TORCH_DISTRIBUTED_DEBUG'] = 'DETAIL'
 
-def finetune(gpu, fasta, args, tuned_name, lr, epochs, world_size):
+def finetune(gpu, fasta, tuned_name, lr, epochs, world_size):
 	rank = os.environ['SLURM_JOB_NUM_NODES'] * len(os.environ['SLURM_JOB_GPUS']) + gpu                          
 	torch.manual_seed(0)
 	ip_add = subprocess.run(["nslookup", hostname], stdout = subprocess.PIPE)
