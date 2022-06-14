@@ -81,7 +81,7 @@ if __name__ == "__main__":
 	noTrain_flag = args.noTrain
 	preTrained_model = args.preTrained_model
 
-	world_size = len(os.environ['SLURM_JOB_GPUS']) * os.environ['SLURM_JOB_NUM_NODES']
+	world_size = len(os.environ['SLURM_JOB_GPUS']) * int(os.environ['SLURM_JOB_NUM_NODES'])
 
 	# This is for when you just want to embed the raw sequences
 	if noTrain_flag == True:
