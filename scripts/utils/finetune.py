@@ -65,7 +65,7 @@ def finetune(gpu, fasta, args, tuned_name, lr, epochs, world_size):
     
 	start = datetime.now()
 
-	for j in tqdm(range(epochs):
+	for j in tqdm(range(epochs)):
 		for i, (labels, seq, toks) in enumerate(dat_loader):
 
 			if len(seq) > 1024:
