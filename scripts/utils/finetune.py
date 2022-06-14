@@ -29,6 +29,7 @@ os.environ['TORCH_DISTRIBUTED_DEBUG'] = 'DETAIL'
 def finetune(gpu, fasta, tuned_name, lr, epochs, world_size):
 	rank = int(os.environ['SLURM_JOB_NUM_NODES']) * len(os.environ['SLURM_JOB_GPUS']) + int(gpu)                          
 	torch.manual_seed(0)
+	hostname = os.environ['SLURM_JOB_NODELIST']
 	ip_add = subprocess.run(["nslookup", hostname], stdout = subprocess.PIPE)
 	ip = ip_add.stdout.decode("utf-8")
 	ip = ip.split('\t')
