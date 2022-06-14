@@ -60,12 +60,14 @@ if __name__ == "__main__":
 		"--noTrain",
 		help="Skips the fine-tuning and embeds the query and database sequences with the raw model",
  		action="store_true",
+		default = False,
 		dest="noTrain",
 )
 	parser.add_argument(
 		"--preTrained_model",
 		help="Input path to your own pre-trained ESM model",
 		action="store",
+		default = False,
 		dest="preTrained_model",
 )
 
