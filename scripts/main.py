@@ -1,6 +1,7 @@
 import sys
 import argparse
 import pandas as pd
+import torch.multiprocessing as mp
 sys.path.insert(0, 'utils')
 from WranglingData import (
 	FineTuneQueryValidation,
@@ -77,6 +78,8 @@ if __name__ == "__main__":
 	noTrain_flag = args.noTrain
 	preTrained_model = args.preTrained_model
 
+	world_size = len(os.environ['SLURM_JOB_GPUS']) * os.environ['SLURM_JOB_NUM_NODES']
+
 	# This is for when you just want to embed the raw sequences
 	if noTrain_flag == True:
 		FineTuneQueryValidation(name, query)
@@ -104,9 +107,7 @@ if __name__ == "__main__":
 		FineTuneQueryValidation(name, query)
 		FineTuneDatabaseValidation(name, database)
 
-		# finetune(f'{name}_query_df.csv', name, lr, epochs)
-		finetune(query, name, lr, epochs)
-
+		mp.spawn(finetune, nprocs = len(os.environ['SLURM_JOB_GPUS']), args = (query,name, lr, epochs, world_size))
 
 		model_name = 'esm_t12_85M_UR50S_' + name + '.pt'
 		embed(model_name, f'{name}_query_df.csv', f'{name}_database_df.csv', name)
