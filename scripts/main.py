@@ -20,7 +20,7 @@ from visualize import (
 	scatter_viz
 	)
 
-if __name__ == "__main__":
+def main():
 
 	parser = argparse.ArgumentParser()
 
@@ -120,3 +120,6 @@ if __name__ == "__main__":
 		# tsnedf = tsne(name, master_db)
 
 		# scatter_viz(tsnedf)
+
+if __name__ == '__main__':
+  main()
