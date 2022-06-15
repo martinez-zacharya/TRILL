@@ -40,7 +40,7 @@ def finetune(gpu, fasta, tuned_name, lr, epochs, world_size):
 	ip = ip[1]
 	print(ip)
 
-	#os.environ['MASTER_ADDR'] = ip
+	os.environ['MASTER_ADDR'] = ip
 	os.environ['MASTER_PORT'] = '12345'
 	dist.init_process_group(                                   
     backend='nccl',                                         
