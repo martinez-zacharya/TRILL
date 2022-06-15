@@ -37,7 +37,7 @@ def finetune(gpu, fasta, tuned_name, lr, epochs, world_size):
 	ip = ip.split('\n')
 	ip = ip.pop(0)
 	ip = ip.split(' ')
-	ip = ip[1]
+	# ip = ip[1]
 	print(ip)
 
 	#os.environ['MASTER_ADDR'] = ip
