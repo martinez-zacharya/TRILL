@@ -44,7 +44,8 @@ def finetune(gpu, fasta, tuned_name, lr, epochs, world_size):
 	os.environ['MASTER_PORT'] = '8888'
 	dist.init_process_group(                                   
     backend='nccl',                                         
-   	init_method='env://',                                   
+   	init_method='env://',
+   	timeout = datetime.timedelta(seconds = 600)                                   
     world_size=world_size,                              
     rank=rank                                               
     )  
