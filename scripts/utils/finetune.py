@@ -20,6 +20,7 @@ from esm.model import ProteinBertModel
 from esm.data import FastaBatchedDataset
 from mlm import prepare_mlm_mask
 from torch.utils.data import Dataset
+import datetime
 import subprocess
 import torch.multiprocessing as mp
 from torch.nn.parallel import DistributedDataParallel as DDP
