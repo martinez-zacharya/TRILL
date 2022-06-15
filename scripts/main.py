@@ -83,6 +83,25 @@ def main():
 
 	world_size = len(os.environ['SLURM_JOB_GPUS']) * int(os.environ['SLURM_JOB_NUM_NODES'])
 
+	hostname = os.environ['SLURM_JOB_NODELIST']
+	ip_add = subprocess.run(["nslookup", hostname], stdout = subprocess.PIPE)
+	ip = ip_add.stdout.decode("utf-8")
+	ip = ip.split('\t')
+	ip = ip.pop(-1)
+	ip = ip.split('\n')
+	ip = ip.pop(1)
+	ip = ip.split(' ')
+	ip = ip[1]
+
+	os.environ['MASTER_ADDR'] = ip
+	os.environ['MASTER_PORT'] = '8888'
+	dist.init_process_group(                                   
+    backend='nccl',                                         
+   	init_method='env://',
+   	timeout = datetime.timedelta(seconds = 300),                                   
+    world_size=world_size,                              
+    rank=rank 
+
 	# This is for when you just want to embed the raw sequences
 	if noTrain_flag == True:
 		FineTuneQueryValidation(name, query)

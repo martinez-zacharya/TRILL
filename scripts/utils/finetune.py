@@ -30,26 +30,26 @@ os.environ['TORCH_DISTRIBUTED_DEBUG'] = 'DETAIL'
 def finetune(gpu, fasta, tuned_name, lr, epochs, world_size):
 	rank = int(os.environ['SLURM_JOB_NUM_NODES']) * len(os.environ['SLURM_JOB_GPUS']) + int(gpu)                          
 	torch.manual_seed(0)
-	hostname = os.environ['SLURM_JOB_NODELIST']
-	ip_add = subprocess.run(["nslookup", hostname], stdout = subprocess.PIPE)
-	ip = ip_add.stdout.decode("utf-8")
-	ip = ip.split('\t')
-	ip = ip.pop(-1)
-	ip = ip.split('\n')
-	ip = ip.pop(1)
-	ip = ip.split(' ')
-	ip = ip[1]
+	# hostname = os.environ['SLURM_JOB_NODELIST']
+	# ip_add = subprocess.run(["nslookup", hostname], stdout = subprocess.PIPE)
+	# ip = ip_add.stdout.decode("utf-8")
+	# ip = ip.split('\t')
+	# ip = ip.pop(-1)
+	# ip = ip.split('\n')
+	# ip = ip.pop(1)
+	# ip = ip.split(' ')
+	# ip = ip[1]
 
-	os.environ['MASTER_ADDR'] = ip
-	print(os.environ['MASTER_ADDR'])
-	os.environ['MASTER_PORT'] = '8888'
-	dist.init_process_group(                                   
-    backend='nccl',                                         
-   	init_method='env://',
-   	timeout = datetime.timedelta(seconds = 300),                                   
-    world_size=world_size,                              
-    rank=rank                                               
-    )  
+	# os.environ['MASTER_ADDR'] = ip
+	# print(os.environ['MASTER_ADDR'])
+	# os.environ['MASTER_PORT'] = '8888'
+	# dist.init_process_group(                                   
+ #    backend='nccl',                                         
+ #   	init_method='env://',
+ #   	timeout = datetime.timedelta(seconds = 300),                                   
+ #    world_size=world_size,                              
+ #    rank=rank                                               
+    # )  
     
 	dat = FastaBatchedDataset.from_file(fasta)
 	model_, alphabet = esm1_t12_85M_UR50S()
