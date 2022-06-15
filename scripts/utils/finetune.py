@@ -33,7 +33,7 @@ def finetune(gpu, fasta, tuned_name, lr, epochs, world_size):
 	ip_add = subprocess.run(["nslookup", hostname], stdout = subprocess.PIPE)
 	ip = ip_add.stdout.decode("utf-8")
 	ip = ip.split('\t')
-        print(ip)
+	print(ip)
 	ip = ip.pop(2)
 	ip = ip.split('\n')
 	ip = ip[0]
