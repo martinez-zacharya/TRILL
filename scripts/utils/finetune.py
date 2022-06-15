@@ -45,7 +45,7 @@ def finetune(gpu, fasta, tuned_name, lr, epochs, world_size):
 	dist.init_process_group(                                   
     backend='nccl',                                         
    	init_method='env://',
-   	timeout = datetime.timedelta(seconds = 600)                                   
+   	timeout = datetime.timedelta(seconds = 300)                                   
     world_size=world_size,                              
     rank=rank                                               
     )  
