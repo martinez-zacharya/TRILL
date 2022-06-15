@@ -33,12 +33,14 @@ def finetune(gpu, fasta, tuned_name, lr, epochs, world_size):
 	ip_add = subprocess.run(["nslookup", hostname], stdout = subprocess.PIPE)
 	ip = ip_add.stdout.decode("utf-8")
 	ip = ip.split('\t')
-	print(ip)
-	ip = ip.pop(2)
+	ip = ip.pop(-1)
 	ip = ip.split('\n')
-	ip = ip[0]
+	ip = ip.pop(0)
+	ip = ip.split(' ')
+	ip = ip[1]
+	print(ip)
 
-	os.environ['MASTER_ADDR'] = ip
+	#os.environ['MASTER_ADDR'] = ip
 	os.environ['MASTER_PORT'] = '12345'
 	dist.init_process_group(                                   
     backend='nccl',                                         
