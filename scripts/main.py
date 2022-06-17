@@ -1,6 +1,9 @@
 import sys
 import argparse
 import os
+import subprocess
+import datetime
+import torch.distributed as dist
 import pandas as pd
 import torch.multiprocessing as mp
 sys.path.insert(0, 'utils')
@@ -42,6 +45,13 @@ def main():
 		)
     
 	parser.add_argument(
+		"GPUs",
+		help="Input total number of GPUs",
+		action="store",
+		default = 1
+)
+    
+	parser.add_argument(
 		"--lr",
 		help="Learning rate for adam optimizer. Default is 0.0001",
 		action="store",
@@ -51,9 +61,9 @@ def main():
 
 	parser.add_argument(
 		"--epochs",
-		help="Number of epochs for fine-tuning transformer. Default is 300",
+		help="Number of epochs for fine-tuning transformer. Default is 100",
 		action="store",
-		default=300,
+		default=100,
 		dest="epochs",
 )
 	parser.add_argument(
@@ -70,6 +80,15 @@ def main():
 		default = False,
 		dest="preTrained_model",
 )
+    
+	parser.add_argument(
+		"--batch_size",
+		help="Change batch-size number for fine-tuning",
+		action="store",
+		default = 5,
+		dest="batch_size",
+)
+
 
 	args = parser.parse_args()
 
@@ -81,9 +100,10 @@ def main():
 	noTrain_flag = args.noTrain
 	preTrained_model = args.preTrained_model
 
-	world_size = len(os.environ['SLURM_JOB_GPUS']) * int(os.environ['SLURM_JOB_NUM_NODES'])
-
 	hostname = os.environ['SLURM_JOB_NODELIST']
+	if ',' in hostname:
+		hostname = hostname.split(',')
+		hostname = hostname[0]
 	ip_add = subprocess.run(["nslookup", hostname], stdout = subprocess.PIPE)
 	ip = ip_add.stdout.decode("utf-8")
 	ip = ip.split('\t')
@@ -95,12 +115,6 @@ def main():
 
 	os.environ['MASTER_ADDR'] = ip
 	os.environ['MASTER_PORT'] = '8888'
-	dist.init_process_group(                                   
-    backend='nccl',                                         
-   	init_method='env://',
-   	timeout = datetime.timedelta(seconds = 300),                                   
-    world_size=world_size,                              
-    rank=rank 
 
 	# This is for when you just want to embed the raw sequences
 	if noTrain_flag == True:
@@ -109,36 +123,38 @@ def main():
 
 		embed('N', f'{name}_query_df.csv', f'{name}_database_df.csv', name)
 
-		master_db = pd.concat([pd.read_csv(f'{name}_query_df_labeled.csv'), pd.read_csv(f'{name}_database_df_labeled.csv')], axis = 0).reset_index(drop = True)
+# 		master_db = pd.concat([pd.read_csv(f'{name}_query_df_labeled.csv'), pd.read_csv(f'{name}_database_df_labeled.csv')], axis = 0).reset_index(drop = True)
 
-		tsnedf = tsne(name, master_db)
+# 		tsnedf = tsne(name, master_db)
 
-		scatter_viz(tsnedf)
+# 		scatter_viz(tsnedf)
 	elif preTrained_model != False:
 		FineTuneQueryValidation(name, query)
 		FineTuneDatabaseValidation(name, database)
 
 		embed(preTrained_model, f'{name}_query_df.csv', f'{name}_database_df.csv', name)
 
-		master_db = pd.concat([pd.read_csv(f'{name}_query_df_labeled.csv'), pd.read_csv(f'{name}_database_df_labeled.csv')], axis = 0).reset_index(drop = True)
+# 		master_db = pd.concat([pd.read_csv(f'{name}_query_df_labeled.csv'), pd.read_csv(f'{name}_database_df_labeled.csv')], axis = 0).reset_index(drop = True)
 
-		tsnedf = tsne(name, master_db)
+# 		tsnedf = tsne(name, master_db)
 
-		scatter_viz(tsnedf)
+# 		scatter_viz(tsnedf)
 	else:
 		FineTuneQueryValidation(name, query)
 		FineTuneDatabaseValidation(name, database)
 
-		mp.spawn(finetune, nprocs = len(os.environ['SLURM_JOB_GPUS']), args = (query,name, lr, epochs, world_size))
+    
+		mp.spawn(finetune, nprocs = int(args.GPUs), args = (args,))
 
-		model_name = 'esm_t12_85M_UR50S_' + name + '.pt'
+
+		model_name = 'esm1_t12_85M_UR50S_' + name + '.pt'
 		embed(model_name, f'{name}_query_df.csv', f'{name}_database_df.csv', name)
 
-		# master_db = pd.concat([pd.read_csv(f'{name}_query_df_labeled.csv'), pd.read_csv(f'{name}_database_df_labeled.csv')], axis = 0).reset_index(drop = True)
+# 		master_db = pd.concat([pd.read_csv(f'{name}_query_df_labeled.csv'), pd.read_csv(f'{name}_database_df_labeled.csv')], axis = 0).reset_index(drop = True)
 
-		# tsnedf = tsne(name, master_db)
+# 		tsnedf = tsne(name, master_db)
 
-		# scatter_viz(tsnedf)
+# 		scatter_viz(tsnedf)
 
 if __name__ == '__main__':
-  main()
+    main()

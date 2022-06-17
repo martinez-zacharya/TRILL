@@ -27,31 +27,19 @@ from torch.nn.parallel import DistributedDataParallel as DDP
 os.environ['CUDA_LAUNCH_BLOCKING'] = '1'
 os.environ['TORCH_DISTRIBUTED_DEBUG'] = 'DETAIL'
 
-def finetune(gpu, fasta, tuned_name, lr, epochs, world_size):
-	rank = int(os.environ['SLURM_JOB_NUM_NODES']) * len(os.environ['SLURM_JOB_GPUS']) + int(gpu)                          
+def finetune(gpu, args):
+	rank = 0 * int(args.GPUs) + gpu                       
 	torch.manual_seed(0)
-	# hostname = os.environ['SLURM_JOB_NODELIST']
-	# ip_add = subprocess.run(["nslookup", hostname], stdout = subprocess.PIPE)
-	# ip = ip_add.stdout.decode("utf-8")
-	# ip = ip.split('\t')
-	# ip = ip.pop(-1)
-	# ip = ip.split('\n')
-	# ip = ip.pop(1)
-	# ip = ip.split(' ')
-	# ip = ip[1]
-
-	# os.environ['MASTER_ADDR'] = ip
-	# print(os.environ['MASTER_ADDR'])
-	# os.environ['MASTER_PORT'] = '8888'
-	# dist.init_process_group(                                   
- #    backend='nccl',                                         
- #   	init_method='env://',
- #   	timeout = datetime.timedelta(seconds = 300),                                   
- #    world_size=world_size,                              
- #    rank=rank                                               
-    # )  
     
-	dat = FastaBatchedDataset.from_file(fasta)
+	dist.init_process_group(                                   
+    backend='nccl',                                         
+   	init_method='env://',
+   	timeout = datetime.timedelta(seconds = 300),                                 
+    world_size=int(args.GPUs),                              
+    rank=rank                                               
+    )  
+    
+	dat = FastaBatchedDataset.from_file(args.query)
 	model_, alphabet = esm1_t12_85M_UR50S()
 
 	if torch.cuda.is_available():
@@ -63,23 +51,23 @@ def finetune(gpu, fasta, tuned_name, lr, epochs, world_size):
 
 	train_sampler = torch.utils.data.distributed.DistributedSampler(
 		dat,
-		num_replicas=world_size,
+		num_replicas=int(args.GPUs),
 		rank=rank
 	)
 
-	dat_loader = torch.utils.data.DataLoader(dat, batch_size = 5, num_workers=0, pin_memory=True, sampler = train_sampler, collate_fn=alphabet.get_batch_converter())
+	dat_loader = torch.utils.data.DataLoader(dat, batch_size = int(args.batch_size), num_workers=0, pin_memory=True, sampler = train_sampler, collate_fn=alphabet.get_batch_converter())
 
 	ddp_model = DDP(model_, device_ids=[rank], find_unused_parameters=True)
 	ddp_model.train()
 
 	criterion = nn.CrossEntropyLoss(reduction='none').cuda('cuda')
-	optimizer = torch.optim.Adam(ddp_model.parameters(), lr=lr)
+	optimizer = torch.optim.Adam(ddp_model.parameters(), lr=int(args.lr))
 	scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer)
     
     
-	start = datetime.now()
+# 	start = datetime.now()
 
-	for j in tqdm(range(epochs)):
+	for j in tqdm(range(int(args.epochs))):
 		for i, (labels, seq, toks) in enumerate(dat_loader):
 
 			if len(seq) > 1024:
@@ -105,6 +93,6 @@ def finetune(gpu, fasta, tuned_name, lr, epochs, world_size):
             
 		print(j, loss)
 	if gpu == 0:
-		print("Training complete in: " + str(datetime.now() - start))
-		torch.save(ddp_model.module.state_dict(), f"esm1_t12_85M_UR50S_{tuned_name}.pt")
+# 		print("Training complete in: " + str(datetime.now() - start))
+		torch.save(ddp_model.module.state_dict(), f"esm1_t12_85M_UR50S_{args.name}.pt")
 	return True
