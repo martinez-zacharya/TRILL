@@ -26,12 +26,11 @@ def generate_embedding_transformer_t12(model,batch_converter,dat,name,seq_col):
 		model.cuda()
 	sequence_embeddings = []
 	model.eval()
-	model = nn.DataParallel(model)
 	for epoch in tqdm(range(dat.shape[0])):
 		data = [(dat.iloc[epoch, 1], dat.iloc[epoch, seq_col])]
 		_, _, batch_tokens = batch_converter(data)
 		with torch.no_grad():
-			if device == 'gpu':
+			if device == 'cuda':
 				results = model(tokens = batch_tokens.to('cuda'), repr_layers=[12])
 			else:
 				results = model(tokens = batch_tokens.to('cpu'), repr_layers=[12])
@@ -47,19 +46,19 @@ def embed(tuned_model, query, database, name):
 	model_t12, alphabet = esm1_t12_85M_UR50S()
 
 	if torch.cuda.is_available():
-		device = 'cuda'
+		model_t12 = model_t12.cuda('cuda')
 	else:
-		device = 'cpu'
+		model_t12 = model_t12.cpu()
         
 	if tuned_model != 'N' or '':
 		model_t12.load_state_dict(torch.load(tuned_model))
+		q = pd.read_csv(query)
+		db = pd.read_csv(database)
+		master_db = pd.concat([q, db], axis = 0)
 
+	else:
+		master_db = pd.read_csv(query)
 
-
-	q = pd.read_csv(query)
-	db = pd.read_csv(database)
-
-	master_db = pd.concat([q, db], axis = 0)
 	batch_converter = alphabet.get_batch_converter()
 
 	generate_embedding_transformer_t12(model_t12,batch_converter,master_db,name,seq_col = 1)

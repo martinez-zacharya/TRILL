@@ -119,7 +119,6 @@ def main():
 	# This is for when you just want to embed the raw sequences
 	if noTrain_flag == True:
 		FineTuneQueryValidation(name, query)
-		FineTuneDatabaseValidation(name, database)
 
 		embed('N', f'{name}_query_df.csv', f'{name}_database_df.csv', name)
 
