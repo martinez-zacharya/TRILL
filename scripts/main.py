@@ -39,7 +39,7 @@ def main():
 		)
 
 	parser.add_argument(
-		"database", 
+		"--database", 
 		help="Input database to search through", 
 		action="store"
 		)
@@ -96,6 +96,13 @@ def main():
                 default = 0,
                 dest="localRank",
 )
+	parser.add_argument(
+                "--blast",
+                help="Enables BLAST mode",
+                action="store_true",
+                default = False,
+                dest="blast",
+)
 
 
 
@@ -151,7 +158,7 @@ def main():
 # 		tsnedf = tsne(name, master_db)
 
 # 		scatter_viz(tsnedf)
-	else:
+	elif args.blast == True:
 		FineTuneQueryValidation(name, query)
 		FineTuneDatabaseValidation(name, database)
 
@@ -167,6 +174,15 @@ def main():
 # 		tsnedf = tsne(name, master_db)
 
 # 		scatter_viz(tsnedf)
+
+	else:
+		FineTuneQueryValidation(name, query)
+    
+		mp.spawn(finetune, nprocs = 4, args = (args,), join = True)
+
+
+		model_name = 'esm1_t12_85M_UR50S_' + name + '.pt'
+        
 
 if __name__ == '__main__':
 	main()
