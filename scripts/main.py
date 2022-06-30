@@ -89,6 +89,15 @@ def main():
 		dest="batch_size",
 )
 
+	parser.add_argument(
+                "--localRank",
+                help="local rank within nodes",
+                action="store",
+                default = 0,
+                dest="localRank",
+)
+
+
 
 	args = parser.parse_args()
 
@@ -104,6 +113,11 @@ def main():
 	if ',' in hostname:
 		hostname = hostname.split(',')
 		hostname = hostname[0]
+	elif '[' in hostname:
+		hostname = hostname.split('[')
+		hostname = ''.join(hostname)
+		hostname = hostname.split('-')
+		hostname = '-'.join(hostname[0:3])
 	ip_add = subprocess.run(["nslookup", hostname], stdout = subprocess.PIPE)
 	ip = ip_add.stdout.decode("utf-8")
 	ip = ip.split('\t')
@@ -115,7 +129,6 @@ def main():
 
 	os.environ['MASTER_ADDR'] = ip
 	os.environ['MASTER_PORT'] = '8888'
-
 	# This is for when you just want to embed the raw sequences
 	if noTrain_flag == True:
 		FineTuneQueryValidation(name, query)
@@ -143,7 +156,7 @@ def main():
 		FineTuneDatabaseValidation(name, database)
 
     
-		mp.spawn(finetune, nprocs = int(args.GPUs), args = (args,))
+		mp.spawn(finetune, nprocs = 4, args = (args,), join = True)
 
 
 		model_name = 'esm1_t12_85M_UR50S_' + name + '.pt'
@@ -156,4 +169,4 @@ def main():
 # 		scatter_viz(tsnedf)
 
 if __name__ == '__main__':
-    main()
+	main()
