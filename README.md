@@ -3,6 +3,8 @@ Detecting functional relationships between proteins using DL
 
 ## Quick Tutorial:
 
+# Don't use this tutorial, not working anymore
+
 1. Type ```git clone https://github.com/martinez-zacharya/DistantHomologyDetection``` in your home directory on the HPC
 3. Download Miniconda by running ```wget https://repo.anaconda.com/miniconda/Miniconda3-latest-Linux-x86_64.sh``` and then ```sh ./Miniconda3-latest-Linux-x86_64.sh```.
 4. Run ```conda env create -f environment.yml``` in the home directory of the repo to set up the proper conda environment.
