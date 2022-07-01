@@ -8,95 +8,95 @@ import pandas as pd
 import torch.multiprocessing as mp
 sys.path.insert(0, 'utils')
 from WranglingData import (
-	FineTuneQueryValidation,
-	FineTuneDatabaseValidation
-	)
+    FineTuneQueryValidation,
+    FineTuneDatabaseValidation
+    )
 from finetune import (
-	finetune
-	)
+    finetune
+    )
 from embed import (
-	embed,
-	generate_embedding_transformer_t12
-	)
+    embed,
+    generate_embedding_transformer_t12
+    )
 from visualize import (
-	tsne,
-	scatter_viz
-	)
+    tsne,
+    scatter_viz
+    )
 
 def main():
 
-	parser = argparse.ArgumentParser()
+    parser = argparse.ArgumentParser()
 
-	parser.add_argument(
-		"name",
-		help = "Name of run",
-		action = "store"
-		)
+    parser.add_argument(
+        "name",
+        help = "Name of run",
+        action = "store"
+        )
 
-	parser.add_argument("query", 
-		help="Input fasta file for queries", 
-		action="store"
-		)
+    parser.add_argument("query", 
+        help="Input fasta file for queries", 
+        action="store"
+        )
 
-	parser.add_argument(
-		"--database", 
-		help="Input database to search through", 
-		action="store"
-		)
+    parser.add_argument(
+        "--database", 
+        help="Input database to search through", 
+        action="store"
+        )
     
-	parser.add_argument(
-		"GPUs",
-		help="Input total number of GPUs",
-		action="store",
-		default = 1
-)
-    
-	parser.add_argument(
-		"--lr",
-		help="Learning rate for adam optimizer. Default is 0.0001",
-		action="store",
-		default=0.0001,
-		dest="lr",
-)
-
-	parser.add_argument(
-		"--epochs",
-		help="Number of epochs for fine-tuning transformer. Default is 100",
-		action="store",
-		default=100,
-		dest="epochs",
-)
-	parser.add_argument(
-		"--noTrain",
-		help="Skips the fine-tuning and embeds the query and database sequences with the raw model",
- 		action="store_true",
-		default = False,
-		dest="noTrain",
-)
-	parser.add_argument(
-		"--preTrained_model",
-		help="Input path to your own pre-trained ESM model",
-		action="store",
-		default = False,
-		dest="preTrained_model",
+    parser.add_argument(
+        "GPUs",
+        help="Input total number of GPUs",
+        action="store",
+        default = 1
 )
     
-	parser.add_argument(
-		"--batch_size",
-		help="Change batch-size number for fine-tuning",
-		action="store",
-		default = 5,
-		dest="batch_size",
+    parser.add_argument(
+        "--lr",
+        help="Learning rate for adam optimizer. Default is 0.0001",
+        action="store",
+        default=0.0001,
+        dest="lr",
 )
 
-	parser.add_argument(
+    parser.add_argument(
+        "--epochs",
+        help="Number of epochs for fine-tuning transformer. Default is 100",
+        action="store",
+        default=100,
+        dest="epochs",
+)
+    parser.add_argument(
+        "--noTrain",
+        help="Skips the fine-tuning and embeds the query and database sequences with the raw model",
+         action="store_true",
+        default = False,
+        dest="noTrain",
+)
+    parser.add_argument(
+        "--preTrained_model",
+        help="Input path to your own pre-trained ESM model",
+        action="store",
+        default = False,
+        dest="preTrained_model",
+)
+    
+    parser.add_argument(
+        "--batch_size",
+        help="Change batch-size number for fine-tuning",
+        action="store",
+        default = 5,
+        dest="batch_size",
+)
+
+    parser.add_argument(
                 "--localRank",
                 help="local rank within nodes",
                 action="store",
                 default = 0,
                 dest="localRank",
 )
-	parser.add_argument(
+    parser.add_argument(
                 "--blast",
                 help="Enables BLAST mode",
                 action="store_true",
@@ -106,83 +106,85 @@ def main():
 
 
 
-	args = parser.parse_args()
+    args = parser.parse_args()
 
-	name = args.name
-	query = args.query
-	database = args.database
-	lr = int(args.lr)
-	epochs = int(args.epochs)
-	noTrain_flag = args.noTrain
-	preTrained_model = args.preTrained_model
+    name = args.name
+    query = args.query
+    database = args.database
+    lr = int(args.lr)
+    epochs = int(args.epochs)
+    noTrain_flag = args.noTrain
+    preTrained_model = args.preTrained_model
 
-	hostname = os.environ['SLURM_JOB_NODELIST']
-	if ',' in hostname:
-		hostname = hostname.split(',')
-		hostname = hostname[0]
-	elif '[' in hostname:
-		hostname = hostname.split('[')
-		hostname = ''.join(hostname)
-		hostname = hostname.split('-')
-		hostname = '-'.join(hostname[0:3])
-	ip_add = subprocess.run(["nslookup", hostname], stdout = subprocess.PIPE)
-	ip = ip_add.stdout.decode("utf-8")
-	ip = ip.split('\t')
-	ip = ip.pop(-1)
-	ip = ip.split('\n')
-	ip = ip.pop(1)
-	ip = ip.split(' ')
-	ip = ip[1]
+    hostname = os.environ['SLURM_JOB_NODELIST']
+    if ',' in hostname and not '[' in hostname:
+        hostname = hostname.split(',')
+        hostname = hostname[0]
+    elif '[' in hostname:
+        hostname = hostname.split('[')
+        hostname = ''.join(hostname)
+        hostname = hostname.split(',')
+        hostname = hostname[0]
+#         hostname = '-'.join(hostname[0:2])
+    ip_add = subprocess.run(["nslookup", hostname], stdout = subprocess.PIPE)
+    ip = ip_add.stdout.decode("utf-8")
+    ip = ip.split('\t')
+    ip = ip.pop(-1)
+    ip = ip.split('\n')
+    ip = ip.pop(1)
+    ip = ip.split(' ')
+    ip = ip[1]
 
-	os.environ['MASTER_ADDR'] = ip
-	os.environ['MASTER_PORT'] = '8888'
-	# This is for when you just want to embed the raw sequences
-	if noTrain_flag == True:
-		FineTuneQueryValidation(name, query)
+    os.environ['MASTER_ADDR'] = ip
+    os.environ['MASTER_PORT'] = '8888'
+    # This is for when you just want to embed the raw sequences
+    if noTrain_flag == True:
+        FineTuneQueryValidation(name, query)
 
-		embed('N', f'{name}_query_df.csv', f'{name}_database_df.csv', name)
+        embed('N', f'{name}_query_df.csv', f'{name}_database_df.csv', name)
 
-# 		master_db = pd.concat([pd.read_csv(f'{name}_query_df_labeled.csv'), pd.read_csv(f'{name}_database_df_labeled.csv')], axis = 0).reset_index(drop = True)
+#         master_db = pd.concat([pd.read_csv(f'{name}_query_df_labeled.csv'), pd.read_csv(f'{name}_database_df_labeled.csv')], axis = 0).reset_index(drop = True)
 
-# 		tsnedf = tsne(name, master_db)
+#         tsnedf = tsne(name, master_db)
 
-# 		scatter_viz(tsnedf)
-	elif preTrained_model != False:
-		FineTuneQueryValidation(name, query)
-		FineTuneDatabaseValidation(name, database)
+#         scatter_viz(tsnedf)
+    elif preTrained_model != False:
+        FineTuneQueryValidation(name, query)
+        FineTuneDatabaseValidation(name, database)
 
-		embed(preTrained_model, f'{name}_query_df.csv', f'{name}_database_df.csv', name)
+        embed(preTrained_model, f'{name}_query_df.csv', f'{name}_database_df.csv', name)
 
-# 		master_db = pd.concat([pd.read_csv(f'{name}_query_df_labeled.csv'), pd.read_csv(f'{name}_database_df_labeled.csv')], axis = 0).reset_index(drop = True)
+#         master_db = pd.concat([pd.read_csv(f'{name}_query_df_labeled.csv'), pd.read_csv(f'{name}_database_df_labeled.csv')], axis = 0).reset_index(drop = True)
 
-# 		tsnedf = tsne(name, master_db)
+#         tsnedf = tsne(name, master_db)
 
-# 		scatter_viz(tsnedf)
-	elif args.blast == True:
-		FineTuneQueryValidation(name, query)
-		FineTuneDatabaseValidation(name, database)
+#         scatter_viz(tsnedf)
+    elif args.blast == True:
+        FineTuneQueryValidation(name, query)
+        FineTuneDatabaseValidation(name, database)
 
     
-		mp.spawn(finetune, nprocs = 4, args = (args,), join = True)
+        mp.spawn(finetune, nprocs = 4, args = (args,), join = True)
 
 
-		model_name = 'esm1_t12_85M_UR50S_' + name + '.pt'
-		embed(model_name, f'{name}_query_df.csv', f'{name}_database_df.csv', name)
+        model_name = 'esm1_t12_85M_UR50S_' + name + '.pt'
+        embed(model_name, f'{name}_query_df.csv', f'{name}_database_df.csv', name)
 
-# 		master_db = pd.concat([pd.read_csv(f'{name}_query_df_labeled.csv'), pd.read_csv(f'{name}_database_df_labeled.csv')], axis = 0).reset_index(drop = True)
+#         master_db = pd.concat([pd.read_csv(f'{name}_query_df_labeled.csv'), pd.read_csv(f'{name}_database_df_labeled.csv')], axis = 0).reset_index(drop = True)
 
-# 		tsnedf = tsne(name, master_db)
+#         tsnedf = tsne(name, master_db)
 
-# 		scatter_viz(tsnedf)
+#         scatter_viz(tsnedf)
 
-	else:
-		FineTuneQueryValidation(name, query)
+    else:
+        FineTuneQueryValidation(name, query)
     
-		mp.spawn(finetune, nprocs = 4, args = (args,), join = True)
+        mp.spawn(finetune, nprocs = 4, args = (args,), join = True)
 
 
-		model_name = 'esm1_t12_85M_UR50S_' + name + '.pt'
+        model_name = 'esm1_t12_85M_UR50S_' + name + '.pt'
         
 
+    print("Finished!")
 if __name__ == '__main__':
-	main()
+    main()
