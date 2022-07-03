@@ -135,7 +135,7 @@ def main():
     ip = ip.split(' ')
     ip = ip[1]
 
-    os.environ['MASTER_ADDR'] = ip
+#     os.environ['MASTER_ADDR'] = ip
     os.environ['MASTER_PORT'] = '8888'
     # This is for when you just want to embed the raw sequences
     if noTrain_flag == True:
