@@ -90,11 +90,11 @@ def main():
 )
 
     parser.add_argument(
-                "--blast",
-                help="Enables BLAST mode",
-                action="store_true",
-                default = False,
-                dest="blast",
+        "--blast",
+        help="Enables BLAST mode",
+        action="store_true",
+        default = False,
+        dest="blast",
 )
 
 
