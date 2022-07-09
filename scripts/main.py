@@ -109,27 +109,7 @@ def main():
     epochs = int(args.epochs)
     noTrain_flag = args.noTrain
     preTrained_model = args.preTrained_model
-
-    hostname = os.environ['SLURM_JOB_NODELIST']
-    if ',' in hostname and not '[' in hostname:
-        hostname = hostname.split(',')
-        hostname = hostname[0]
-    elif '[' in hostname:
-        hostname = hostname.split('[')
-        hostname = ''.join(hostname)
-        hostname = hostname.split(',')
-        hostname = hostname[0]
-#         hostname = '-'.join(hostname[0:2])
-    ip_add = subprocess.run(["nslookup", hostname], stdout = subprocess.PIPE)
-    ip = ip_add.stdout.decode("utf-8")
-    ip = ip.split('\t')
-    ip = ip.pop(-1)
-    ip = ip.split('\n')
-    ip = ip.pop(1)
-    ip = ip.split(' ')
-    ip = ip[1]
-
-#     os.environ['MASTER_ADDR'] = ip
+    
     os.environ['MASTER_PORT'] = '8888'
     # This is for when you just want to embed the raw sequences
     if noTrain_flag == True:
