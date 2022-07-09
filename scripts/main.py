@@ -89,7 +89,6 @@ def main():
         dest="batch_size",
 )
 
-
     parser.add_argument(
                 "--blast",
                 help="Enables BLAST mode",
@@ -109,13 +108,13 @@ def main():
     epochs = int(args.epochs)
     noTrain_flag = args.noTrain
     preTrained_model = args.preTrained_model
-    
+
     os.environ['MASTER_PORT'] = '8888'
     # This is for when you just want to embed the raw sequences
     if noTrain_flag == True:
         FineTuneQueryValidation(name, query)
 
-        embed('N', f'{name}_query_df.csv', f'{name}_database_df.csv', name)
+        embed('N', f'{name}_query_df.csv', f'{name}_query_df.csv', name)
 
 #         master_db = pd.concat([pd.read_csv(f'{name}_query_df_labeled.csv'), pd.read_csv(f'{name}_database_df_labeled.csv')], axis = 0).reset_index(drop = True)
 
@@ -124,9 +123,8 @@ def main():
 #         scatter_viz(tsnedf)
     elif preTrained_model != False:
         FineTuneQueryValidation(name, query)
-        FineTuneDatabaseValidation(name, database)
 
-        embed(preTrained_model, f'{name}_query_df.csv', f'{name}_database_df.csv', name)
+        embed(preTrained_model, f'{name}_query_df.csv', f'{name}_query_df.csv', name)
 
 #         master_db = pd.concat([pd.read_csv(f'{name}_query_df_labeled.csv'), pd.read_csv(f'{name}_database_df_labeled.csv')], axis = 0).reset_index(drop = True)
 
@@ -136,9 +134,13 @@ def main():
     elif args.blast == True:
         FineTuneQueryValidation(name, query)
         FineTuneDatabaseValidation(name, database)
+        if int(args.GPUs) >= 4:
+            nprocs = 4
+        else:
+            nprocs = int(args.GPUs)
 
     
-        mp.spawn(finetune, nprocs = 4, args = (args,), join = True)
+        mp.spawn(finetune, nprocs = nprocs, args = (args,), join = True)
 
 
         model_name = 'esm1_t12_85M_UR50S_' + name + '.pt'
