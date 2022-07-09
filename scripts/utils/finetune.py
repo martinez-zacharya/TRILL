@@ -30,7 +30,7 @@ BackwardPrefetch,
 # )
 import torch.distributed as dist
 from torch.utils.data import Dataset
-import datetime
+from datetime import datetime, timedelta
 import subprocess
 # from fairscale.experimental.tooling.layer_memory_tracker import LayerwiseMemoryTracker
 # from GPUtil import showUtilization as gpu_usage
@@ -43,21 +43,19 @@ os.environ['CUDA_LAUNCH_BLOCKING'] = '1'
 
 def finetune(gpu, args):
     torch.cuda.empty_cache()
-    rank = int(os.environ["SLURM_NODEID"])  * 4 + gpu
+    rank = gpu
     torch.manual_seed(0)
     dist.init_process_group(                                   
     backend='nccl',                                         
        init_method='env://',
-       timeout = datetime.timedelta(seconds = 300),                                 
+       timeout = timedelta(seconds = 300),                                 
     world_size=int(args.GPUs),                              
     rank=rank                                               
     )  
     
     gpus_per_node = int(os.environ["SLURM_GPUS_ON_NODE"])
-    print(f"rank: {rank}")
-    print(f"gpus: {gpus_per_node}")
+
     local_rank = rank - gpus_per_node * (rank // gpus_per_node)
-    print(f"local: {local_rank}")
     
     torch.cuda.set_device(local_rank)
 
@@ -69,7 +67,6 @@ def finetune(gpu, args):
         torch.cuda.set_device(local_rank)
         model_ = model_.to(f"cuda:{local_rank}")
     else:
-        device = "cpu"
         return("Don't run this on a CPU")
 
     train_sampler = torch.utils.data.distributed.DistributedSampler(
@@ -96,8 +93,7 @@ def finetune(gpu, args):
 #     tracker.monitor(ddp_model)
     
 
-#     start = datetime.now()
-    accumulation_steps = 1
+    start = datetime.now()
     optimizer.zero_grad()
     for j in tqdm(range(int(args.epochs))):
         for i, (labels, seq, toks) in enumerate(dat_loader):
@@ -119,29 +115,25 @@ def finetune(gpu, args):
                 
             pred = results['logits']
             loss = criterion(pred.permute(0,2,1).to(f"cuda:{local_rank}"),true_aa.to(f"cuda:{local_rank}"))
-            loss = loss.mean()
-            loss = loss.sum()
+            loss = loss.mean().sum()
 
 #             tracker.show_plots()
 
             loss.backward()
             #log_metric('CrossEntropyLoss', loss)
             
-#             if (i+1) % accumulation_steps == 0:             # Wait for several backward steps
-#                 optimizer.step() # Now we can do an optimizer step
-#                 optimizer.zero_grad()
-            optimizer.step()                            # Now we can do an optimizer step
+
+            optimizer.step()                            
             optimizer.zero_grad()
         
         perplexity = torch.exp(loss)
         print(f"Epoch: {j}")
         print(f"Loss: {loss}")
-        print(f"Perplexity: {perplexity}")
+        # print(f"Perplexity: {perplexity}")
         
     states = ddp_model.state_dict()
     if rank == 0:
 
-#         print("Training complete in: " + str(datetime.now() - start))
         torch.save(
             states,
             f"esm1_t12_85M_UR50S_{args.name}.pt"
@@ -149,5 +141,6 @@ def finetune(gpu, args):
     
     dist.destroy_process_group()
 #     tracker.stop()
+    print("Training complete in: " + str(datetime.now() - start))
 
     return True

@@ -89,13 +89,7 @@ def main():
         dest="batch_size",
 )
 
-    parser.add_argument(
-                "--localRank",
-                help="local rank within nodes",
-                action="store",
-                default = 0,
-                dest="localRank",
-)
+
     parser.add_argument(
                 "--blast",
                 help="Enables BLAST mode",
@@ -178,8 +172,13 @@ def main():
 
     else:
         FineTuneQueryValidation(name, query)
+        if int(args.GPUs) >= 4:
+                nprocs = 4
+        else:
+            nprocs = int(args.GPUs)
+        
     
-        mp.spawn(finetune, nprocs = 4, args = (args,), join = True)
+        mp.spawn(finetune, nprocs = nprocs, args = (args,), join = True)
 
 
         model_name = 'esm1_t12_85M_UR50S_' + name + '.pt'
