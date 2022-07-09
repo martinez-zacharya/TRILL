@@ -5,7 +5,7 @@ Detecting functional relationships between proteins using DL
 
 1. Type ```git clone https://github.com/martinez-zacharya/DistantHomologyDetection``` in your home directory on the HPC
 3. Download Miniconda by running ```wget https://repo.anaconda.com/miniconda/Miniconda3-latest-Linux-x86_64.sh``` and then ```sh ./Miniconda3-latest-Linux-x86_64.sh```.
-4. Run ```conda env create -f environment.yml``` in the home directory of the repo to set up the proper conda environment.
+4. Run ```conda env create -f environment.yml``` in the home directory of the repo to set up the proper conda environment and then type ```conda activate RemoteHomologyTransformer``` to activate it.
 5. Shift your current working directory to the scripts folder with ```cd scripts```.
 6. Type ```vi tutorial_slurm``` to open the slurm file and then hit ```i```.
 7. Change the email in the tutorial_slurm file to your email (You can use https://s3-us-west-2.amazonaws.com/imss-hpc/index.html to make your own slurm files in the future).
