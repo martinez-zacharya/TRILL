@@ -1,5 +1,5 @@
 # DistantHomologyDetection
-Detecting functional relationships between proteins using DL
+
 ## Arguments
 
 ### Positional Arguments:
