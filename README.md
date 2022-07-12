@@ -24,14 +24,17 @@
   ```
   python3 main.py fine_tuning_ex ../data/query.fasta 4
   ```
+### Embed with base esm1_t12 model
   2. You can also embed proteins with just the base model from FAIR and completely skip fine-tuning.
   ```
   python3 main.py raw_embed ../data/query.fasta 4 --noTrain
   ```
+### Embedding with a custom pre-trained model
   3. If you have a pre-trained model, you can use it to embed sequences by passing the path to --preTrained_model. 
   ```
   python3 main.py pre_trained ../data/query.fasta 4 --preTrained_model ../models/pre_trained_model.pt
   ```
+### BLAST-like (Fine-tune on query and embed query+database)
   4. To enable a BLAST-like functionality, you can use the --blast flag in conjuction with passing a database fasta file to --database. The base model from FAIR is first fine-tuned with the query sequences and then both the query and the database sequences are embedded.
   ```
   python3 main.py blast_search ../data/query.fasta 4 --blast --database ../data/database.fasta
