@@ -18,9 +18,88 @@ from update_weights import weights_update
 
 os.environ['TF_ENABLE_ONEDNN_OPTS'] = '0'
 
+def get_node_indices(num_nodes, num_gpus):
+    """
+    Creates ordered list of node indices for each process
+
+    Args
+        num_nodes: number of nodes
+        num_gpus: number of gpus per node
+    """
+    # convert to int incase we are using string environmental variables
+    num_nodes = int(num_nodes)
+    num_gpus = int(num_gpus)
+
+    node_indices = [0]
+    for i in range(1, num_nodes*num_gpus):
+        # use modulo to decide when to increment node index
+        increment = i % num_gpus == 0
+        node_indices += [node_indices[-1] + increment]
+    # convert to string
+    return [ str(x) for x in node_indices ]
+
+
 def main():
     start = time.time()
     
+    
+    pl.seed_everything(123)
+    model_import_name = f'esm.pretrained.{args.model}()'
+    model = LitModel(eval(model_import_name), float(args.lr))
+    data = esm.data.FastaBatchedDataset.from_file(args.query)
+    dataloader = torch.utils.data.DataLoader(data, shuffle = False, batch_size = int(args.batch_size), num_workers=0, collate_fn=model.alphabet.get_batch_converter())
+    if args.logger == True:
+        logger = TensorBoardLogger("logs")
+    else:
+        logger = False
+    
+    
+    if args.noTrain == True:
+        trainer = pl.Trainer(devices=int(args.GPUs), strategy = args.strategy, accelerator='gpu', logger=logger, num_nodes=int(args.nodes))
+        trainer.predict(model, dataloader)
+        newdf = pd.DataFrame(model.reps, columns = ['Embeddings', 'Label'])
+        newdf = newdf.drop(index=newdf.index[0], axis=0)
+        finaldf = newdf['Embeddings'].apply(pd.Series)
+        finaldf['Label'] = newdf['Label']
+        finaldf.to_csv(f'{args.name}_{args.model}.csv', index = False)
+    
+    elif args.preTrained_model != False:
+        model = weights_update(model = LitModel(eval(model_import_name), float(args.lr)), checkpoint = torch.load('/home/zacharymartinez/DistantHomologyDetection/scripts/test_esm2_t12_35M_UR50D_20.pt'))
+        trainer = pl.Trainer(devices=int(args.GPUs), strategy = args.strategy, accelerator='gpu', logger=logger, num_nodes=int(args.nodes))
+        trainer.predict(model, dataloader)
+        newdf = pd.DataFrame(model.reps, columns = ['Embeddings', 'Label'])
+        newdf = newdf.drop(index=newdf.index[0], axis=0)
+        finaldf = newdf['Embeddings'].apply(pd.Series)
+        finaldf['Label'] = newdf['Label']
+        finaldf.to_csv(f'{args.name}_{args.model}.csv', index = False)
+        
+    elif args.blast == True:
+        trainer = pl.Trainer(devices=int(args.GPUs), accelerator='gpu', strategy = args.strategy, max_epochs=int(args.epochs), logger=logger, num_nodes=int(args.nodes))        
+        trainer.fit(model=model, train_dataloaders=dataloader)
+        trainer.save_checkpoint(f"{args.name}_{args.model}_{args.epochs}.pt")
+        blastdb = esm.data.FastaBatchedDataset.from_file(args.database)
+        blastdb_loader = torch.utils.data.DataLoader(data, shuffle = False, batch_size = int(args.batch_size), num_workers=0, collate_fn=model.alphabet.get_batch_converter())
+        trainer.predict(model, dataloader)
+        trainer.predict(model, blastdb_loader)
+        newdf = pd.DataFrame(model.reps, columns = ['Embeddings', 'Label'])
+        newdf = newdf.drop(index=newdf.index[0], axis=0)
+        finaldf = newdf['Embeddings'].apply(pd.Series)
+        finaldf['Label'] = newdf['Label']
+        finaldf.to_csv(f'{args.name}_{args.model}.csv', index = False)       
+    
+    else:
+        trainer = pl.Trainer(devices=int(args.GPUs), accelerator='gpu', strategy = args.strategy, max_epochs=int(args.epochs), logger=logger, num_nodes=int(args.nodes), precision = 16, amp_backend='native')        
+        trainer.fit(model=model, train_dataloaders=dataloader)
+        trainer.save_checkpoint(f"{args.name}_{args.model}_{args.epochs}.pt")
+        
+    
+    end = time.time()
+    print("Finished!")
+    print(f"Time elapsed: {end-start} seconds")
+ 
+
+
+if __name__ == '__main__':
     parser = argparse.ArgumentParser()
 
     parser.add_argument(
@@ -113,65 +192,19 @@ def main():
         action="store",
         default = None,
         dest="strategy",
-)    
+)
+    parser.add_argument(
+        "--logger",
+        help="Enable Tensorboard logger. Default is None",
+        action="store",
+        default = False,
+        dest="logger",
+)
+        
     
 
 
     args = parser.parse_args()
-    
-    
-    pl.seed_everything(123)
-    model_import_name = f'esm.pretrained.{args.model}()'
-    model = LitModel(eval(model_import_name), float(args.lr))
-    data = esm.data.FastaBatchedDataset.from_file(args.query)
-    dataloader = torch.utils.data.DataLoader(data, shuffle = False, batch_size = int(args.batch_size), num_workers=14, collate_fn=model.alphabet.get_batch_converter())
-    logger = TensorBoardLogger("test_logs")
-    
-    
-    if args.noTrain == True:
-        trainer = pl.Trainer(devices=int(args.GPUs), strategy = args.strategy, accelerator='gpu', logger=logger, num_nodes=int(args.nodes))
-        trainer.predict(model, dataloader)
-        newdf = pd.DataFrame(model.reps, columns = ['Embeddings', 'Label'])
-        newdf = newdf.drop(index=newdf.index[0], axis=0)
-        finaldf = newdf['Embeddings'].apply(pd.Series)
-        finaldf['Label'] = newdf['Label']
-        finaldf.to_csv(f'{args.name}_{args.model}.csv', index = False)
-    
-    elif args.preTrained_model != False:
-        model = weights_update(model = LitModel(eval(model_import_name), float(args.lr)), checkpoint = torch.load('/home/zacharymartinez/DistantHomologyDetection/scripts/test_esm2_t12_35M_UR50D_20.pt'))
-        trainer = pl.Trainer(devices=int(args.GPUs), strategy = args.strategy, accelerator='gpu', logger=logger, num_nodes=int(args.nodes))
-        trainer.predict(model, dataloader)
-        newdf = pd.DataFrame(model.reps, columns = ['Embeddings', 'Label'])
-        newdf = newdf.drop(index=newdf.index[0], axis=0)
-        finaldf = newdf['Embeddings'].apply(pd.Series)
-        finaldf['Label'] = newdf['Label']
-        finaldf.to_csv(f'{args.name}_{args.model}.csv', index = False)
-        
-    elif args.blast == True:
-        trainer = pl.Trainer(devices=int(args.GPUs), accelerator='gpu', strategy = args.strategy, max_epochs=int(args.epochs), logger=logger, num_nodes=int(args.nodes))        
-        trainer.fit(model=model, train_dataloaders=dataloader)
-        trainer.save_checkpoint(f"{args.name}_{args.model}_{args.epochs}.pt")
-        blastdb = esm.data.FastaBatchedDataset.from_file(args.database)
-        blastdb_loader = torch.utils.data.DataLoader(data, shuffle = False, batch_size = int(args.batch_size), num_workers=14, collate_fn=model.alphabet.get_batch_converter())
-        trainer.predict(model, dataloader)
-        trainer.predict(model, blastdb_loader)
-        newdf = pd.DataFrame(model.reps, columns = ['Embeddings', 'Label'])
-        newdf = newdf.drop(index=newdf.index[0], axis=0)
-        finaldf = newdf['Embeddings'].apply(pd.Series)
-        finaldf['Label'] = newdf['Label']
-        finaldf.to_csv(f'{args.name}_{args.model}.csv', index = False)       
-    
-    else:
-        trainer = pl.Trainer(devices=int(args.GPUs), accelerator='gpu', strategy = args.strategy, max_epochs=int(args.epochs), logger=logger, num_nodes=int(args.nodes))        
-        trainer.fit(model=model, train_dataloaders=dataloader)
-        trainer.save_checkpoint(f"{args.name}_{args.model}_{args.epochs}.pt")
-        
-    
-    end = time.time()
-    print("Finished!")
-    print(f"Time elapsed: {end-start} seconds")
- 
 
-
-if __name__ == '__main__':
+    
     main()
