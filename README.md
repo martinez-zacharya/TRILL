@@ -4,18 +4,21 @@
 
 ### Positional Arguments:
 1. name (Name of run)
-2. query (Input Fasta file)
-3. GPUs (Total # of GPUs requested for run)
+2. query (Input fasta file)
+3. GPUs (Total # of GPUs requested for each node)
 
 ### Optional Arguments:
 - -h, --help (Show help message)
 - --database (Input database to embed with --blast mode)
 - --lr (Learning rate for adam optimizer. Default is 0.0001)
-- --epochs (Number of epochs for fine-tuning transformer. Default is 100)
-- --noTrain (Skips the fine-tuning and embeds the query sequences with the raw model)
+- --epochs (Number of epochs for fine-tuning transformer. Default is 20)
+- --noTrain (Skips the fine-tuning and embeds the query sequences with the base model)
 - --preTrained_model (Input path to your own pre-trained ESM model)
 - --batch_size (Change batch-size number for fine-tuning. Default is 5)
 - --blast (Enables "BLAST" mode. --database argument is required)
+- --model (Change ESM model. Default is esm2_t12_35M_UR50D. List of models can be found at https://github.com/facebookresearch/esm)
+- --strategy (Change training strategy. Default is None. List of strategies can be found at https://pytorch-lightning.readthedocs.io/en/stable/extensions/strategy.html)
+- --logger (Enable Tensorboard logger. Default is None)
 
 ## Examples
 
