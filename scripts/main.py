@@ -95,7 +95,7 @@ if __name__ == '__main__':
 
     parser.add_argument(
         "--database", 
-        help="Input database to search through", 
+        help="Input database to embed with --blast mode", 
         action="store"
         )
     
@@ -152,7 +152,7 @@ if __name__ == '__main__':
 
     parser.add_argument(
         "--blast",
-        help="Enables BLAST mode",
+        help="Enables 'BLAST' mode. --database argument is required",
         action="store_true",
         default = False,
         dest="blast",
@@ -160,7 +160,7 @@ if __name__ == '__main__':
     
     parser.add_argument(
         "--model",
-        help="Change ESM model. Default is esm2_t12_35M_UR50D",
+        help="Change ESM model. Default is esm2_t12_35M_UR50D. List of models can be found at https://github.com/facebookresearch/esm",
         action="store",
         default = 'esm2_t12_35M_UR50D',
         dest="model",
@@ -168,7 +168,7 @@ if __name__ == '__main__':
 
     parser.add_argument(
         "--strategy",
-        help="Change training strategy. Default is None",
+        help="Change training strategy. Default is None. List of strategies can be found at https://pytorch-lightning.readthedocs.io/en/stable/extensions/strategy.html",
         action="store",
         default = None,
         dest="strategy",
