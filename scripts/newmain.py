@@ -18,26 +18,6 @@ from update_weights import weights_update
 
 os.environ['TF_ENABLE_ONEDNN_OPTS'] = '0'
 
-def get_node_indices(num_nodes, num_gpus):
-    """
-    Creates ordered list of node indices for each process
-
-    Args
-        num_nodes: number of nodes
-        num_gpus: number of gpus per node
-    """
-    # convert to int incase we are using string environmental variables
-    num_nodes = int(num_nodes)
-    num_gpus = int(num_gpus)
-
-    node_indices = [0]
-    for i in range(1, num_nodes*num_gpus):
-        # use modulo to decide when to increment node index
-        increment = i % num_gpus == 0
-        node_indices += [node_indices[-1] + increment]
-    # convert to string
-    return [ str(x) for x in node_indices ]
-
 
 def main():
     start = time.time()
