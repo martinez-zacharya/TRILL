@@ -4,6 +4,7 @@ import esm
 import torch.nn as nn
 import torch.nn.functional as F
 import pandas as pd
+import sys
 sys.path.insert(0, 'utils')
 from mask import maskInputs
 from pytorch_lightning.loggers import TensorBoardLogger
