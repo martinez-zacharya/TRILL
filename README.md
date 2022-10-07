@@ -10,6 +10,7 @@
 ### Optional Arguments:
 - -h, --help (Show help message)
 - --database (Input database to embed with --blast mode)
+- --nodes (Total number of computational nodes. Default is 1)
 - --lr (Learning rate for adam optimizer. Default is 0.0001)
 - --epochs (Number of epochs for fine-tuning transformer. Default is 20)
 - --noTrain (Skips the fine-tuning and embeds the query sequences with the base model)
