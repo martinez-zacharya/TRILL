@@ -43,6 +43,11 @@
   ```
   python3 main.py blast_search ../data/query.fasta 4 --blast --database ../data/database.fasta
   ```
+### Distributed Training/Inference
+  5. In order to scale/speed up your analyses, you can distribute your training/inference across many GPUs with a few extra flags to your command. You can even fit models that do not normally fit on your GPUs with sharding and CPU-offloading. The list of strategies can be found here (https://pytorch-lightning.readthedocs.io/en/stable/extensions/strategy.html). The example below utilizes 16 GPUs in total (4(GPUs) * 4(--nodes)) with Fully Sharded Data Parallel and the 650M parameter ESM2 model.
+  ```
+  python3 main.py distributed_example ../data/query.fasta 4 --nodes 4 --strategy fsdp --model esm2_t33_650M_UR50D
+  ```
   
 ## Quick Tutorial:
 
