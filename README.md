@@ -4,7 +4,7 @@
 
 ### Positional Arguments:
 1. name (Name of run)
-2. query (Input fasta file)
+2. query (Input file. Needs to be either protein fasta (.fa, .faa, .fasta) or structural coordinates (.pdb, .cif))
 3. GPUs (Total # of GPUs requested for each node)
 
 ### Optional Arguments:
@@ -20,6 +20,10 @@
 - --model (Change ESM model. Default is esm2_t12_35M_UR50D. List of models can be found at https://github.com/facebookresearch/esm)
 - --strategy (Change training strategy. Default is None. List of strategies can be found at https://pytorch-lightning.readthedocs.io/en/stable/extensions/strategy.html)
 - --logger (Enable Tensorboard logger. Default is None)
+- --if1 (Utilize Inverse Folding model 'esm_if1_gvp4_t16_142M_UR50' to facilitate fixed backbone sequence design. Basically converts protein structure to possible sequences)
+- --chain (Don't use right now)
+- --temp (Choose sampling temperature. Higher temps will have more sequence diversity, but less recovery of the original sequence)
+- --genIters (Adjust number of sequences generated for each chain of the input structure)
 
 ## Examples
 
@@ -43,8 +47,17 @@
   ```
   python3 main.py blast_search ../data/query.fasta 4 --blast --database ../data/database.fasta
   ```
-  
-## Quick Tutorial:
+### Distributed Training/Inference
+  5. In order to scale/speed up your analyses, you can distribute your training/inference across many GPUs with a few extra flags to your command. You can even fit models that do not normally fit on your GPUs with sharding and CPU-offloading. The list of strategies can be found here (https://pytorch-lightning.readthedocs.io/en/stable/extensions/strategy.html). The example below utilizes 16 GPUs in total (4(GPUs) * 4(--nodes)) with Fully Sharded Data Parallel and the 650M parameter ESM2 model.
+  ```
+  python3 main.py distributed_example ../data/query.fasta 4 --nodes 4 --strategy fsdp --model esm2_t33_650M_UR50D
+  ```
+### Generating protein sequences using inverse folding with ESM-IF1
+  6. When provided a protein backbone structure (.pdb, .cif), the IF1 model is able to predict a sequence that might be able to fold into the input structure. The example input are the backbone coordinates from DWARF14, a rice hydrolase. For every chain in the structure, 2 in 4ih9.pdb, the following command will generate 3 sequences. In total, 6 sequences will be generated.
+  ```
+  python3 main.py IF_Test 4ih9.pdb 1 --if --gen_iters 3
+  ```
+## Quick Tutorial (NOT CURRENT, DON'T USE):
 
 1. Type ```git clone https://github.com/martinez-zacharya/DistantHomologyDetection``` in your home directory on the HPC
 2. Download Miniconda by running ```wget https://repo.anaconda.com/miniconda/Miniconda3-latest-Linux-x86_64.sh``` and then ```sh ./Miniconda3-latest-Linux-x86_64.sh```.
