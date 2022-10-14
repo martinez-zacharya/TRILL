@@ -3,6 +3,7 @@ import torch
 import argparse
 import esm
 import time
+import gc
 import os
 import sys
 import torch.nn as nn
@@ -10,6 +11,7 @@ import torch.nn.functional as F
 import pandas as pd
 from pytorch_lightning.loggers import TensorBoardLogger
 from pytorch_lightning.profilers import PyTorchProfiler
+from pytorch_lightning.strategies import DeepSpeedStrategy
 from tqdm import tqdm
 sys.path.insert(0, 'utils')
 from lightning_model import LitModel, coordDataset
@@ -29,7 +31,7 @@ def main():
     if args.if1 == True:
         pass
     else:
-        model = LitModel(eval(model_import_name), float(args.lr))
+        model = LitModel(eval(model_import_name), float(args.lr), args.LEGGO)
     if args.query.endswith(('.pdb', '.cif')) == True:
         structures = load_structure(args.query)
         data = extract_coords_from_complex(structures)
@@ -37,7 +39,7 @@ def main():
         dataloader = torch.utils.data.DataLoader(data, pin_memory = True, batch_size=1, shuffle=False)
         
     elif args.query.endswith(('.fasta', '.faa', '.fa')):
-        data = esm.data.FastaBatchedDataset(args.query)
+        data = esm.data.FastaBatchedDataset.from_file(args.query)
         dataloader = torch.utils.data.DataLoader(data, shuffle = False, batch_size = int(args.batch_size), num_workers=0, collate_fn=model.alphabet.get_batch_converter())
 
     else:
@@ -49,7 +51,11 @@ def main():
     else:
         logger = False
     
-    
+    if args.profiler:
+        profiler = PyTorchProfiler(filename='test-logs')
+    else:
+        profiler = None
+        
     if args.noTrain == True:
         trainer = pl.Trainer(enable_checkpointing=False, devices=int(args.GPUs), strategy = args.strategy, accelerator='gpu', logger=logger, num_nodes=int(args.nodes))
         trainer.predict(model, dataloader)
@@ -70,7 +76,7 @@ def main():
         finaldf.to_csv(f'{args.name}_{args.model}.csv', index = False)
         
     elif args.blast == True:
-        trainer = pl.Trainer(devices=int(args.GPUs), precision = 16, amp_backend='native', accelerator='gpu', strategy = args.strategy, max_epochs=int(args.epochs), logger=logger, num_nodes=int(args.nodes), enable_checkpointing=False)        
+        trainer = pl.Trainer(devices=int(args.GPUs), profiler = profiler, precision = 16, amp_backend='native', accelerator='gpu', strategy = args.strategy, max_epochs=int(args.epochs), logger=logger, num_nodes=int(args.nodes), enable_checkpointing=False)        
         trainer.fit(model=model, train_dataloaders=dataloader)
         trainer.save_checkpoint(f"{args.name}_{args.model}_{args.epochs}.pt")
         blastdb = esm.data.FastaBatchedDataset.from_file(args.database)
@@ -105,7 +111,10 @@ def main():
         
         
     else:
-        trainer = pl.Trainer(devices=int(args.GPUs), accelerator='gpu', strategy = args.strategy, max_epochs=int(args.epochs), logger=logger, num_nodes=int(args.nodes), precision = 16, amp_backend='native', enable_checkpointing=False)        
+        if args.LEGGO:
+            trainer = pl.Trainer(devices=int(args.GPUs), profiler = profiler,accelerator='gpu',max_epochs=int(args.epochs),logger=logger, num_nodes=int(args.nodes), precision = 16, amp_backend='native', enable_checkpointing=False, strategy=DeepSpeedStrategy(stage=3, offload_optimizer=True, offload_parameters=True))
+        else:
+            trainer = pl.Trainer(devices=int(args.GPUs), profiler = profiler, accelerator='gpu', strategy = args.strategy, max_epochs=int(args.epochs), logger=logger, num_nodes=int(args.nodes), precision = 16, amp_backend='native', enable_checkpointing=False)        
         trainer.fit(model=model, train_dataloaders=dataloader)
         trainer.save_checkpoint(f"{args.name}_{args.model}_{args.epochs}.pt")
         
@@ -221,7 +230,7 @@ if __name__ == '__main__':
     parser.add_argument(
         "--if1",
         help="Utilize Inverse Folding model 'esm_if1_gvp4_t16_142M_UR50' to facilitate fixed backbone sequence design. Basically converts protein structure to possible sequences.",
-        action="store_true",
+        action="store_false",
         default = False,
         dest="if1",
 )
@@ -249,6 +258,22 @@ if __name__ == '__main__':
         default = 1,
         dest="genIters",
 )
+    parser.add_argument(
+        "--LEGGO",
+        help="deepspeed_stage_3_offload.",
+        action="store_true",
+        default=False,
+        dest="LEGGO",
+)
+
+    parser.add_argument(
+        "--profiler",
+        help="Utilize PyTorchProfiler",
+        action="store_true",
+        default=False,
+        dest="profiler",
+)
+    
         
     
 
