@@ -9,6 +9,7 @@ sys.path.insert(0, 'utils')
 from mask import maskInputs
 from pytorch_lightning.loggers import TensorBoardLogger
 from pytorch_lightning.profilers import PyTorchProfiler
+from esm.inverse_folding.multichain_util import sample_sequence_in_complex
 
 class LitModel(pl.LightningModule):
     def __init__(self, model, lr):
@@ -17,6 +18,7 @@ class LitModel(pl.LightningModule):
         self.repr_layers = [(i + self.esm.num_layers + 1) % (self.esm.num_layers + 1) for i in [-1]]
         self.reps = []
         self.lr = lr
+        self.sample_seqs = []
 
     def training_step(self, batch, batch_idx):
         labels, seqs, toks = batch
@@ -40,10 +42,18 @@ class LitModel(pl.LightningModule):
         for i in range(len(rep_numpy)):
             self.reps.append(tuple([rep_numpy[i].mean(0), labels[i]]))
         return True
+        
     
-    # def generate(self, )
-    
-    
+
+class coordDataset(torch.utils.data.Dataset):
+    def __init__(self, input):
+        self.input = input
+    def __getitem__(self, idx):
+        coords, seq = self.input[idx]
+        return coords, seq
+    def __len__(self):
+        return len(self.input)
+        
     
     
     
