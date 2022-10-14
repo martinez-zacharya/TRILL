@@ -55,7 +55,7 @@
 ### Generating protein sequences using inverse folding with ESM-IF1
   6. When provided a protein backbone structure (.pdb, .cif), the IF1 model is able to predict a sequence that might be able to fold into the input structure. The example input are the backbone coordinates from DWARF14, a rice hydrolase. For every chain in the structure, 2 in 4ih9.pdb, the following command will generate 3 sequences. In total, 6 sequences will be generated.
   ```
-  python3 main.py IF_Test 4ih9.pdb 1 --if --gen_iters 3
+  python3 main.py IF_Test ../data/4ih9.pdb 1 --if --gen_iters 3
   ```
 ## Quick Tutorial (NOT CURRENT, DON'T USE):
 
