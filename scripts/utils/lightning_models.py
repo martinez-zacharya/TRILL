@@ -73,7 +73,9 @@ class ProtGPT2(pl.LightningModule):
         self.tokenizer = AutoTokenizer.from_pretrained("nferruz/ProtGPT2")
 
     def training_step(self, batch, batch_idx):
-        tokenizer_output = self.tokenizer.encode(batch[0])
+        if len(batch) == 1:
+            batch = batch[0]
+        tokenizer_output = self.tokenizer.encode(batch)
         self.tokenizer.pad_token = self.tokenizer.eos_token
         data_collator = DataCollatorForLanguageModeling(self.tokenizer, mlm=False)
         print(tokenizer_output)
