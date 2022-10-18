@@ -1,4 +1,5 @@
-# DistantHomologyDetection
+# TRILL
+**TR**aining and **I**nference using the **L**anguage of **L**ife
 
 ## Arguments
 
