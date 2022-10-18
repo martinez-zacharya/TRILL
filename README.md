@@ -1,5 +1,5 @@
 # TRILL
-### TRaining and Inference using the Language of Life
+**TR**aining and **I**nference using the **L**anguage of **L**ife
 
 ## Arguments
 
