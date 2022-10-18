@@ -16,6 +16,7 @@ from tqdm import tqdm
 sys.path.insert(0, 'utils')
 from lightning_models import ESM, coordDataset, ProtGPT2
 from update_weights import weights_update
+from transformers import DataCollatorForLanguageModeling
 from esm.inverse_folding.util import load_structure, extract_coords_from_structure
 from esm.inverse_folding.multichain_util import extract_coords_from_complex, sample_sequence_in_complex
 
