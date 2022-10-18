@@ -78,6 +78,11 @@ class ProtGPT2(pl.LightningModule):
         tokenizer.pad_token = tokenizer.eos_token
         data_collator = DataCollatorForLanguageModeling(tokenizer, mlm=False)
         outputs = self.model(tokenizer_output)
+        
+    def configure_optimizers(self):
+        optimizer = torch.optim.Adam(self.esm.parameters(), lr=self.lr)
+        lr_scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=1)
+        return [optimizer], [lr_scheduler]
     
     def predict_step(self, seed_seq="M", max_length=333, do_sample = True, top_k=950, repetition_penalty=1.2, num_return_sequences=10, eos_token_id=0):
         generator = pipeline('text-generation', model = self.model, tokenizer=self.tokenizer)
