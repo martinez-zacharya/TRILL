@@ -75,10 +75,10 @@ class ProtGPT2(pl.LightningModule):
     def training_step(self, batch, batch_idx):
         if len(batch) == 1:
             batch = batch[0]
-        tokenizer_output = self.tokenizer.encode(batch)
+        tokenizer_output = self.tokenizer(batch)
+        print(tokenizer_output)
         self.tokenizer.pad_token = self.tokenizer.eos_token
         data_collator = DataCollatorForLanguageModeling(self.tokenizer, mlm=False)
-        print(len(tokenizer_output))
         collated_data = data_collator(tokenizer_output)
         outputs = self.model(collated_data)
         
