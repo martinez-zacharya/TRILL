@@ -78,7 +78,7 @@ class ProtGPT2(pl.LightningModule):
         tokenizer_output = self.tokenizer.encode(batch)
         self.tokenizer.pad_token = self.tokenizer.eos_token
         data_collator = DataCollatorForLanguageModeling(self.tokenizer, mlm=False)
-        print(tokenizer_output)
+        print(len(tokenizer_output))
         collated_data = data_collator(tokenizer_output)
         outputs = self.model(collated_data)
         
