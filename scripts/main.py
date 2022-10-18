@@ -30,10 +30,10 @@ def main():
     model_import_name = f'esm.pretrained.{args.model}()'
     if args.if1 == True:
         pass
-    elif args.protgpt2 == True and args.pretrained == False:
+    elif args.protgpt2 == True and args.preTrained_model == False:
         model = ProtGPT2()
-    elif args.protgpt2 == True and args.pretrained == True:
-        model = ProtGPT2(args.pretrained)
+    elif args.protgpt2 == True and args.preTrained_model == True:
+        model = ProtGPT2(args.preTrained_model)
     else:
         model = ESM(eval(model_import_name), float(args.lr), args.LEGGO)
     
