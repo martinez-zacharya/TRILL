@@ -1,4 +1,5 @@
-# DistantHomologyDetection
+# TRILL
+### TRaining and Inference using the Language of Life
 
 ## Arguments
 
