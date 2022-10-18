@@ -76,8 +76,9 @@ class ProtGPT2(pl.LightningModule):
         print(batch)
         tokenizer_output = self.tokenizer(batch)
         self.tokenizer.pad_token = self.tokenizer.eos_token
-        data_collator = DataCollatorForLanguageModeling(tokenizer, mlm=False)
-        outputs = self.model(tokenizer_output)
+        data_collator = DataCollatorForLanguageModeling(self.tokenizer, mlm=False)
+        collated_data = data_collator(tokenizer_output)
+        outputs = self.model(collated_data)
         
     def configure_optimizers(self):
         optimizer = torch.optim.Adam(self.model.parameters(), lr=1e5)
