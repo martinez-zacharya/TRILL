@@ -80,7 +80,7 @@ class ProtGPT2(pl.LightningModule):
         outputs = self.model(tokenizer_output)
         
     def configure_optimizers(self):
-        optimizer = torch.optim.Adam(self.esm.parameters(), lr=self.lr)
+        optimizer = torch.optim.Adam(self.model.parameters(), lr=1e5)
         lr_scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=1)
         return [optimizer], [lr_scheduler]
     
