@@ -14,7 +14,7 @@ from pytorch_lightning.profilers import PyTorchProfiler
 from pytorch_lightning.strategies import DeepSpeedStrategy
 from tqdm import tqdm
 sys.path.insert(0, 'utils')
-from lightning_model import LitModel, coordDataset
+from lightning_models import ESM, coordDataset, ProtGPT2
 from update_weights import weights_update
 from esm.inverse_folding.util import load_structure, extract_coords_from_structure
 from esm.inverse_folding.multichain_util import extract_coords_from_complex, sample_sequence_in_complex
@@ -30,8 +30,13 @@ def main():
     model_import_name = f'esm.pretrained.{args.model}()'
     if args.if1 == True:
         pass
+    elif args.protgpt2 == True and args.pretrained == False:
+        model = ProtGPT2()
+    elif args.protgpt2 == True and args.pretrained == True:
+        model = ProtGPT2(args.pretrained)
     else:
-        model = LitModel(eval(model_import_name), float(args.lr), args.LEGGO)
+        model = ESM(eval(model_import_name), float(args.lr), args.LEGGO)
+    
     if args.query.endswith(('.pdb', '.cif')) == True:
         structures = load_structure(args.query)
         data = extract_coords_from_complex(structures)
@@ -39,8 +44,13 @@ def main():
         dataloader = torch.utils.data.DataLoader(data, pin_memory = True, batch_size=1, shuffle=False)
         
     elif args.query.endswith(('.fasta', '.faa', '.fa')):
-        data = esm.data.FastaBatchedDataset.from_file(args.query)
-        dataloader = torch.utils.data.DataLoader(data, shuffle = False, batch_size = int(args.batch_size), num_workers=0, collate_fn=model.alphabet.get_batch_converter())
+        if args.protgpt2 == True:
+            data = esm.data.FastaBatchedDataset.from_file(args.query)
+            data_collator = DataCollatorForLanguageModeling(model.tokenizer, mlm=False)
+            dataloader = torch.utils.data.DataLoader(data, shuffle = False, batch_size = int(args.batch_size), num_workers=0, collate_fn=data_collator)
+        else:
+            data = esm.data.FastaBatchedDataset.from_file(args.query)
+            dataloader = torch.utils.data.DataLoader(data, shuffle = False, batch_size = int(args.batch_size), num_workers=0, collate_fn=model.alphabet.get_batch_converter())
 
     else:
         return (f'Input query file - {args.query} is not a valid file format.\
@@ -65,8 +75,8 @@ def main():
         finaldf['Label'] = newdf['Label']
         finaldf.to_csv(f'{args.name}_{args.model}.csv', index = False)
     
-    elif args.preTrained_model != False:
-        model = weights_update(model = LitModel(eval(model_import_name), float(args.lr)), checkpoint = torch.load('/home/zacharymartinez/DistantHomologyDetection/scripts/test_esm2_t12_35M_UR50D_20.pt'))
+    elif args.preTrained_model != False and args.protgpt2 == False:
+        model = weights_update(model = ESM(eval(model_import_name), float(args.lr)), checkpoint = torch.load('/home/zacharymartinez/DistantHomologyDetection/scripts/test_esm2_t12_35M_UR50D_20.pt'))
         trainer = pl.Trainer(enable_checkpointing=False, devices=int(args.GPUs), strategy = args.strategy, accelerator='gpu', logger=logger, num_nodes=int(args.nodes))
         trainer.predict(model, dataloader)
         newdf = pd.DataFrame(model.reps, columns = ['Embeddings', 'Label'])
@@ -108,8 +118,15 @@ def main():
         sample_df = sample_df.iloc[1: , :]
         sample_df.to_csv(f'{args.name}_IF1_gen.csv', index=False, header = ['Generated_Seq', 'Chain'])      
         
-        
-        
+    elif args.protgpt2 == True:
+        if args.gen == True:
+            trainer = pl.Trainer(devices=int(args.GPUs), profiler=profiler, accelerator='gpu', max_epochs=int(args.epochs), logger=logger, num_nodes = int(args.nodes), precision = 16, amp_backend = 'native', enable_checkpointing = False, strategy = args.strategy)
+            generated_seqs = trainer.predict(model=model)
+            return(generated_seqs)     
+        else:
+            trainer = pl.Trainer(devices=int(args.GPUs), profiler=profiler, accelerator='gpu', max_epochs=int(args.epochs), logger=logger, num_nodes = int(args.nodes), precision = 16, amp_backend = 'native', enable_checkpointing = False, strategy = args.strategy)
+            trainer.fit(model=model, train_dataloaders = dataloader)
+    
     else:
         if args.LEGGO:
             trainer = pl.Trainer(devices=int(args.GPUs), profiler = profiler,accelerator='gpu',max_epochs=int(args.epochs),logger=logger, num_nodes=int(args.nodes), precision = 16, amp_backend='native', enable_checkpointing=False, strategy=DeepSpeedStrategy(stage=3, offload_optimizer=True, offload_parameters=True))
@@ -245,7 +262,7 @@ if __name__ == '__main__':
     
     parser.add_argument(
         "--temp",
-        help="Choose sampling temperature.",
+        help="Choose sampling temperature for --if1 mode.",
         action="store",
         default = 1.,
         dest="temp",
@@ -273,6 +290,24 @@ if __name__ == '__main__':
         default=False,
         dest="profiler",
 )
+    
+    parser.add_argument(
+        "--protgpt2",
+        help="Utilize ProtGPT2. Can either fine-tune or generate sequences",
+        action="store_true",
+        default=False,
+        dest="protgpt2",
+)
+    
+
+    parser.add_argument(
+        "--gen",
+        help="Generate protein sequences using ProtGPT2. Can either use base model or user-submitted fine-tuned model",
+        action="store_true",
+        default=False,
+        dest="gen",
+)   
+    
     
         
     
