@@ -55,8 +55,10 @@ def main():
             model.tokenizer.pad_token = model.tokenizer.eos_token
             data_collator = DataCollatorForLanguageModeling(model.tokenizer, mlm=False)
             # seq_dict = ProtGPT2Dataset(seq_dict)
-            seq_dict = Dataset.from_dict(seq_dict)
-            dataloader = torch.utils.data.DataLoader(seq_dict, shuffle = False, batch_size = int(args.batch_size), num_workers=0, collate_fn=data_collator)
+            seq_dict_df = pd.DataFrame(seq_dict)
+            print(seq_dict_df)
+            seq_dict_df = Dataset.from_pandas(seq_dict_df)
+            dataloader = torch.utils.data.DataLoader(seq_dict_df, shuffle = False, batch_size = int(args.batch_size), num_workers=0, collate_fn=data_collator)
         else:
             data = esm.data.FastaBatchedDataset.from_file(args.query)
             dataloader = torch.utils.data.DataLoader(data, shuffle = False, batch_size = int(args.batch_size), num_workers=0, collate_fn=model.alphabet.get_batch_converter())
