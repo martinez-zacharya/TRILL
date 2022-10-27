@@ -99,6 +99,15 @@ class coordDataset(torch.utils.data.Dataset):
         return coords, seq
     def __len__(self):
         return len(self.input)
+    
+class ProtGPT2Dataset(torch.utils.data.Dataset):
+    def __init__(self, input):
+        self.input = input
+    def __getitem__(self, idx):
+        label, seq = self.input[idx]
+        return label, seq
+    def __len__(self):
+        return len(self.input)
         
     
     

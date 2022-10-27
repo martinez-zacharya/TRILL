@@ -14,7 +14,7 @@ from pytorch_lightning.profilers import PyTorchProfiler
 from pytorch_lightning.strategies import DeepSpeedStrategy
 from tqdm import tqdm
 sys.path.insert(0, 'utils')
-from lightning_models import ESM, coordDataset, ProtGPT2
+from lightning_models import ESM, coordDataset, ProtGPT2, ProtGPT2Dataset
 from update_weights import weights_update
 from transformers import DataCollatorForLanguageModeling
 from esm.inverse_folding.util import load_structure, extract_coords_from_structure
@@ -53,9 +53,7 @@ def main():
             seq_dict = dict(seqs_for_dl)
             model.tokenizer.pad_token = model.tokenizer.eos_token
             data_collator = DataCollatorForLanguageModeling(model.tokenizer, mlm=False)
-            for idx, (blah) in enumerate(seq_dict):
-                print(idx)
-                print(blah)
+            seq_dict = ProtGPT2Dataset(seq_dict)
             dataloader = torch.utils.data.DataLoader(seq_dict, shuffle = False, batch_size = int(args.batch_size), num_workers=0, collate_fn=data_collator)
         else:
             data = esm.data.FastaBatchedDataset.from_file(args.query)
