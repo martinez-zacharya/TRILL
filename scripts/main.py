@@ -23,8 +23,7 @@ from esm.inverse_folding.multichain_util import extract_coords_from_complex, sam
 
 os.environ['TF_ENABLE_ONEDNN_OPTS'] = '0'
 
-def tokenize_and_encode(batch):
-    return tokenizer(batch['text'], padding=True)
+
 
 def main():
     start = time.time()
@@ -40,6 +39,9 @@ def main():
         model = ProtGPT2(args.preTrained_model)
     else:
         model = ESM(eval(model_import_name), float(args.lr), args.LEGGO)
+        
+    def tokenize_and_encode(batch):
+        return model.tokenizer(batch['text'], padding=True)
     
     if args.query.endswith(('.pdb', '.cif')) == True:
         structures = load_structure(args.query)
