@@ -50,6 +50,7 @@ def main():
             seqs_for_dl = []
             for pair in data:
                 seqs_for_dl.append(pair)
+            model.tokenizer.pad_token = model.tokenizer.eos_token
             data_collator = DataCollatorForLanguageModeling(model.tokenizer, mlm=False)
             print(data)
             dataloader = torch.utils.data.DataLoader(data, shuffle = False, batch_size = int(args.batch_size), num_workers=0, collate_fn=data_collator)
