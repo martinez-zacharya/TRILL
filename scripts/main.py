@@ -59,7 +59,7 @@ def main():
             # seq_dict_df = Dataset.from_pandas(seq_dict_df)
             blah_list = seq_dict_df['input_ids'].values.tolist()
             print(blah_list)
-            tokens = model.tokenizer(blah_list, return_tensors = 'pt')
+            tokens = data_collator(blah_list)
             print(tokens)
             dataloader = torch.utils.data.DataLoader(seq_dict_df, shuffle = False, batch_size = int(args.batch_size), num_workers=0, collate_fn=data_collator)
         else:
