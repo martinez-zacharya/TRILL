@@ -109,7 +109,7 @@ class ProtGPT2Dataset(torch.utils.data.Dataset):
         seq = self.seqs[idx]
         return {'label': label, 'seq': seq}
     def __len__(self):
-        return len(self.input)
+        return len(self.labels)
         
     
     
