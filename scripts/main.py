@@ -41,7 +41,7 @@ def main():
         model = ESM(eval(model_import_name), float(args.lr), args.LEGGO)
         
     def tokenize_and_encode(batch):
-        return model.tokenizer(batch['text'], padding=True)
+        return model.tokenizer(batch['input_ids'], padding=True)
     
     if args.query.endswith(('.pdb', '.cif')) == True:
         structures = load_structure(args.query)
