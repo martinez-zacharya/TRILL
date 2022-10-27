@@ -53,6 +53,9 @@ def main():
             seq_dict = dict(seqs_for_dl)
             model.tokenizer.pad_token = model.tokenizer.eos_token
             data_collator = DataCollatorForLanguageModeling(model.tokenizer, mlm=False)
+            for idx, (data, blah) in enumerate(seq_dict):
+                print(idx)
+                print(data,blah)
             dataloader = torch.utils.data.DataLoader(seq_dict, shuffle = False, batch_size = int(args.batch_size), num_workers=0, collate_fn=data_collator)
         else:
             data = esm.data.FastaBatchedDataset.from_file(args.query)
