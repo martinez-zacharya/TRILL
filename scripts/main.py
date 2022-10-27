@@ -47,10 +47,10 @@ def main():
     elif args.query.endswith(('.fasta', '.faa', '.fa')):
         if args.protgpt2 == True:
             data = esm.data.FastaBatchedDataset.from_file(args.query)
-            seqs_for_dl = {}
+            seqs_for_dl = []
             for pair in data:
-                seqs_for_dl = {pair[0]: pair[1]}
-            print(seqs_for_dl)
+                seqs_for_dl.append(tuple(pair[0], pair[1]))
+            print(dict(seqs_for_dl))
             model.tokenizer.pad_token = model.tokenizer.eos_token
             data_collator = DataCollatorForLanguageModeling(model.tokenizer, mlm=False)
             dataloader = torch.utils.data.DataLoader(seqs_for_dl, shuffle = False, batch_size = int(args.batch_size), num_workers=0, collate_fn=data_collator)
