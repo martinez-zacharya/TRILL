@@ -50,8 +50,8 @@ def main():
             seqs_for_dl = []
             for pair in data:
                 seqs_for_dl.append(pair[1])
-            # data_collator = DataCollatorForLanguageModeling(model.tokenizer, mlm=False)
-            dataloader = torch.utils.data.DataLoader(seqs_for_dl, shuffle = False, batch_size = int(args.batch_size), num_workers=0)
+            data_collator = DataCollatorForLanguageModeling(model.tokenizer, mlm=False)
+            dataloader = torch.utils.data.DataLoader(seqs_for_dl, shuffle = False, batch_size = int(args.batch_size), num_workers=0, collate_fn=data_collator)
         else:
             data = esm.data.FastaBatchedDataset.from_file(args.query)
             dataloader = torch.utils.data.DataLoader(data, shuffle = False, batch_size = int(args.batch_size), num_workers=0, collate_fn=model.alphabet.get_batch_converter())
