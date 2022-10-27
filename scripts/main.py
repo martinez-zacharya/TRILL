@@ -49,7 +49,7 @@ def main():
             data = esm.data.FastaBatchedDataset.from_file(args.query)
             seqs_for_dl = []
             for pair in data:
-                seqs_for_dl.append(tuple(pair[0], pair[1]))
+                seqs_for_dl.append(tuple(pair))
             print(dict(seqs_for_dl))
             model.tokenizer.pad_token = model.tokenizer.eos_token
             data_collator = DataCollatorForLanguageModeling(model.tokenizer, mlm=False)
