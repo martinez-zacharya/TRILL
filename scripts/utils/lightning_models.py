@@ -102,8 +102,8 @@ class coordDataset(torch.utils.data.Dataset):
     
 class ProtGPT2Dataset(torch.utils.data.Dataset):
     def __init__(self, input):
-        self.labels = dict.keys()
-        self.seqs = dict.values()
+        self.labels = input.keys()
+        self.seqs = input.values()
     def __getitem__(self, idx):
         label = self.labels[idx]
         seq = self.seqs[idx]
