@@ -40,8 +40,6 @@ def main():
     else:
         model = ESM(eval(model_import_name), float(args.lr), args.LEGGO)
         
-    def tokenize_and_encode(batch):
-        return model.tokenizer(batch['input_ids'], padding=True)
     
     if args.query.endswith(('.pdb', '.cif')) == True:
         structures = load_structure(args.query)
@@ -60,11 +58,12 @@ def main():
             data_collator = DataCollatorForLanguageModeling(tokenizer = model.tokenizer, mlm=False)
             # seq_dict = ProtGPT2Dataset(seq_dict)
             seq_dict_df = pd.DataFrame(seq_dict.items(), columns = ['Labels', 'input_ids'])
-            seq_dict_df = Dataset.from_pandas(seq_dict_df)
-            seq_dict_df_enc = seq_dict_df.map(tokenize_and_encode, batched=True)
-            print(seq_dict_df_enc)
-            # blah_list = seq_dict_df['input_ids'].values.tolist()
-            # please = model.tokenizer(blah_list, padding = True)
+            # seq_dict_df = Dataset.from_pandas(seq_dict_df)
+            blah_list = seq_dict_df['input_ids'].values.tolist()
+            please = model.tokenizer(blah_list, padding = True, return_tensors='pt')
+            print(please)
+            collated = data_collator(please)
+            print(collated)
             dataloader = torch.utils.data.DataLoader(seq_dict_df, shuffle = False, batch_size = int(args.batch_size), num_workers=0, collate_fn=data_collator)
         else:
             data = esm.data.FastaBatchedDataset.from_file(args.query)
