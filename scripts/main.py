@@ -60,7 +60,7 @@ def main():
             seq_dict_df = pd.DataFrame(seq_dict.items(), columns = ['Labels', 'input_ids'])
             # seq_dict_df = Dataset.from_pandas(seq_dict_df)
             blah_list = seq_dict_df['input_ids'].values.tolist()
-            please = model.tokenizer(blah_list, padding = True, return_tensors='pt')
+            please = model.tokenizer(blah_list, padding = True, return_tensors='pt', return_special_tokens_mask=True)
             print(please)
             collated = data_collator(please)
             print(collated)
