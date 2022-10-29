@@ -30,6 +30,7 @@ def tokenize(element):
         element["Labels"],
         padding=True,
         return_length=True,
+        max_length=context_length
     )
     input_batch = []
     for length, input_ids in zip(outputs["length"], outputs["input_ids"]):
