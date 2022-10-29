@@ -25,6 +25,7 @@ os.environ['TF_ENABLE_ONEDNN_OPTS'] = '0'
 
 def tokenize(element):
     tokenizer = AutoTokenizer.from_pretrained("nferruz/ProtGPT2")
+    tokenizer.pad_token = tokenizer.eos_token
     outputs = tokenizer(
         element["Labels"],
         padding=True,
