@@ -73,8 +73,7 @@ def main():
             print(seq_dict_df)
             tokenized_datasets = seq_dict_df.map(tokenize, batched=True)
             out = data_collator([tokenized_datasets["input_ids"][i] for i in range(5)])
-            for key in out:
-                print(f"{key} shape: {out[key].shape}")
+            print(out)
             # blah_list = seq_dict_df['input_ids'].values.tolist()
             # please = model.tokenizer(blah_list, padding = True, return_tensors='pt', return_special_tokens_mask=True)
             dataloader = torch.utils.data.DataLoader(seq_dict_df, shuffle = False, batch_size = int(args.batch_size), num_workers=0, collate_fn=data_collator)
