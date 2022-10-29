@@ -71,6 +71,7 @@ def main():
             # seq_dict = ProtGPT2Dataset(seq_dict)
             seq_dict_df = pd.DataFrame(seq_dict.items(), columns = ['Labels', 'input_ids'])
             seq_dict_df = Dataset.from_pandas(seq_dict_df)
+            print(seq_dict_df)
             tokenized_datasets = seq_dict_df.map(tokenize, batched=True)
             out = data_collator([tokenized_datasets["input_ids"][i] for i in range(5)])
             for key in out:
