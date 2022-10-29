@@ -26,7 +26,7 @@ os.environ['TF_ENABLE_ONEDNN_OPTS'] = '0'
 def tokenize(element):
     tokenizer = AutoTokenizer.from_pretrained("nferruz/ProtGPT2")
     outputs = tokenizer(
-        element["content"],
+        element["label"],
         padding=True,
         return_length=True,
     )
