@@ -28,14 +28,11 @@ def tokenize(element):
     tokenizer.pad_token = tokenizer.eos_token
     outputs = tokenizer(
         element["Labels"],
-        padding=True,
-        return_length=True,
-        max_length=context_length
+        padding=True
     )
     input_batch = []
-    for length, input_ids in zip(outputs["length"], outputs["input_ids"]):
-        if length == context_length:
-            input_batch.append(input_ids)
+    for input_ids in outputs["input_ids"]:
+        input_batch.append(input_ids)
     return {"input_ids": input_batch} 
 
 
