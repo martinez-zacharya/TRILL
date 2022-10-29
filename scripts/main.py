@@ -21,7 +21,7 @@ from transformers import DataCollatorForLanguageModeling, AutoTokenizer
 from esm.inverse_folding.util import load_structure, extract_coords_from_structure
 from esm.inverse_folding.multichain_util import extract_coords_from_complex, sample_sequence_in_complex
 
-os.environ['TF_ENABLE_ONEDNN_OPTS'] = '0'
+os.environ['CUDA_LAUNCH_BLOCKING'] = '1'
 os.environ["TOKENIZERS_PARALLELISM"] = "false"
 def tokenize(element):
     tokenizer = AutoTokenizer.from_pretrained("nferruz/ProtGPT2")
