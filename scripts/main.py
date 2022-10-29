@@ -23,6 +23,18 @@ from esm.inverse_folding.multichain_util import extract_coords_from_complex, sam
 
 os.environ['TF_ENABLE_ONEDNN_OPTS'] = '0'
 
+def tokenize(element):
+    tokenizer = AutoTokenizer.from_pretrained("nferruz/ProtGPT2")
+    outputs = tokenizer(
+        element["content"],
+        padding=True,
+        return_length=True,
+    )
+    input_batch = []
+    for length, input_ids in zip(outputs["length"], outputs["input_ids"]):
+        if length == context_length:
+            input_batch.append(input_ids)
+    return {"input_ids": input_batch} 
 
 
 def main():
@@ -58,12 +70,13 @@ def main():
             data_collator = DataCollatorForLanguageModeling(tokenizer = model.tokenizer, mlm=False)
             # seq_dict = ProtGPT2Dataset(seq_dict)
             seq_dict_df = pd.DataFrame(seq_dict.items(), columns = ['Labels', 'input_ids'])
-            # seq_dict_df = Dataset.from_pandas(seq_dict_df)
-            blah_list = seq_dict_df['input_ids'].values.tolist()
-            please = model.tokenizer(blah_list, padding = True, return_tensors='pt', return_special_tokens_mask=True)
-            print(please)
-            collated = data_collator(please)
-            print(collated)
+            seq_dict_df = Dataset.from_pandas(seq_dict_df)
+            tokenized_datasets = seq_dict_df.map(tokenize, batched=True)
+            out = data_collator([tokenized_datasets["input_ids"][i] for i in range(5)])
+            for key in out:
+                print(f"{key} shape: {out[key].shape}")
+            # blah_list = seq_dict_df['input_ids'].values.tolist()
+            # please = model.tokenizer(blah_list, padding = True, return_tensors='pt', return_special_tokens_mask=True)
             dataloader = torch.utils.data.DataLoader(seq_dict_df, shuffle = False, batch_size = int(args.batch_size), num_workers=0, collate_fn=data_collator)
         else:
             data = esm.data.FastaBatchedDataset.from_file(args.query)
