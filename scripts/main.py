@@ -28,7 +28,8 @@ def tokenize(element):
     tokenizer.pad_token = tokenizer.eos_token
     outputs = tokenizer(
         element["Labels"],
-        padding=True
+        padding=True,
+        return_special_tokens_mask=True
     )
     input_batch = []
     for input_ids in outputs["input_ids"]:
@@ -76,7 +77,7 @@ def main():
             print(out)
             # blah_list = seq_dict_df['input_ids'].values.tolist()
             # please = model.tokenizer(blah_list, padding = True, return_tensors='pt', return_special_tokens_mask=True)
-            dataloader = torch.utils.data.DataLoader(seq_dict_df, shuffle = False, batch_size = int(args.batch_size), num_workers=0, collate_fn=data_collator)
+            dataloader = torch.utils.data.DataLoader(out, shuffle = False, batch_size = int(args.batch_size), num_workers=0)
         else:
             data = esm.data.FastaBatchedDataset.from_file(args.query)
             dataloader = torch.utils.data.DataLoader(data, shuffle = False, batch_size = int(args.batch_size), num_workers=0, collate_fn=model.alphabet.get_batch_converter())
