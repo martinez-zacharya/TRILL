@@ -73,12 +73,13 @@ class ProtGPT2(pl.LightningModule):
         self.tokenizer = AutoTokenizer.from_pretrained("nferruz/ProtGPT2")
 
     def training_step(self, batch, batch_idx):
-        # if len(batch) == 1:
-        #     batch = batch[0]
-        # tokenizer_output = self.tokenizer(batch)
-        # data_collator = DataCollatorForLanguageModeling(self.tokenizer, mlm=False)
-        # collated_data = data_collator(tokenizer_output)
-        print(batch['input_ids'])
+        print(batch)
+        print('-----------------')
+        print(batch.shape)
+        print('-----------------')
+        print(type(batch))
+        print('-----------------')
+        print(batch['input_ids'].shape)
         # outputs = self.model(batch['input_ids'])
         
     def configure_optimizers(self):
