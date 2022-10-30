@@ -76,7 +76,7 @@ class ProtGPT2(pl.LightningModule):
         for k, v in batch.items():
             print(v)
             print(type(v))
-            print(self.tokenizer.decode(torch.Tensor(v)))
+            print(self.tokenizer.batch_decode((v)))
             print('-----------------')
             print(self.tokenizer.decode(torch.Tensor(k)))
         print('-----------------')
