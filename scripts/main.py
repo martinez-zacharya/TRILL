@@ -73,7 +73,7 @@ def main():
             tokenized_datasets = seq_dict_df.map(tokenize, batched=True)
             # out = data_collator([tokenized_datasets["input_ids"][i] for i in range(5)])
             # out = ProtGPT2Dataset(tokenized_datasets)
-            for blah in tokenized_datasets():
+            for blah in tokenized_datasets:
                 print(blah)
                 print('------')
                 print(blah[0])
