@@ -68,16 +68,17 @@ def main():
             seq_dict = dict(seqs_for_dl)
             model.tokenizer.pad_token = model.tokenizer.eos_token
             data_collator = DataCollatorForLanguageModeling(tokenizer = model.tokenizer, mlm=False)
-            # seq_dict = ProtGPT2Dataset(seq_dict)
             seq_dict_df = pd.DataFrame(seq_dict.items(), columns = ['Labels', 'input_ids'])
             seq_dict_df = Dataset.from_pandas(seq_dict_df)
             tokenized_datasets = seq_dict_df.map(tokenize, batched=True)
             # out = data_collator([tokenized_datasets["input_ids"][i] for i in range(5)])
             # out = ProtGPT2Dataset(tokenized_datasets)
-            for k, v in tokenized_datasets.items():
-                print(k)
+            for blah in tokenized_datasets():
+                print(blah)
                 print('------')
-                print(v)
+                print(blah[0])
+                print('------')
+                print(blah[1])
                 print('---end-----')
             # blah_list = seq_dict_df['input_ids'].values.tolist()
             # please = model.tokenizer(blah_list, padding = True, return_tensors='pt', return_special_tokens_mask=True)
