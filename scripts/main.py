@@ -75,7 +75,10 @@ def main():
             out = data_collator([tokenized_datasets["input_ids"][i] for i in range(5)])
             out = ProtGPT2Dataset(out)
             for blah in out:
-                print(blah.shape)
+                for k, v in blah.items():
+                    print(k)
+                    print('-----------')
+                    print(v)
             # blah_list = seq_dict_df['input_ids'].values.tolist()
             # please = model.tokenizer(blah_list, padding = True, return_tensors='pt', return_special_tokens_mask=True)
             dataloader = torch.utils.data.DataLoader(out, shuffle = False, batch_size = int(args.batch_size), num_workers=0)
