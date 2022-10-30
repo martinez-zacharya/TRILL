@@ -79,6 +79,7 @@ def main():
                     print(k)
                     print('-----------')
                     print(v)
+                    print(type(v))
                     print('---end-----')
                     print(model.tokenizer.decode(v))
             # blah_list = seq_dict_df['input_ids'].values.tolist()
