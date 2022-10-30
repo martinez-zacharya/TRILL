@@ -77,7 +77,7 @@ class ProtGPT2(pl.LightningModule):
             print(v)
             print(v.shape)
             print(type(v))
-            print(self.tokenizer.decode((v)))
+            print(self.tokenizer.batch_decode((v)))
             print('-----------------')
             print(self.tokenizer.decode(torch.Tensor(k)))
         print('-----------------')
