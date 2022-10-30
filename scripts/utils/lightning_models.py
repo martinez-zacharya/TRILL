@@ -73,12 +73,10 @@ class ProtGPT2(pl.LightningModule):
         self.tokenizer = AutoTokenizer.from_pretrained("nferruz/ProtGPT2")
 
     def training_step(self, batch, batch_idx):
-        print(batch)
-        print('-----------------')
         for k, v in batch.items():
-            print(self.tokenizer.decode(v))
-            print(self.tokenizer.decode(k))
-
+            print(self.tokenizer.decode(torch.Tensor(v)))
+            print('-----------------')
+            print(self.tokenizer.decode(torch.Tensor(k)))
         print('-----------------')
         print(type(batch))
         print('-----------------')
