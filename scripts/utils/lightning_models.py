@@ -75,7 +75,9 @@ class ProtGPT2(pl.LightningModule):
     def training_step(self, batch, batch_idx):
         print(batch)
         print('-----------------')
-        print(batch.shape)
+        for k, v in batch.items():
+            print(k)
+            print(v)
         print('-----------------')
         print(type(batch))
         print('-----------------')
