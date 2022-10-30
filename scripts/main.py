@@ -79,6 +79,8 @@ def main():
                     print(k)
                     print('-----------')
                     print(v)
+                    print('---end-----')
+                    print(model.tokenizer.decode(v))
             # blah_list = seq_dict_df['input_ids'].values.tolist()
             # please = model.tokenizer(blah_list, padding = True, return_tensors='pt', return_special_tokens_mask=True)
             dataloader = torch.utils.data.DataLoader(out, shuffle = False, batch_size = int(args.batch_size), num_workers=0)
