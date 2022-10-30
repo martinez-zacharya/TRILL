@@ -76,9 +76,7 @@ def main():
             for blah in tokenized_datasets:
                 print(blah)
                 print('------')
-                print(blah[0])
-                print('------')
-                print(blah[1])
+                print(model.tokenizer.decode(blah['input_ids']))
                 print('---end-----')
             # blah_list = seq_dict_df['input_ids'].values.tolist()
             # please = model.tokenizer(blah_list, padding = True, return_tensors='pt', return_special_tokens_mask=True)
