@@ -74,6 +74,8 @@ class ProtGPT2(pl.LightningModule):
 
     def training_step(self, batch, batch_idx):
         for k, v in batch.items():
+            print(v)
+            print(type(v))
             print(self.tokenizer.decode(torch.Tensor(v)))
             print('-----------------')
             print(self.tokenizer.decode(torch.Tensor(k)))
