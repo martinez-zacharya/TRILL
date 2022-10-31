@@ -8,6 +8,7 @@ import sys
 import gc
 sys.path.insert(0, 'utils')
 from mask import maskInputs
+from update_weights import weights_update
 from pytorch_lightning.loggers import TensorBoardLogger
 from pytorch_lightning.profilers import PyTorchProfiler
 from deepspeed.ops.adam import DeepSpeedCPUAdam
@@ -67,34 +68,36 @@ class ProtGPT2(pl.LightningModule):
     def __init__(self, pretrained = None):
         super().__init__()
         if pretrained != None:
-            self.model = AutoModelForCausalLM.from_pretrained(pretrained)
+            self.model = AutoModelForCausalLM.from_pretrained("nferruz/ProtGPT2")
+            self.model = weights_update(self.model, checkpoint=pretrained)
         else:
             self.model = AutoModelForCausalLM.from_pretrained("nferruz/ProtGPT2")
         self.tokenizer = AutoTokenizer.from_pretrained("nferruz/ProtGPT2")
 
     def training_step(self, batch, batch_idx):
-        print(self.tokenizer.decode(batch['input_ids'].squeeze()))
-        for k, v in batch.items():
-            print(v)
-            print(v.shape)
-            print(type(v))
-            print(self.tokenizer.batch_decode((v)))
-            print('-----------------')
-            print(self.tokenizer.decode(torch.Tensor(k)))
-        print('-----------------')
-        print(type(batch))
-        print('-----------------')
-        print(batch['input_ids'].shape)
-        # outputs = self.model(batch['input_ids'])
+        self.tokenizer.pad_token = self.tokenizer.eos_token
+        tokenized = self.tokenizer(
+        batch["Labels"],
+        padding=True,
+        return_special_tokens_mask=True
+    )
+        att = torch.LongTensor(tokenized['attention_mask']).cuda()
+        data_collator = DataCollatorForLanguageModeling(tokenizer = self.tokenizer, mlm=False)
+        collated = data_collator([tokenized['input_ids']])
+        outputs = self.model(collated['input_ids'].cuda(), labels = collated['labels'].cuda(), attention_mask = att, return_dict = True)
+        loss = outputs[0]
+        self.log("loss", loss)
+        return(loss)
         
     def configure_optimizers(self):
-        optimizer = torch.optim.Adam(self.model.parameters(), lr=1e5)
+        optimizer = torch.optim.Adam(self.model.parameters(), lr=1e-5)
         lr_scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=1)
         return [optimizer], [lr_scheduler]
     
-    def predict_step(self, seed_seq="M", max_length=333, do_sample = True, top_k=950, repetition_penalty=1.2, num_return_sequences=10, eos_token_id=0):
+    def generate(self, seed_seq="M", max_length=333, do_sample = True, top_k=950, repetition_penalty=1.2, num_return_sequences=10, eos_token_id=0):
         generator = pipeline('text-generation', model = self.model, tokenizer=self.tokenizer)
-        outseqs = generator(seed_seq, max_length, do_sample, top_k, repetition_penalty, num_return_sequences, eos_token_id)
+        outseqs = generator(seed_seq, max_length=max_length, do_sample =do_sample, top_k=top_k, repetition_penalty=repetition_penalty, num_return_sequences=num_return_sequences, eos_token_id=eos_token_id)
+        outseqs = [samp['generated_text'].replace('\n','') for samp in outseqs]
         return outseqs
 
 class coordDataset(torch.utils.data.Dataset):
@@ -106,16 +109,16 @@ class coordDataset(torch.utils.data.Dataset):
     def __len__(self):
         return len(self.input)
     
-class ProtGPT2Dataset(torch.utils.data.Dataset):
-    def __init__(self, input):
-        self.labels = list(input.keys())
-        self.seqs = list(input.values())
-    def __getitem__(self, idx):
-        label = self.labels[idx]
-        seq = self.seqs[idx]
-        return {'input_ids': seq, 'text': label }
-    def __len__(self):
-        return len(self.labels)
+# class ProtGPT2Dataset(torch.utils.data.Dataset):
+#     def __init__(self, input):
+#         self.labels = list(input.keys())
+#         self.seqs = list(input.values())
+#     def __getitem__(self, idx):
+#         label = self.labels[idx]
+#         seq = self.seqs[idx]
+#         return {'input_ids': seq, 'text': label }
+#     def __len__(self):
+#         return len(self.labels)
         
     
     

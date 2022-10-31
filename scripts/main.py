@@ -14,7 +14,7 @@ from pytorch_lightning.profilers import PyTorchProfiler
 from pytorch_lightning.strategies import DeepSpeedStrategy
 from tqdm import tqdm
 sys.path.insert(0, 'utils')
-from lightning_models import ESM, coordDataset, ProtGPT2, ProtGPT2Dataset
+from lightning_models import ESM, coordDataset, ProtGPT2
 from update_weights import weights_update
 from datasets import Dataset
 from transformers import DataCollatorForLanguageModeling, AutoTokenizer
@@ -23,23 +23,10 @@ from esm.inverse_folding.multichain_util import extract_coords_from_complex, sam
 
 os.environ['CUDA_LAUNCH_BLOCKING'] = '1'
 os.environ["TOKENIZERS_PARALLELISM"] = "false"
-def tokenize(element):
-    tokenizer = AutoTokenizer.from_pretrained("nferruz/ProtGPT2")
-    tokenizer.pad_token = tokenizer.eos_token
-    outputs = tokenizer(
-        element["Labels"],
-        padding=True,
-        return_special_tokens_mask=True
-    )
-    input_batch = []
-    for input_ids in outputs["input_ids"]:
-        input_batch.append(input_ids)
-    return {"input_ids": input_batch} 
-
 
 def main():
     start = time.time()
-    
+
     
     pl.seed_everything(123)
     model_import_name = f'esm.pretrained.{args.model}()'
@@ -47,8 +34,8 @@ def main():
         pass
     elif args.protgpt2 == True and args.preTrained_model == False:
         model = ProtGPT2()
-    elif args.protgpt2 == True and args.preTrained_model == True:
-        model = ProtGPT2(args.preTrained_model)
+    elif args.protgpt2 == True and args.preTrained_model != False:
+        model = ProtGPT2(pretrained=args.preTrained_model)
     else:
         model = ESM(eval(model_import_name), float(args.lr), args.LEGGO)
         
@@ -68,20 +55,9 @@ def main():
             seq_dict = dict(seqs_for_dl)
             model.tokenizer.pad_token = model.tokenizer.eos_token
             data_collator = DataCollatorForLanguageModeling(tokenizer = model.tokenizer, mlm=False)
-            seq_dict_df = pd.DataFrame(seq_dict.items(), columns = ['Labels', 'input_ids'])
+            seq_dict_df = pd.DataFrame(seq_dict.items(), columns = ['input_ids', 'Labels'])
             seq_dict_df = Dataset.from_pandas(seq_dict_df)
-            tokenized_datasets = seq_dict_df.map(tokenize, batched=True)
-            # out = data_collator([tokenized_datasets["input_ids"][i] for i in range(5)])
-            # out = ProtGPT2Dataset(tokenized_datasets)
-            for blah in tokenized_datasets:
-                print(blah)
-                print('------')
-                print(model.tokenizer.decode(blah['input_ids']))
-                print('---end-----')
-                break
-            # blah_list = seq_dict_df['input_ids'].values.tolist()
-            # please = model.tokenizer(blah_list, padding = True, return_tensors='pt', return_special_tokens_mask=True)
-            dataloader = torch.utils.data.DataLoader(out, shuffle = False, batch_size = int(args.batch_size), num_workers=0)
+            dataloader = torch.utils.data.DataLoader(seq_dict_df, shuffle = False, batch_size = int(args.batch_size), num_workers=0)
         else:
             data = esm.data.FastaBatchedDataset.from_file(args.query)
             dataloader = torch.utils.data.DataLoader(data, shuffle = False, batch_size = int(args.batch_size), num_workers=0, collate_fn=model.alphabet.get_batch_converter())
@@ -154,13 +130,13 @@ def main():
         
     elif args.protgpt2 == True:
         if args.gen == True:
-            trainer = pl.Trainer(devices=int(args.GPUs), profiler=profiler, accelerator='gpu', max_epochs=int(args.epochs), logger=logger, num_nodes = int(args.nodes), precision = 16, amp_backend = 'native', enable_checkpointing = False, strategy = args.strategy)
-            generated_seqs = trainer.predict(model=model)
-            return(generated_seqs)     
+            generated_output = model.generate()
+            gen_seq_df = pd.DataFrame(generated_output, columns=['Generated_Sequence'])
+            gen_seq_df.to_csv(f'{args.name}_generated_sequences.csv', index = False)
         else:
-            trainer = pl.Trainer(devices=int(args.GPUs), profiler=profiler, accelerator='gpu', max_epochs=int(args.epochs), logger=logger, num_nodes = int(args.nodes), precision = 16, amp_backend = 'native', enable_checkpointing = False, strategy = args.strategy)
+            trainer = pl.Trainer(devices=int(args.GPUs), profiler=profiler, accelerator='gpu', max_epochs=int(args.epochs), logger=logger, num_nodes = int(args.nodes), enable_checkpointing = False, strategy = args.strategy)
             trainer.fit(model=model, train_dataloaders = dataloader)
-    
+            trainer.save_checkpoint(f"{args.name}_{args.epochs}.pt")
     else:
         if args.LEGGO:
             trainer = pl.Trainer(devices=int(args.GPUs), profiler = profiler,accelerator='gpu',max_epochs=int(args.epochs),logger=logger, num_nodes=int(args.nodes), precision = 16, amp_backend='native', enable_checkpointing=False, strategy=DeepSpeedStrategy(stage=3, offload_optimizer=True, offload_parameters=True))
