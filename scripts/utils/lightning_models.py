@@ -69,7 +69,8 @@ class ProtGPT2(pl.LightningModule):
         super().__init__()
         if pretrained != None:
             self.model = AutoModelForCausalLM.from_pretrained("nferruz/ProtGPT2")
-            self.model = weights_update(self.model, checkpoint=pretrained)
+            # self.model = self.model.load_from_checkpoint(pretrained)
+            # self.model = weights_update(self.model, checkpoint=pretrained)
         else:
             self.model = AutoModelForCausalLM.from_pretrained("nferruz/ProtGPT2")
         self.tokenizer = AutoTokenizer.from_pretrained("nferruz/ProtGPT2")
