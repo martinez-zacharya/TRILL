@@ -37,12 +37,6 @@ class ESM(pl.LightningModule):
         loss = F.cross_entropy(output['logits'].permute(0,2,1), toks)
         self.log("loss", loss)
         del masked_toks, toks
-        # for obj in gc.get_objects():
-        #     try:
-        #         if torch.is_tensor(obj) or (hasattr(obj, 'data') and torch.is_tensor(obj.data)):
-        #             print(type(obj), obj.size())
-        #     except:
-        #         pass  
         return {"loss": loss}
     
     def configure_optimizers(self):
@@ -61,6 +55,26 @@ class ESM(pl.LightningModule):
         rep_numpy = representations[self.repr_layers[0]].cpu().detach().numpy()
         for i in range(len(rep_numpy)):
             self.reps.append(tuple([rep_numpy[i].mean(0), labels[i]]))
+        return True
+    
+class ESMFold(pl.LightningModule):
+    def __init__(self):
+        super().__init__()
+        self.esmfold = esm.pretrained.esmfold_v1()
+        self.preds = []
+        
+    def training_step(self, batch, batch_idx):
+        pass
+    
+    def configure_optimizers(self):
+        optimizer = DeepSpeedCPUAdam(self.esmfold.parameters(), lr=1e-5)
+        return optimizer
+    
+    def predict_step(self, batch, batch_idx):
+        labels, seqs = batch
+        print(seqs[0])
+        pred = self.esmfold.infer_pdb(seqs[0])
+        self.preds.append(tuple([pred, labels]))
         return True
         
         

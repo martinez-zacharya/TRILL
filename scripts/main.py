@@ -14,7 +14,7 @@ from pytorch_lightning.profilers import PyTorchProfiler
 from pytorch_lightning.strategies import DeepSpeedStrategy
 from tqdm import tqdm
 sys.path.insert(0, 'utils')
-from lightning_models import ESM, coordDataset, ProtGPT2
+from lightning_models import ESM, coordDataset, ProtGPT2, ESMFold
 from update_weights import weights_update
 from datasets import Dataset
 from transformers import DataCollatorForLanguageModeling, AutoTokenizer
@@ -33,6 +33,8 @@ def main():
     model_import_name = f'esm.pretrained.{args.model}()'
     if args.if1 == True:
         pass
+    elif args.esmfold == True:
+        model = ESMFold()
     elif args.protgpt2 == True and args.preTrained_model == False:
         model = ProtGPT2()
     elif args.protgpt2 == True and args.preTrained_model != False:
@@ -64,7 +66,10 @@ def main():
             dataloader = torch.utils.data.DataLoader(seq_dict_df, shuffle = False, batch_size = int(args.batch_size), num_workers=0)
         else:
             data = esm.data.FastaBatchedDataset.from_file(args.query)
-            dataloader = torch.utils.data.DataLoader(data, shuffle = False, batch_size = int(args.batch_size), num_workers=0, collate_fn=model.alphabet.get_batch_converter())
+            if args.esmfold == True:
+                dataloader = torch.utils.data.DataLoader(data, shuffle = False, batch_size = int(args.batch_size), num_workers=0)
+            else:
+                dataloader = torch.utils.data.DataLoader(data, shuffle = False, batch_size = int(args.batch_size), num_workers=0, collate_fn=model.alphabet.get_batch_converter())
 
     else:
         return (f'Input query file - {args.query} is not a valid file format.\
@@ -142,6 +147,12 @@ def main():
             trainer = pl.Trainer(devices=int(args.GPUs), callbacks=[checkpoint_callback], profiler=profiler, accelerator='gpu', max_epochs=int(args.epochs), logger=logger, num_nodes = int(args.nodes), strategy = args.strategy)
             trainer.fit(model=model, train_dataloaders = dataloader)
             # trainer.save_checkpoint(f"{args.name}_{args.epochs}.pt")
+    elif args.esmfold == True:
+        trainer = pl.Trainer(enable_checkpointing=False, devices=int(args.GPUs),  precision = 16, amp_backend='native', strategy = DeepSpeedStrategy(stage=3, offload_optimizer=True, offload_parameters=True), accelerator='gpu', logger=logger, num_nodes=int(args.nodes))
+        trainer.predict(model, dataloader)
+        print(model.preds)
+        pdb_df = pd.DataFrame(model.preds)
+        print(pdb_df)
     else:
         if args.LEGGO:
             trainer = pl.Trainer(devices=int(args.GPUs), profiler = profiler,accelerator='gpu',max_epochs=int(args.epochs),logger=logger, num_nodes=int(args.nodes), precision = 16, amp_backend='native', strategy=DeepSpeedStrategy(stage=3, offload_optimizer=True, offload_parameters=True))
@@ -321,7 +332,14 @@ if __name__ == '__main__':
         action="store_true",
         default=False,
         dest="gen",
-)   
+)
+    parser.add_argument(
+        "--esmfold",
+        help="Predict protein structures in bulk using ESMFold",
+        action="store_true",
+        default=False,
+        dest="esmfold",
+) 
     
     
         
