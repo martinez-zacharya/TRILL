@@ -90,7 +90,7 @@ def main():
         finaldf.to_csv(f'{args.name}_{args.model}.csv', index = False)
     
     elif args.preTrained_model != False and args.protgpt2 == False:
-        model = weights_update(model = ESM(eval(model_import_name), float(args.lr)), checkpoint = torch.load('/home/zacharymartinez/DistantHomologyDetection/scripts/test_esm2_t12_35M_UR50D_20.pt'))
+        model = weights_update(model = ESM(eval(model_import_name), float(args.lr)), checkpoint = torch.load(args.preTrained_model))
         trainer = pl.Trainer(enable_checkpointing=False, devices=int(args.GPUs), strategy = args.strategy, accelerator='gpu', logger=logger, num_nodes=int(args.nodes))
         trainer.predict(model, dataloader)
         newdf = pd.DataFrame(model.reps, columns = ['Embeddings', 'Label'])
