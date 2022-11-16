@@ -35,6 +35,7 @@ def main():
         pass
     elif args.protgpt2 == True and args.preTrained_model == False:
         model = ProtGPT2()
+        tokenizer = AutoTokenizer.from_pretrained("nferruz/ProtGPT2")
     elif args.protgpt2 == True and args.preTrained_model != False:
         model = ProtGPT2()
         state_dict = torch.load(args.preTrained_model)
