@@ -10,7 +10,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 import pandas as pd
 from pytorch_lightning.loggers import TensorBoardLogger
-from pytorch_lightning.profilers import PyTorchProfiler
+# from pytorch_lightning.profilers import PyTorchProfiler
 from pytorch_lightning.strategies import DeepSpeedStrategy
 from tqdm import tqdm
 sys.path.insert(0, 'utils')
@@ -37,6 +37,7 @@ def main():
         model = ESMFold()
     elif args.protgpt2 == True and args.preTrained_model == False:
         model = ProtGPT2()
+        tokenizer = AutoTokenizer.from_pretrained("nferruz/ProtGPT2")
     elif args.protgpt2 == True and args.preTrained_model != False:
         model = ProtGPT2()
         state_dict = torch.load(args.preTrained_model)
@@ -89,17 +90,17 @@ def main():
         trainer = pl.Trainer(enable_checkpointing=False, devices=int(args.GPUs), strategy = args.strategy, accelerator='gpu', logger=logger, num_nodes=int(args.nodes))
         trainer.predict(model, dataloader)
         newdf = pd.DataFrame(model.reps, columns = ['Embeddings', 'Label'])
-        newdf = newdf.drop(index=newdf.index[0], axis=0)
+        # newdf = newdf.drop(index=newdf.index[0], axis=0)
         finaldf = newdf['Embeddings'].apply(pd.Series)
         finaldf['Label'] = newdf['Label']
         finaldf.to_csv(f'{args.name}_{args.model}.csv', index = False)
     
     elif args.preTrained_model != False and args.protgpt2 == False:
-        model = weights_update(model = ESM(eval(model_import_name), float(args.lr)), checkpoint = torch.load('/home/zacharymartinez/DistantHomologyDetection/scripts/test_esm2_t12_35M_UR50D_20.pt'))
+        model = weights_update(model = ESM(eval(model_import_name), float(args.lr)), checkpoint = torch.load(args.preTrained_model))
         trainer = pl.Trainer(enable_checkpointing=False, devices=int(args.GPUs), strategy = args.strategy, accelerator='gpu', logger=logger, num_nodes=int(args.nodes))
         trainer.predict(model, dataloader)
         newdf = pd.DataFrame(model.reps, columns = ['Embeddings', 'Label'])
-        newdf = newdf.drop(index=newdf.index[0], axis=0)
+        # newdf = newdf.drop(index=newdf.index[0], axis=0)
         finaldf = newdf['Embeddings'].apply(pd.Series)
         finaldf['Label'] = newdf['Label']
         finaldf.to_csv(f'{args.name}_{args.model}.csv', index = False)
@@ -113,7 +114,7 @@ def main():
         trainer.predict(model, dataloader)
         trainer.predict(model, blastdb_loader)
         newdf = pd.DataFrame(model.reps, columns = ['Embeddings', 'Label'])
-        newdf = newdf.drop(index=newdf.index[0], axis=0)
+        # newdf = newdf.drop(index=newdf.index[0], axis=0)
         finaldf = newdf['Embeddings'].apply(pd.Series)
         finaldf['Label'] = newdf['Label']
         finaldf.to_csv(f'{args.name}_{args.model}.csv', index = False)       
@@ -144,7 +145,7 @@ def main():
             gen_seq_df.to_csv(f'{args.name}_generated_sequences.csv', index = False)
         else:
             checkpoint_callback = ModelCheckpoint(filename=f"{args.name}", save_weights_only=True, every_n_epochs=int(args.epochs))
-            trainer = pl.Trainer(devices=int(args.GPUs), callbacks=[checkpoint_callback], profiler=profiler, accelerator='gpu', max_epochs=int(args.epochs), logger=logger, num_nodes = int(args.nodes), strategy = args.strategy)
+            trainer = pl.Trainer(devices=int(args.GPUs), callbacks=[checkpoint_callback], profiler=profiler, accelerator='gpu', max_epochs=int(args.epochs), logger=logger, num_nodes = int(args.nodes), precision = 16, amp_backend='native', strategy = DeepSpeedStrategy(stage=3, offload_optimizer=True, offload_parameters=True))
             trainer.fit(model=model, train_dataloaders = dataloader)
             # trainer.save_checkpoint(f"{args.name}_{args.epochs}.pt")
     elif args.esmfold == True:

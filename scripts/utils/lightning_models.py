@@ -6,9 +6,12 @@ import torch.nn.functional as F
 import pandas as pd
 import sys
 import gc
-sys.path.insert(0, 'utils')
-from mask import maskInputs
-from update_weights import weights_update
+import os
+SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
+sys.path.append(os.path.dirname(SCRIPT_DIR))
+# sys.path.insert(0, 'utils')
+from utils.mask import maskInputs
+from utils.update_weights import weights_update
 from pytorch_lightning.loggers import TensorBoardLogger
 from pytorch_lightning.profilers import PyTorchProfiler
 from deepspeed.ops.adam import DeepSpeedCPUAdam
@@ -16,7 +19,7 @@ from transformers import pipeline, AutoTokenizer, AutoModelForCausalLM, DataColl
 from esm.inverse_folding.multichain_util import sample_sequence_in_complex
 
 class ESM(pl.LightningModule):
-    def __init__(self, model, lr, leggo):
+    def __init__(self, model, lr, leggo = False):
         super().__init__()
         self.esm, self.alphabet = model
         self.repr_layers = [(i + self.esm.num_layers + 1) % (self.esm.num_layers + 1) for i in [-1]]
@@ -61,6 +64,7 @@ class ESMFold(pl.LightningModule):
     def __init__(self):
         super().__init__()
         self.esmfold = esm.pretrained.esmfold_v1()
+        self.esmfold.set_chunk_size(100)
         self.preds = []
         
     def training_step(self, batch, batch_idx):
@@ -72,9 +76,12 @@ class ESMFold(pl.LightningModule):
     
     def predict_step(self, batch, batch_idx):
         labels, seqs = batch
+        print(seqs)
         print(seqs[0])
-        pred = self.esmfold.infer_pdb(seqs[0])
-        self.preds.append(tuple([pred, labels]))
+        print(type(seqs[0]))
+        output = self.esmfold.infer(seqs[0])
+        pdb = model.output_to_pdb(output)[0]
+        self.preds.append(tuple([pdb, labels]))
         return True
         
         
@@ -105,9 +112,8 @@ class ProtGPT2(pl.LightningModule):
         return(loss)
         
     def configure_optimizers(self):
-        optimizer = torch.optim.Adam(self.model.parameters(), lr=1e-5)
-        lr_scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=1)
-        return [optimizer], [lr_scheduler]
+        optimizer = DeepSpeedCPUAdam(self.model.parameters(), lr=1e-5)
+        return optimizer
     
     def generate(self, seed_seq="M", max_length=333, do_sample = True, top_k=950, repetition_penalty=1.2, num_return_sequences=10, eos_token_id=0):
         generator = pipeline('text-generation', model = self.model, tokenizer=self.tokenizer)
