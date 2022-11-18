@@ -27,6 +27,7 @@ jobs:
       run: |
         python -m pip install --upgrade pip
         pip install flake8 pytest
+        pip install 'dllogger @ git+https://github.com/NVIDIA/dllogger.git'
         $CONDA/bin/conda env update --file env.yml --name base
         $CONDA/bin/conda activate base
     - name: Lint with flake8
