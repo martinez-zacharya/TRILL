@@ -33,7 +33,7 @@ jobs:
         pip install 'fair-esm[esmfold]'
         pip install 'dllogger @ git+https://github.com/NVIDIA/dllogger.git'
         pip install 'openfold @ git+https://github.com/aqlaboratory/openfold.git@4b41059694619831a7db195b7e0988fc4ff3a307'
-        source /usr/local/anaconda3/etc/profile.d/conda.sh
+        source $CONDA/bin/conda
         $CONDA/bin/conda init bash
         $CONDA/bin/conda env update --file env.yml --name base
         $CONDA/bin/conda activate base
