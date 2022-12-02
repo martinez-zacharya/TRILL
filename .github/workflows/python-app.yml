@@ -33,10 +33,9 @@ jobs:
         pip install 'fair-esm[esmfold]'
         pip install 'dllogger @ git+https://github.com/NVIDIA/dllogger.git'
         pip install 'openfold @ git+https://github.com/aqlaboratory/openfold.git@4b41059694619831a7db195b7e0988fc4ff3a307'
-        source $CONDA/bin/conda
         $CONDA/bin/conda init bash
         $CONDA/bin/conda env update --file env.yml --name base
-        $CONDA/bin/conda activate base
+        $CONDA/bin/activate base
     - name: Lint with flake8
       run: |
         # stop the build if there are Python syntax errors or undefined names
