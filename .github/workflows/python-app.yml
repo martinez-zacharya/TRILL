@@ -38,6 +38,8 @@ jobs:
         $CONDA/bin/conda init bash
         $CONDA/bin/conda env update --file env.yml --name trill
         $CONDA/bin/activate trill
+        $CONDA/bin/conda install pyg pytorch-cluster pytorch-scatter pytorch-sparse -c pyg
+        $CONDA/bin/conda install -c conda-forge biotite
     #- name: Lint with flake8
     #  run: |
     #    # stop the build if there are Python syntax errors or undefined names
