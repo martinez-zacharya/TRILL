@@ -29,10 +29,10 @@ jobs:
       run: |
         python -m pip install --upgrade pip
         pip install flake8 pytest
-        pip install pytorch-lightning
-        pip install 'fair-esm[esmfold]'
-        pip install 'dllogger @ git+https://github.com/NVIDIA/dllogger.git'
-        pip install 'openfold @ git+https://github.com/aqlaboratory/openfold.git@4b41059694619831a7db195b7e0988fc4ff3a307'
+        #pip install pytorch-lightning
+        #pip install 'fair-esm[esmfold]'
+        #pip install 'dllogger @ git+https://github.com/NVIDIA/dllogger.git'
+        #pip install 'openfold @ git+https://github.com/aqlaboratory/openfold.git@4b41059694619831a7db195b7e0988fc4ff3a307'
         pip install GitPython
         pip install pandas
     - uses: conda-incubator/setup-miniconda@v2
@@ -42,7 +42,6 @@ jobs:
           python-version: 3.7
           auto-activate-base: false
     - run: |
-          conda init bash
           conda info
           conda list
           conda activate trill
