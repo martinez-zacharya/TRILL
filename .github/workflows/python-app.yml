@@ -42,8 +42,8 @@ jobs:
           auto-activate-base: false
     - run: |
           $CONDA/bin/activate trill
-          #conda install pyg pytorch-cluster pytorch-scatter pytorch-sparse -c pyg
-          #conda install -c conda-forge biotite
+          conda install pyg pytorch-cluster pytorch-scatter pytorch-sparse -c pyg
+          conda install -c conda-forge biotite
     #- name: Lint with flake8
     #  run: |
     #    # stop the build if there are Python syntax errors or undefined names
