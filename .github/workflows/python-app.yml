@@ -44,7 +44,7 @@ jobs:
           python-version: 3.7
           auto-activate-base: false
     - run: |
-          $CONDA/bin/activate TRILL
+          conda activate TRILL
           conda install pyg pytorch-cluster pytorch-scatter pytorch-sparse -c pyg
           conda install -c conda-forge biotite
     #- name: Lint with flake8
