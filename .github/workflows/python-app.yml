@@ -36,6 +36,7 @@ jobs:
         pip install 'openfold @ git+https://github.com/aqlaboratory/openfold.git@4b41059694619831a7db195b7e0988fc4ff3a307'
         pip install GitPython
         pip install pandas
+        pip install torch
         pip install torch-geometric
         pip install torch-sparse
     #- name: Lint with flake8
