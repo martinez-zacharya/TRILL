@@ -37,6 +37,7 @@ jobs:
         pip install GitPython
         pip install pandas
         pip install torch-geometric
+        pip install torch-sparse
     - uses: conda-incubator/setup-miniconda@v2
       with:
           activate-environment: TRILL
@@ -44,7 +45,6 @@ jobs:
           python-version: 3.7
           auto-activate-base: false
     - run: |
-          conda activate TRILL
           conda install pyg pytorch-cluster pytorch-scatter pytorch-sparse -c pyg
           conda install -c conda-forge biotite
     #- name: Lint with flake8
