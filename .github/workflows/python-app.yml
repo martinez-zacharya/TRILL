@@ -36,8 +36,6 @@ jobs:
         pip install 'openfold @ git+https://github.com/aqlaboratory/openfold.git@4b41059694619831a7db195b7e0988fc4ff3a307'
         pip install GitPython
         pip install pandas
-        pip install torch-geometric
-        pip install torch-sparse
     - uses: conda-incubator/setup-miniconda@v2
       with:
           activate-environment: TRILL
@@ -47,6 +45,8 @@ jobs:
     - run: |
           conda install pyg pytorch-cluster pytorch-scatter pytorch-sparse -c pyg
           conda install -c conda-forge biotite
+          pip install torch-geometric
+          pip install torch-sparse
     #- name: Lint with flake8
     #  run: |
     #    # stop the build if there are Python syntax errors or undefined names
