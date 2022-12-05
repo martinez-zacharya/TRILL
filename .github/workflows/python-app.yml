@@ -49,7 +49,6 @@ jobs:
           python-version: 3.7
           auto-activate-base: true
     - run: |
-          conda install pyg pytorch-cluster pytorch-scatter pytorch-sparse -c pyg
     #- name: Lint with flake8
     #  run: |
     #    # stop the build if there are Python syntax errors or undefined names
