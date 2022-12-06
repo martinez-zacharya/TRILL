@@ -6,6 +6,10 @@ jobs:
     # optionally use a convenient Ubuntu LTS + DVC + CML container
     # container: docker://ghcr.io/iterative/cml:0-dvc2-base1
     steps:
+      - uses: Jimver/cuda-toolkit@v0.2.8
+        id: cuda-toolkit
+        with:
+          cuda: '11.7.0'
       # may need to setup Node.js & Python3 on e.g. self-hosted
       - uses: actions/setup-node@v2
         with:
@@ -20,6 +24,8 @@ jobs:
       - name: Train model
         run: |
           # Your ML workflow goes here
+          nvcc
+          nvidia-smi
           #pip install -r requirements.txt
           #python train.py  # generate plot.png
       - name: Create CML report
