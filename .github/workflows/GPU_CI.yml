@@ -1,11 +1,32 @@
-name: train-my-model
+name: CML
 on: [push]
 jobs:
-  train:
-    runs-on: [self-hosted, cml, gpu]
+  train-and-report:
+    runs-on: ubuntu-latest
+    # optionally use a convenient Ubuntu LTS + DVC + CML container
+    # container: docker://ghcr.io/iterative/cml:0-dvc2-base1
     steps:
-      - uses: actions/checkout@v2
-      - name: cml_run
+      # may need to setup Node.js & Python3 on e.g. self-hosted
+      - uses: actions/setup-node@v2
+        with:
+          node-version: '16'
+      - uses: actions/setup-python@v4
+        with:
+          python-version: '3.7'
+      - uses: iterative/setup-cml@v1
+      - uses: actions/checkout@v3
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+      - name: Train model
         run: |
-          echo 'Hi from CML!' >> report.md
-          cml send-comment report.md
+          # Your ML workflow goes here
+          #pip install -r requirements.txt
+          #python train.py  # generate plot.png
+      - name: Create CML report
+        env:
+          REPO_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          # Post CML report as a comment in GitHub
+          cat metrics.txt >> report.md
+          echo '![](./plot.png "Confusion Matrix")' >> report.md
+          cml comment create report.md
