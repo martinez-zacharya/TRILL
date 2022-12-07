@@ -2,7 +2,7 @@ name: CML
 on: [push]
 jobs:
   train-and-report:
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted]
     # optionally use a convenient Ubuntu LTS + DVC + CML container
    # container: 
       # image: docker://ghcr.io/iterative/cml:0-dvc2-base1
