@@ -9,8 +9,8 @@ import os
 import pytorch_lightning as pl
 from esm.inverse_folding.util import load_structure, extract_coords_from_structure
 from esm.inverse_folding.multichain_util import extract_coords_from_complex, sample_sequence_in_complex
-from ..lightning_models import ESM, ESMFold, coordDataset
-from ..update_weights import weights_update
+from trill.utils.lightning_models import ESM, ESMFold, coordDataset
+from trill.utils.update_weights import weights_update
 
 @pytest.fixture
 def get_git_root(path = os.getcwd()):
