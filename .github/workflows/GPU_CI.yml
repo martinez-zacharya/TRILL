@@ -39,7 +39,7 @@ jobs:
         run: |
           # Your ML workflow goes here
           python -c "import torch; print(torch.cuda.is_available())"
-          
+          nvidia-smi
           #pip install -r requirements.txt
           #python train.py  # generate plot.png
       - name: Test with pytest
