@@ -4,7 +4,9 @@ jobs:
   train-and-report:
     runs-on: ubuntu-latest
     # optionally use a convenient Ubuntu LTS + DVC + CML container
-    # container: docker://ghcr.io/iterative/cml:0-dvc2-base1
+    container: 
+      image: docker://ghcr.io/iterative/cml:0-dvc2-base1
+      options: --gpus all --privileged -v /dev:/dev
     steps:
       - uses: Jimver/cuda-toolkit@v0.2.8
         id: cuda-toolkit
