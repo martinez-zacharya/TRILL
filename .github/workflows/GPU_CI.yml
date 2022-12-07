@@ -26,18 +26,19 @@ jobs:
           python -m pip install --upgrade pip
           pip install flake8 pytest
           pip install pytorch-lightning
-          pip install 'fair-esm[esmfold]'
-          pip install 'dllogger @ git+https://github.com/NVIDIA/dllogger.git'
-          pip install 'openfold @ git+https://github.com/aqlaboratory/openfold.git@4b41059694619831a7db195b7e0988fc4ff3a307'
-          pip install GitPython
-          pip install pandas
-          pip install torch-geometric
-          pip install biotite
-          pip install transformers datasets
-          pip install pyg-lib torch-scatter torch-sparse torch-cluster torch-spline-conv torch-geometric -f https://data.pyg.org/whl/torch-1.13.0+cu117.html
+          pip install torch
+          #pip install 'fair-esm[esmfold]'
+          #pip install 'dllogger @ git+https://github.com/NVIDIA/dllogger.git'
+          #pip install 'openfold @ git+https://github.com/aqlaboratory/openfold.git@4b41059694619831a7db195b7e0988fc4ff3a307'
+          #pip install GitPython
+          #pip install pandas
+          #pip install biotite
+          #pip install transformers datasets
+          #pip install pyg-lib torch-scatter torch-sparse torch-cluster torch-spline-conv torch-geometric -f https://data.pyg.org/whl/torch-1.13.0+cu117.html
       - name: Train model
         run: |
           # Your ML workflow goes here
+          python -m torch print(torch.cuda.is_available())
           
           #pip install -r requirements.txt
           #python train.py  # generate plot.png
