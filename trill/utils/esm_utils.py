@@ -29,6 +29,8 @@ def ESM_IF1(data, genIters, temp):
         chains = list(coords.keys())
         loop_chain = tqdm(chains)
         loop_chain.set_description('Chains')
+        for coord in coords:
+            coords[coord] = coords[coord].squeeze(0)
         for chain in loop_chain:
             loop_gen_iters = tqdm(range(int(genIters)))
             loop_gen_iters.set_description('Generative Iterations')
