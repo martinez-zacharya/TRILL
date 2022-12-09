@@ -17,8 +17,6 @@ from pytorch_lightning.profilers import PyTorchProfiler
 from deepspeed.ops.adam import DeepSpeedCPUAdam
 from transformers import pipeline, AutoTokenizer, AutoModelForCausalLM, DataCollatorForLanguageModeling
 from esm.inverse_folding.multichain_util import sample_sequence_in_complex
-from lightning_transformers.task.nlp.language_modeling import LanguageModelingDataModule, LanguageModelingTransformer
-from lightning_transformers.utilities.deepspeed import enable_transformers_pretrained_deepspeed_sharding
 # from colossalai.nn.optimizer import HybridAdam, CPUAdam
 from deepspeed.ops.adam import FusedAdam
 

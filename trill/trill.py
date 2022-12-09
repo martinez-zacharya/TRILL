@@ -14,15 +14,16 @@ from pytorch_lightning.loggers import TensorBoardLogger
 from pytorch_lightning.strategies import DeepSpeedStrategy
 from tqdm import tqdm
 sys.path.insert(0, 'utils')
-from lightning_models import ESM, ProtGPT2, ESMFold
+from lightning_models import ESM, ProtGPT2
 from update_weights import weights_update
 from datasets import Dataset
 from transformers import DataCollatorForLanguageModeling, AutoTokenizer
 from esm.inverse_folding.util import load_structure, extract_coords_from_structure
 from esm.inverse_folding.multichain_util import extract_coords_from_complex, sample_sequence_in_complex
 from pytorch_lightning.callbacks import ModelCheckpoint
-from trill.utils.protgpt2_utils import ProtGPT2_wrangle
-from trill.utils.esm_utils import ESM_IF1_Wrangle, coordDataset
+from utils.protgpt2_utils import ProtGPT2_wrangle
+from utils.esm_utils import ESM_IF1_Wrangle, coordDataset
+from pyfiglet import Figlet
 # os.environ['CUDA_LAUNCH_BLOCKING'] = '1'
 os.environ["TOKENIZERS_PARALLELISM"] = "false"
 
@@ -92,19 +93,6 @@ def main():
         embeddings = clean_embeddings(model.reps)
         embeddings.to_csv(f'{args.name}_{args.model}.csv', index = False)
         
-    # elif args.blast == True:
-    #     trainer = pl.Trainer(devices=int(args.GPUs), profiler = profiler, precision = 16, amp_backend='native', accelerator='gpu', strategy = args.strategy, max_epochs=int(args.epochs), logger=logger, num_nodes=int(args.nodes), enable_checkpointing=False)        
-    #     trainer.fit(model=model, train_dataloaders=dataloader)
-    #     trainer.save_checkpoint(f"{args.name}_{args.model}_{args.epochs}.pt")
-    #     blastdb = esm.data.FastaBatchedDataset.from_file(args.database)
-    #     blastdb_loader = torch.utils.data.DataLoader(data, shuffle = False, batch_size = int(args.batch_size), num_workers=0, collate_fn=model.alphabet.get_batch_converter())
-    #     trainer.predict(model, dataloader)
-    #     trainer.predict(model, blastdb_loader)
-    #     newdf = pd.DataFrame(model.reps, columns = ['Embeddings', 'Label'])
-    #     finaldf = newdf['Embeddings'].apply(pd.Series)
-    #     finaldf['Label'] = newdf['Label']
-    #     finaldf.to_csv(f'{args.name}_{args.model}.csv', index = False)       
-    
     elif args.if1 == True:
         sample_df = ESM_IF1(struct_import, genIters=int(args.genIters), temp = args.temp)
         sample_df.to_csv(f'{args.name}_IF1_gen.csv', index=False, header = ['Generated_Seq', 'Chain'])      
@@ -143,6 +131,10 @@ def main():
 
 
 if __name__ == '__main__':
+    
+    f = Figlet(font="graffiti")
+    print(f.renderText("TRILL"))
+    
     parser = argparse.ArgumentParser()
 
     parser.add_argument(
