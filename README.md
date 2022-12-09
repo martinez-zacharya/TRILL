@@ -17,47 +17,73 @@
 - --noTrain (Skips the fine-tuning and embeds the query sequences with the base model)
 - --preTrained_model (Input path to your own pre-trained ESM model)
 - --batch_size (Change batch-size number for fine-tuning. Default is 5)
-- --blast (Enables "BLAST" mode. --database argument is required)
 - --model (Change ESM model. Default is esm2_t12_35M_UR50D. List of models can be found at https://github.com/facebookresearch/esm)
 - --strategy (Change training strategy. Default is None. List of strategies can be found at https://pytorch-lightning.readthedocs.io/en/stable/extensions/strategy.html)
 - --logger (Enable Tensorboard logger. Default is None)
 - --if1 (Utilize Inverse Folding model 'esm_if1_gvp4_t16_142M_UR50' to facilitate fixed backbone sequence design. Basically converts protein structure to possible sequences)
-- --chain (Don't use right now)
-- --temp (Choose sampling temperature. Higher temps will have more sequence diversity, but less recovery of the original sequence)
-- --genIters (Adjust number of sequences generated for each chain of the input structure)
+- --temp (Choose sampling temperature. Higher temps will have more sequence diversity, but less recovery of the original sequence for ESM_IF1)
+- --genIters (Adjust number of sequences generated for each chain of the input structure for ESM_IF1)
+- --LEGGO (Use deepspeed_stage_3_offload with ESM. Will be removed soon...)
+- --profiler (Utilize PyTorchProfiler)
+- --protgpt2 (Utilize ProtGPT2. Can either fine-tune or generate sequences)
+- --gen (Generate protein sequences using ProtGPT2. Can either use base model or user-submitted fine-tuned model)
+- --seed_seq (Sequence to seed ProtGPT2 Generation)
+- --max_length (Max length of proteins generated from ProtGPT)
+- --do_sample (Whether or not to use sampling ; use greedy decoding otherwise)
+- --top_k (The number of highest probability vocabulary tokens to keep for top-k-filtering)
+- --repetition_penalty (The parameter for repetition penalty. 1.0 means no penalty)
+- --num_return_sequences (Number of sequences for ProtGPT2 to generate)
 
 ## Examples
 
 ### Default (Fine-tuning)
-  1. The default mode for the pipeline is to just fine-tune the base esm1_t12 model from FAIR with the query input.
+  1. The default mode for TRILL is to just fine-tune the base esm2_t12_35M_UR50D model from FAIR with the query input.
   ```
-  python3 main.py fine_tuning_ex ../data/query.fasta 4
+  python3 trill.py fine_tuning_ex data/query.fasta 1
   ```
-### Embed with base esm1_t12 model
+### Embed with base esm2_t12_35M_UR50D model
   2. You can also embed proteins with just the base model from FAIR and completely skip fine-tuning.
   ```
-  python3 main.py raw_embed ../data/query.fasta 4 --noTrain
+  python3 trill.py base_embed data/query.fasta 1 --noTrain
   ```
 ### Embedding with a custom pre-trained model
   3. If you have a pre-trained model, you can use it to embed sequences by passing the path to --preTrained_model. 
   ```
-  python3 main.py pre_trained ../data/query.fasta 4 --preTrained_model ../models/pre_trained_model.pt
-  ```
-### BLAST-like (Fine-tune on query and embed query+database)
-  4. To enable a BLAST-like functionality, you can use the --blast flag in conjuction with passing a database fasta file to --database. The base model from FAIR is first fine-tuned with the query sequences and then both the query and the database sequences are embedded.
-  ```
-  python3 main.py blast_search ../data/query.fasta 4 --blast --database ../data/database.fasta
+  python3 trill.py pre_trained data/query.fasta 1 --preTrained_model /path/to/mymodels/pre_trained_model.pt
   ```
 ### Distributed Training/Inference
-  5. In order to scale/speed up your analyses, you can distribute your training/inference across many GPUs with a few extra flags to your command. You can even fit models that do not normally fit on your GPUs with sharding and CPU-offloading. The list of strategies can be found here (https://pytorch-lightning.readthedocs.io/en/stable/extensions/strategy.html). The example below utilizes 16 GPUs in total (4(GPUs) * 4(--nodes)) with Fully Sharded Data Parallel and the 650M parameter ESM2 model.
+  4. In order to scale/speed up your analyses, you can distribute your training/inference across many GPUs with a few extra flags to your command. You can even fit models that do not normally fit on your GPUs with sharding, CPU-offloading etc. Below is an example slurm batch submission file. The list of strategies can be found here (https://pytorch-lightning.readthedocs.io/en/stable/extensions/strategy.html). The example below utilizes 16 GPUs in total (4(GPUs) * 4(--nodes)) with Fully Sharded Data Parallel and the 650M parameter ESM2 model.
+  ```shell
+  #!/bin/bash
+  #SBATCH --time=8:00:00   # walltime
+  #SBATCH --ntasks-per-node=4
+  #SBATCH --nodes=4 # number of nodes
+  #SBATCH --gres=gpu:4 # number of GPUs
+  #SBATCH --mem-per-cpu=60G   # memory per CPU core
+  #SBATCH -J "tutorial"   # job name
+  #SBATCH --mail-user="" # change to your email
+  #SBATCH --mail-type=BEGIN
+  #SBATCH --mail-type=END
+  #SBATCH --mail-type=FAIL
+  #SBATCH --output=%x-%j.out
+  master_addr=$(scontrol show hostnames "$SLURM_JOB_NODELIST" | head -n 1)
+  export MASTER_ADDR=$master_addr
+  export MASTER_PORT=13579
+  
+  srun python3 trill.py distributed_example data/query.fasta 4 --nodes 4 --strategy fsdp --model esm2_t33_650M_UR50D
   ```
-  python3 main.py distributed_example ../data/query.fasta 4 --nodes 4 --strategy fsdp --model esm2_t33_650M_UR50D
+  You can then submit this job with:
   ```
+  sbatch distributed_example.slurm
+  ```
+  More examples for distributed training/inference without slurm coming soon!
+  
 ### Generating protein sequences using inverse folding with ESM-IF1
-  6. When provided a protein backbone structure (.pdb, .cif), the IF1 model is able to predict a sequence that might be able to fold into the input structure. The example input are the backbone coordinates from DWARF14, a rice hydrolase. For every chain in the structure, 2 in 4ih9.pdb, the following command will generate 3 sequences. In total, 6 sequences will be generated.
+  5. When provided a protein backbone structure (.pdb, .cif), the IF1 model is able to predict a sequence that might be able to fold into the input structure. The example input are the backbone coordinates from DWARF14, a rice hydrolase. For every chain in the structure, 2 in 4ih9.pdb, the following command will generate 3 sequences. In total, 6 sequences will be generated.
   ```
-  python3 main.py IF_Test ../data/4ih9.pdb 1 --if1 --gen_iters 3
+  python3 trill.py IF_Test data/4ih9.pdb 1 --if1 --gen_iters 3
   ```
+  
 ## Quick Tutorial (NOT CURRENT, DON'T USE):
 
 1. Type ```git clone https://github.com/martinez-zacharya/DistantHomologyDetection``` in your home directory on the HPC
