@@ -1,5 +1,6 @@
 name: CML
-on: [push]
+#on: [push]
+on: [public]
 jobs:
   train-and-report:
     runs-on: [self-hosted]
