@@ -55,7 +55,7 @@
   python3 trill.py fine_tuning_ex 1 --query data/query.fasta
   ```
 ### Embed with base esm2_t12_35M_UR50D model
-  2. You can also embed proteins with just the base model from FAIR and completely skip fine-tuning.
+  2. You can also embed proteins with just the base model from FAIR and completely skip fine-tuning. The output will be a CSV file where each row corresponds to a single protein with the last column being the fasta header.
   ```
   python3 trill.py base_embed 1 --query data/query.fasta --noTrain
   ```
