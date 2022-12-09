@@ -143,16 +143,11 @@ if __name__ == '__main__':
         action = "store"
         )
 
-    parser.add_argument("query", 
-        help="Input fasta file for queries", 
+    parser.add_argument("--query", 
+        help="Input fasta file", 
         action="store"
         )
 
-    parser.add_argument(
-        "--database", 
-        help="Input database to embed with --blast mode", 
-        action="store"
-        )
     
     parser.add_argument(
         "GPUs",
@@ -312,19 +307,19 @@ if __name__ == '__main__':
 )
     parser.add_argument(
         "--do_sample",
-        help="Whether or not to use sampling ; use greedy decoding otherwise.",
+        help="Whether or not to use sampling ; use greedy decoding otherwise",
         default=True,
         dest="do_sample",
 )
     parser.add_argument(
         "--top_k",
-        help="The number of highest probability vocabulary tokens to keep for top-k-filtering.",
+        help="The number of highest probability vocabulary tokens to keep for top-k-filtering",
         default=950,
         dest="top_k",
 )
     parser.add_argument(
         "--repetition_penalty",
-        help="The parameter for repetition penalty. 1.0 means no penalty.",
+        help="The parameter for repetition penalty. 1.0 means no penalty",
         default=1.2,
         dest="repetition_penalty",
 )
