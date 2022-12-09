@@ -1,7 +1,7 @@
 [tool.poetry]
 name = "trill-proteins"
 version = "0.1.0"
-description = "Sandbox for Computational Protein Design"
+description = "Sandbox (in progress) for Computational Protein Design"
 authors = ["Zachary Martinez <martinez.zacharya@gmail.com>"]
 readme = "README.md"
 packages = [{include = "trill"}]
@@ -9,28 +9,13 @@ packages = [{include = "trill"}]
 [tool.poetry.dependencies]
 python = "^3.9"
 pytest = "^7.2.0"
-#torch = {url = "https://download.pytorch.org/whl/cu116/torch-1.12.0%2Bcu116-cp310-cp310-linux_x86_64.whl"}
 fair-esm = "^2.0.0"
-dllogger = {git="https://github.com/NVIDIA/dllogger.git"}
 GitPython = "^3.1.29"
 pandas = "^1.5.2"
 biotite = "^0.35.0"
 transformers = "^4.25.1"
 datasets = "^2.7.1"
-#pyg-lib = {url="https://data.pyg.org/whl/torch-1.12.0+cu116.html/"}
-#torch-scatter = {url="https://data.pyg.org/whl/torch-1.12.0+cu116.html/"}
-#torch-sparse = {url="https://data.pyg.org/whl/torch-1.12.0+cu116.html/"}
-#torch-cluster = {url="https://data.pyg.org/whl/torch-1.12.0+cu116.html/"}
-#torch-spline-conv = {url="https://data.pyg.org/whl/torch-1.12.0+cu116.html/"}
-#torch-geometric = {url="https://data.pyg.org/whl/torch-1.12.0+cu116.html/"}
-#openfold = {git="https://github.com/aqlaboratory/openfold.git@4b41059694619831a7db195b7e0988fc4ff3a307"}
-
-#[[tool.poetry.source]]
-#name = "pytorch"
-#url = "https://download.pytorch.org/whl/cu116/"
-#default = false
-#secondary = false
-
+pyfiglet = "^0.8.post1"
 
 
 [build-system]
