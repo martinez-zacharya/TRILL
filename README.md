@@ -5,6 +5,8 @@
                                 |____|    |____|_  /___|_______ \_______ \
                                                  \/            \/       \/
 
+[![pypi version](https://img.shields.io/pypi/v/trill-proteins)](https://pypi.org/project/trill-proteins)
+![status](https://github.com/martinez-zacharya/TRILL/workflows/CI/badge.svg)
 # TRILL
 **TR**aining and **I**nference using the **L**anguage of **L**ife
 
