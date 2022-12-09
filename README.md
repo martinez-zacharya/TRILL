@@ -29,7 +29,7 @@
 - --epochs (Number of epochs for fine-tuning transformer. Default is 20)
 - --noTrain (Skips the fine-tuning and embeds the query sequences with the base model)
 - --preTrained_model (Input path to your own pre-trained ESM model)
-- --batch_size (Change batch-size number for fine-tuning. Default is 5)
+- --batch_size (Change batch-size number for fine-tuning. Default is 1)
 - --model (Change ESM model. Default is esm2_t12_35M_UR50D. List of models can be found at https://github.com/facebookresearch/esm)
 - --strategy (Change training strategy. Default is None. List of strategies can be found at https://pytorch-lightning.readthedocs.io/en/stable/extensions/strategy.html)
 - --logger (Enable Tensorboard logger. Default is None)
