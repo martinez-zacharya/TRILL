@@ -9,6 +9,7 @@ import sys
 import torch.nn as nn
 import torch.nn.functional as F
 import pandas as pd
+import git
 from pytorch_lightning.loggers import TensorBoardLogger
 # from pytorch_lightning.profilers import PyTorchProfiler
 from pytorch_lightning.strategies import DeepSpeedStrategy
@@ -22,7 +23,7 @@ from esm.inverse_folding.util import load_structure, extract_coords_from_structu
 from esm.inverse_folding.multichain_util import extract_coords_from_complex, sample_sequence_in_complex
 from pytorch_lightning.callbacks import ModelCheckpoint
 from utils.protgpt2_utils import ProtGPT2_wrangle
-from utils.esm_utils import ESM_IF1_Wrangle, coordDataset
+from utils.esm_utils import ESM_IF1_Wrangle, coordDataset, clean_embeddings
 from pyfiglet import Figlet
 # os.environ['CUDA_LAUNCH_BLOCKING'] = '1'
 os.environ["TOKENIZERS_PARALLELISM"] = "false"
@@ -106,7 +107,7 @@ def main():
             trainer = pl.Trainer(devices=int(args.GPUs), profiler=profiler, accelerator='gpu', max_epochs=int(args.epochs), logger = logger, num_nodes = int(args.nodes), precision = 16, amp_backend='native', strategy = 'deepspeed_stage_3')
             trainer.fit(model=model, train_dataloaders = dataloader)
             save_path = os.path.join(git_root, f"lightning_logs/version_0/checkpoints/epoch={args.epochs}-step={len(seq_dict_df)}.ckpt")
-            output_path = f"{args.name}_{args.model}_{args.epochs}.pt"
+            output_path = f"{args.name}_ProtGPT2_{args.epochs}.pt"
             convert_zero_checkpoint_to_fp32_state_dict(save_path, output_path)
             # trainer.save_checkpoint(f"{args.name}_{args.epochs}.pt")
     # elif args.esmfold == True:
@@ -196,7 +197,7 @@ if __name__ == '__main__':
         "--batch_size",
         help="Change batch-size number for fine-tuning. Default is 5",
         action="store",
-        default = 5,
+        default = 1,
         dest="batch_size",
 )
 
