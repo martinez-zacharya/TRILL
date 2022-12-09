@@ -17,6 +17,11 @@ from pytorch_lightning.profilers import PyTorchProfiler
 from deepspeed.ops.adam import DeepSpeedCPUAdam
 from transformers import pipeline, AutoTokenizer, AutoModelForCausalLM, DataCollatorForLanguageModeling
 from esm.inverse_folding.multichain_util import sample_sequence_in_complex
+from lightning_transformers.task.nlp.language_modeling import LanguageModelingDataModule, LanguageModelingTransformer
+from lightning_transformers.utilities.deepspeed import enable_transformers_pretrained_deepspeed_sharding
+# from colossalai.nn.optimizer import HybridAdam, CPUAdam
+from deepspeed.ops.adam import FusedAdam
+
 
 class ESM(pl.LightningModule):
     def __init__(self, model, lr, leggo = False):
@@ -60,32 +65,32 @@ class ESM(pl.LightningModule):
             self.reps.append(tuple([rep_numpy[i].mean(0), labels[i]]))
         return True
     
-class ESMFold(pl.LightningModule):
-    def __init__(self):
-        super().__init__()
-        self.esmfold = esm.pretrained.esmfold_v1()
-        self.esmfold.set_chunk_size(100)
-        self.preds = []
+# class ESMFold(pl.LightningModule):
+#     def __init__(self):
+#         super().__init__()
+#         self.esmfold = esm.pretrained.esmfold_v1()
+#         self.esmfold.set_chunk_size(100)
+#         self.preds = []
         
-    def training_step(self, batch, batch_idx):
-        pass
+#     def training_step(self, batch, batch_idx):
+#         pass
     
-    def configure_optimizers(self):
-        optimizer = DeepSpeedCPUAdam(self.esmfold.parameters(), lr=1e-5)
-        return optimizer
+#     def configure_optimizers(self):
+#         optimizer = DeepSpeedCPUAdam(self.esmfold.parameters(), lr=1e-5)
+#         return optimizer
     
-    def predict_step(self, batch, batch_idx):
-        labels, seqs = batch
-        print(seqs)
-        print(seqs[0])
-        print(type(seqs[0]))
-        output = self.esmfold.infer(seqs[0])
-        pdb = model.output_to_pdb(output)[0]
-        self.preds.append(tuple([pdb, labels]))
-        return True
+#     def predict_step(self, batch, batch_idx):
+#         labels, seqs = batch
+#         print(seqs)
+#         print(seqs[0])
+#         print(type(seqs[0]))
+#         output = self.esmfold.infer(seqs[0])
+#         pdb = model.output_to_pdb(output)[0]
+#         self.preds.append(tuple([pdb, labels]))
+#         return True
         
         
-class ProtGPT2(pl.LightningModule):
+class old_ProtGPT2(pl.LightningModule):
     def __init__(self, pretrained = None):
         super().__init__()
         if pretrained != None:
@@ -112,7 +117,8 @@ class ProtGPT2(pl.LightningModule):
         return(loss)
         
     def configure_optimizers(self):
-        optimizer = DeepSpeedCPUAdam(self.model.parameters(), lr=1e-5)
+        # optimizer = DeepSpeedCPUAdam(self.model.parameters(), lr=1e-5)
+        optimizer = torch.optim.Adam(self.trainer.model.parameters(), lr=1e-5)
         return optimizer
     
     def generate(self, seed_seq="M", max_length=333, do_sample = True, top_k=950, repetition_penalty=1.2, num_return_sequences=10, eos_token_id=0):
@@ -120,15 +126,48 @@ class ProtGPT2(pl.LightningModule):
         outseqs = generator(seed_seq, max_length=max_length, do_sample =do_sample, top_k=top_k, repetition_penalty=repetition_penalty, num_return_sequences=num_return_sequences, eos_token_id=eos_token_id)
         outseqs = [samp['generated_text'].replace('\n','') for samp in outseqs]
         return outseqs
+    
+class ProtGPT2(pl.LightningModule):
+    def __init__(self, lr):
+        super().__init__()
+        self.tokenizer = AutoTokenizer.from_pretrained("nferruz/ProtGPT2")
+        self.model = AutoModelForCausalLM.from_pretrained("nferruz/ProtGPT2")
+        self.lr = lr
+        # if pretrained != None:
+        #     self.model = AutoModelForCausalLM.from_pretrained("nferruz/ProtGPT2")
+        #     # self.model = self.model.load_from_checkpoint(pretrained)
+        #     # self.model = weights_update(self.model, checkpoint=pretrained)
+        # else:
+        #     self.model = AutoModelForCausalLM.from_pretrained("nferruz/ProtGPT2")
 
-class coordDataset(torch.utils.data.Dataset):
-    def __init__(self, input):
-        self.input = input
-    def __getitem__(self, idx):
-        coords, seq = self.input[idx]
-        return coords, seq
-    def __len__(self):
-        return len(self.input)
+    
+    def training_step(self, batch, batch_idx):
+        self.tokenizer.pad_token = self.tokenizer.eos_token
+        tokenized = self.tokenizer(
+        batch["Labels"],
+        padding=True,
+        return_special_tokens_mask=True
+    )
+        att = torch.LongTensor(tokenized['attention_mask']).cuda()
+        data_collator = DataCollatorForLanguageModeling(tokenizer = self.tokenizer, mlm=False)
+        collated = data_collator([tokenized['input_ids']])
+        outputs = self.model(collated['input_ids'].cuda(), labels = collated['labels'].cuda(), attention_mask = att, return_dict = True)
+        loss = outputs[0]
+        self.log("loss", loss)
+        return(loss)
+        
+    def configure_optimizers(self):
+        # optimizer = DeepSpeedCPUAdam(self.model.parameters(), lr=1e-5)
+        # optimizer = torch.optim.Adam(self.model.parameters(), lr=1e-5)
+        optimizer = FusedAdam(self.model.parameters(), lr=self.lr)
+        return optimizer
+    
+    def generate(self, eos_token_id=0):
+        generator = pipeline('text-generation', model = self.model, tokenizer=self.tokenizer)
+        outseqs = generator(seed_seq, max_length=max_length, do_sample =do_sample, top_k=top_k, repetition_penalty=repetition_penalty, num_return_sequences=num_return_sequences, eos_token_id=eos_token_id)
+        outseqs = [samp['generated_text'].replace('\n','') for samp in outseqs]
+        return outseqs
+
     
 # class ProtGPT2Dataset(torch.utils.data.Dataset):
 #     def __init__(self, input):

@@ -3,7 +3,7 @@
 #SBATCH --ntasks-per-node=4
 #SBATCH --nodes=1 # number of nodes
 #SBATCH --gres=gpu:4 # number of GPUs (max 4 per node)
-#SBATCH --mem-per-cpu=32G   # memory per CPU core
+#SBATCH --mem-per-cpu=60G   # memory per CPU core
 #SBATCH -J "tutorial"   # job name
 #SBATCH --mail-user="" # change to your email
 #SBATCH --mail-type=BEGIN
