@@ -23,7 +23,7 @@ from esm.inverse_folding.util import load_structure, extract_coords_from_structu
 from esm.inverse_folding.multichain_util import extract_coords_from_complex, sample_sequence_in_complex
 from pytorch_lightning.callbacks import ModelCheckpoint
 from utils.protgpt2_utils import ProtGPT2_wrangle
-from utils.esm_utils import ESM_IF1_Wrangle, coordDataset, clean_embeddings
+from utils.esm_utils import ESM_IF1_Wrangle, coordDataset, clean_embeddings, ESM_IF1
 from pyfiglet import Figlet
 # os.environ['CUDA_LAUNCH_BLOCKING'] = '1'
 os.environ["TOKENIZERS_PARALLELISM"] = "false"
@@ -95,7 +95,7 @@ def main():
         embeddings.to_csv(f'{args.name}_{args.model}.csv', index = False)
         
     elif args.if1 == True:
-        sample_df = ESM_IF1(struct_import, genIters=int(args.genIters), temp = args.temp)
+        sample_df = ESM_IF1(dataloader, genIters=int(args.genIters), temp = args.temp)
         sample_df.to_csv(f'{args.name}_IF1_gen.csv', index=False, header = ['Generated_Seq', 'Chain'])      
         
     elif args.protgpt2 == True:
@@ -235,7 +235,7 @@ if __name__ == '__main__':
     parser.add_argument(
         "--if1",
         help="Utilize Inverse Folding model 'esm_if1_gvp4_t16_142M_UR50' to facilitate fixed backbone sequence design. Basically converts protein structure to possible sequences.",
-        action="store_false",
+        action="store_true",
         default = False,
         dest="if1",
 )
