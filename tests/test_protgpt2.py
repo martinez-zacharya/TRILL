@@ -12,7 +12,6 @@ from trill.utils.lightning_models import ProtGPT2
 from trill.utils.update_weights import weights_update
 from pytorch_lightning.callbacks import ModelCheckpoint
 from pytorch_lightning.strategies import DeepSpeedStrategy
-from lightning_transformers.task.nlp.language_modeling import LanguageModelingDataModule, LanguageModelingTransformer
 from pytorch_lightning.strategies import DeepSpeedStrategy
 from pytorch_lightning.utilities.deepspeed import convert_zero_checkpoint_to_fp32_state_dict
 from trill.utils.protgpt2_utils import ProtGPT2_wrangle
