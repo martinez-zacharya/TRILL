@@ -15,124 +15,21 @@ from pytorch_lightning.loggers import TensorBoardLogger
 from pytorch_lightning.strategies import DeepSpeedStrategy
 from tqdm import tqdm
 sys.path.insert(0, 'utils')
-from lightning_models import ESM, ProtGPT2
-from update_weights import weights_update
+from trill.utils.lightning_models import ESM, ProtGPT2
+from trill.utils.update_weights import weights_update
 from datasets import Dataset
 from transformers import DataCollatorForLanguageModeling, AutoTokenizer
 from esm.inverse_folding.util import load_structure, extract_coords_from_structure
 from esm.inverse_folding.multichain_util import extract_coords_from_complex, sample_sequence_in_complex
 from pytorch_lightning.callbacks import ModelCheckpoint
-from utils.protgpt2_utils import ProtGPT2_wrangle
-from utils.esm_utils import ESM_IF1_Wrangle, coordDataset, clean_embeddings, ESM_IF1
+from trill.utils.protgpt2_utils import ProtGPT2_wrangle
+from trill.utils.esm_utils import ESM_IF1_Wrangle, coordDataset, clean_embeddings, ESM_IF1
 from pyfiglet import Figlet
 # os.environ['CUDA_LAUNCH_BLOCKING'] = '1'
 os.environ["TOKENIZERS_PARALLELISM"] = "false"
 
-def main():
-    start = time.time()
+def main(args):
 
-    git_repo = git.Repo(os.getcwd(), search_parent_directories=True)
-    git_root = git_repo.git.rev_parse("--show-toplevel")
-
-    pl.seed_everything(123)
-    
-    if args.logger == True:
-        logger = TensorBoardLogger("logs")
-    else:
-        logger = False
-    if args.profiler:
-        profiler = PyTorchProfiler(filename='test-logs')
-    else:
-        profiler = None
-        
-    model_import_name = f'esm.pretrained.{args.model}()'
-    if args.if1 == True:
-        pass
-    # elif args.esmfold == True:
-    #     model = ESMFold()
-    elif args.protgpt2 == True and args.preTrained_model == False:
-        model = ProtGPT2(int(args.lr))
-        tokenizer = AutoTokenizer.from_pretrained("nferruz/ProtGPT2")
-    elif args.protgpt2 == True and args.preTrained_model != False:
-        model = ProtGPT2(int(args.lr))
-        model = model.load_from_checkpoint(args.preTrained_model, strict = False)
-        tokenizer = AutoTokenizer.from_pretrained("nferruz/ProtGPT2")
-    else:
-        model = ESM(eval(model_import_name), float(args.lr), args.LEGGO)
-        
-    
-    if args.query.endswith(('.pdb', '.cif')) == True:
-        data = ESM_IF1_Wrangle(args.query)
-        dataloader = torch.utils.data.DataLoader(data, pin_memory = True, batch_size=1, shuffle=False)
-        
-    elif args.query.endswith(('.fasta', '.faa', '.fa')):
-        data = esm.data.FastaBatchedDataset.from_file(args.query)
-        if args.protgpt2 == True:
-            seq_dict_df = ProtGPT2_wrangle(data, tokenizer)
-            dataloader = torch.utils.data.DataLoader(seq_dict_df, shuffle = False, batch_size = int(args.batch_size), num_workers=0)
-        else:
-            # if args.esmfold == True:
-            #     dataloader = torch.utils.data.DataLoader(data, shuffle = False, batch_size = int(args.batch_size), num_workers=0)
-            # else:
-            dataloader = torch.utils.data.DataLoader(data, shuffle = False, batch_size = int(args.batch_size), num_workers=0, collate_fn=model.alphabet.get_batch_converter())
-
-    else:
-        return (f'Input query file - {args.query} is not a valid file format.\
-            File needs to be either protein fasta (.fa, .fasta, .faa) or atomic coordinates (.pdb, .cif)')
-
-        
-    if args.noTrain == True:
-        trainer = pl.Trainer(enable_checkpointing=False, devices=int(args.GPUs), strategy = args.strategy, accelerator='gpu', logger=logger, num_nodes=int(args.nodes))
-        trainer.predict(model, dataloader)
-        embeddings = clean_embeddings(model.reps)
-        embeddings.to_csv(f'{args.name}_{args.model}.csv', index = False)
-    
-    elif args.preTrained_model != False and args.protgpt2 == False:
-        model = weights_update(model = ESM(eval(model_import_name), float(args.lr)), checkpoint = torch.load(args.preTrained_model))
-        trainer = pl.Trainer(enable_checkpointing=False, devices=int(args.GPUs), strategy = args.strategy, accelerator='gpu', logger=logger, num_nodes=int(args.nodes))
-        trainer.predict(model, dataloader)
-        embeddings = clean_embeddings(model.reps)
-        embeddings.to_csv(f'{args.name}_{args.model}.csv', index = False)
-        
-    elif args.if1 == True:
-        sample_df = ESM_IF1(dataloader, genIters=int(args.genIters), temp = args.temp)
-        sample_df.to_csv(f'{args.name}_IF1_gen.csv', index=False, header = ['Generated_Seq', 'Chain'])      
-        
-    elif args.protgpt2 == True:
-        if args.gen == True:
-            generated_output = model.generate(seed_seq=args.seed_seq, max_length=int(args.max_length), do_sample = args.do_sample, top_k=int(args.top_k), repetition_penalty=float(args.repetition_penalty), num_return_sequences=int(args.num_return_sequences))
-            gen_seq_df = pd.DataFrame(generated_output, columns=['Generated_Sequence'])
-            gen_seq_df.to_csv(f'{args.name}_generated_sequences.csv', index = False)
-        else:
-            trainer = pl.Trainer(devices=int(args.GPUs), profiler=profiler, accelerator='gpu', max_epochs=int(args.epochs), logger = logger, num_nodes = int(args.nodes), precision = 16, amp_backend='native', strategy = 'deepspeed_stage_3')
-            trainer.fit(model=model, train_dataloaders = dataloader)
-            save_path = os.path.join(git_root, f"lightning_logs/version_0/checkpoints/epoch={args.epochs}-step={len(seq_dict_df)}.ckpt")
-            output_path = f"{args.name}_ProtGPT2_{args.epochs}.pt"
-            convert_zero_checkpoint_to_fp32_state_dict(save_path, output_path)
-            # trainer.save_checkpoint(f"{args.name}_{args.epochs}.pt")
-    # elif args.esmfold == True:
-    #     trainer = pl.Trainer(enable_checkpointing=False, devices=int(args.GPUs),  precision = 16, amp_backend='native', strategy = DeepSpeedStrategy(stage=3, offload_optimizer=True, offload_parameters=True), accelerator='gpu', logger=logger, num_nodes=int(args.nodes))
-    #     trainer.predict(model, dataloader)
-    #     print(model.preds)
-    #     pdb_df = pd.DataFrame(model.preds)
-    #     print(pdb_df)
-    else:
-        if args.LEGGO:
-            trainer = pl.Trainer(devices=int(args.GPUs), profiler = profiler,accelerator='gpu',max_epochs=int(args.epochs),logger=logger, num_nodes=int(args.nodes), precision = 16, amp_backend='native', strategy=DeepSpeedStrategy(stage=3, offload_optimizer=True, offload_parameters=True))
-        else:
-            trainer = pl.Trainer(devices=int(args.GPUs), profiler = profiler, accelerator='gpu', strategy = args.strategy, max_epochs=int(args.epochs), logger=logger, num_nodes=int(args.nodes), precision = 16, amp_backend='native', enable_checkpointing=False)        
-        trainer.fit(model=model, train_dataloaders=dataloader)
-        trainer.save_checkpoint(f"{args.name}_{args.model}_{args.epochs}.pt")
-        
-    
-    end = time.time()
-    print("Finished!")
-    print(f"Time elapsed: {end-start} seconds")
- 
-
-
-if __name__ == '__main__':
-    
     f = Figlet(font="graffiti")
     print(f.renderText("TRILL"))
     
@@ -330,6 +227,117 @@ if __name__ == '__main__':
         default=5,
         dest="num_return_sequences",
 )
+
+    args = parser.parse_args()
+    start = time.time()
+    if args.query == None and args.gen == False:
+        raise ValueError('An input file is needed when not using --gen')
+    git_repo = git.Repo(os.getcwd(), search_parent_directories=True)
+    git_root = git_repo.git.rev_parse("--show-toplevel")
+
+    pl.seed_everything(123)
+    
+    if args.logger == True:
+        logger = TensorBoardLogger("logs")
+    else:
+        logger = False
+    if args.profiler:
+        profiler = PyTorchProfiler(filename='test-logs')
+    else:
+        profiler = None
+        
+    model_import_name = f'esm.pretrained.{args.model}()'
+    if args.if1 == True:
+        pass
+    # elif args.esmfold == True:
+    #     model = ESMFold()
+    elif args.protgpt2 == True and args.preTrained_model == False:
+        model = ProtGPT2(int(args.lr))
+        tokenizer = AutoTokenizer.from_pretrained("nferruz/ProtGPT2")
+    elif args.protgpt2 == True and args.preTrained_model != False:
+        model = ProtGPT2(int(args.lr))
+        model = model.load_from_checkpoint(args.preTrained_model, strict = False)
+        tokenizer = AutoTokenizer.from_pretrained("nferruz/ProtGPT2")
+    else:
+        model = ESM(eval(model_import_name), float(args.lr), args.LEGGO)
+        
+    if args.query != None:
+        if args.query.endswith(('.pdb', '.cif')):
+            data = ESM_IF1_Wrangle(args.query)
+            dataloader = torch.utils.data.DataLoader(data, pin_memory = True, batch_size=1, shuffle=False)
+        
+        elif args.query.endswith(('.fasta', '.faa', '.fa')):
+            data = esm.data.FastaBatchedDataset.from_file(args.query)
+            if args.protgpt2 == True:
+                seq_dict_df = ProtGPT2_wrangle(data, tokenizer)
+                dataloader = torch.utils.data.DataLoader(seq_dict_df, shuffle = False, batch_size = int(args.batch_size), num_workers=0)
+            else:
+            # if args.esmfold == True:
+            #     dataloader = torch.utils.data.DataLoader(data, shuffle = False, batch_size = int(args.batch_size), num_workers=0)
+            # else:
+                dataloader = torch.utils.data.DataLoader(data, shuffle = False, batch_size = int(args.batch_size), num_workers=0, collate_fn=model.alphabet.get_batch_converter())
+
+        else:
+            return (f'Input query file - {args.query} is not a valid file format.\
+            File needs to be either protein fasta (.fa, .fasta, .faa) or atomic coordinates (.pdb, .cif)')
+
+        
+    if args.noTrain == True:
+        trainer = pl.Trainer(enable_checkpointing=False, devices=int(args.GPUs), strategy = args.strategy, accelerator='gpu', logger=logger, num_nodes=int(args.nodes))
+        trainer.predict(model, dataloader)
+        embeddings = clean_embeddings(model.reps)
+        embeddings.to_csv(f'{args.name}_{args.model}.csv', index = False)
+    
+    elif args.preTrained_model != False and args.protgpt2 == False:
+        model = weights_update(model = ESM(eval(model_import_name), float(args.lr)), checkpoint = torch.load(args.preTrained_model))
+        trainer = pl.Trainer(enable_checkpointing=False, devices=int(args.GPUs), strategy = args.strategy, accelerator='gpu', logger=logger, num_nodes=int(args.nodes))
+        trainer.predict(model, dataloader)
+        embeddings = clean_embeddings(model.reps)
+        embeddings.to_csv(f'{args.name}_{args.model}.csv', index = False)
+        
+    elif args.if1 == True:
+        sample_df = ESM_IF1(dataloader, genIters=int(args.genIters), temp = args.temp)
+        sample_df.to_csv(f'{args.name}_IF1_gen.csv', index=False, header = ['Generated_Seq', 'Chain'])      
+        
+    elif args.protgpt2 == True:
+        if args.gen == True:
+            generated_output = model.generate(seed_seq=args.seed_seq, max_length=int(args.max_length), do_sample = args.do_sample, top_k=int(args.top_k), repetition_penalty=float(args.repetition_penalty), num_return_sequences=int(args.num_return_sequences))
+            gen_seq_df = pd.DataFrame(generated_output, columns=['Generated_Sequence'])
+            gen_seq_df.to_csv(f'{args.name}_generated_sequences.csv', index = False)
+        else:
+            trainer = pl.Trainer(devices=int(args.GPUs), profiler=profiler, accelerator='gpu', max_epochs=int(args.epochs), logger = logger, num_nodes = int(args.nodes), precision = 16, amp_backend='native', strategy = 'deepspeed_stage_3')
+            trainer.fit(model=model, train_dataloaders = dataloader)
+            save_path = os.path.join(git_root, f"lightning_logs/version_0/checkpoints/epoch={args.epochs}-step={len(seq_dict_df)}.ckpt")
+            output_path = f"{args.name}_ProtGPT2_{args.epochs}.pt"
+            convert_zero_checkpoint_to_fp32_state_dict(save_path, output_path)
+            # trainer.save_checkpoint(f"{args.name}_{args.epochs}.pt")
+    # elif args.esmfold == True:
+    #     trainer = pl.Trainer(enable_checkpointing=False, devices=int(args.GPUs),  precision = 16, amp_backend='native', strategy = DeepSpeedStrategy(stage=3, offload_optimizer=True, offload_parameters=True), accelerator='gpu', logger=logger, num_nodes=int(args.nodes))
+    #     trainer.predict(model, dataloader)
+    #     print(model.preds)
+    #     pdb_df = pd.DataFrame(model.preds)
+    #     print(pdb_df)
+    else:
+        if args.LEGGO:
+            trainer = pl.Trainer(devices=int(args.GPUs), profiler = profiler,accelerator='gpu',max_epochs=int(args.epochs),logger=logger, num_nodes=int(args.nodes), precision = 16, amp_backend='native', strategy=DeepSpeedStrategy(stage=3, offload_optimizer=True, offload_parameters=True))
+        else:
+            trainer = pl.Trainer(devices=int(args.GPUs), profiler = profiler, accelerator='gpu', strategy = args.strategy, max_epochs=int(args.epochs), logger=logger, num_nodes=int(args.nodes), precision = 16, amp_backend='native', enable_checkpointing=False)        
+        trainer.fit(model=model, train_dataloaders=dataloader)
+        trainer.save_checkpoint(f"{args.name}_{args.model}_{args.epochs}.pt")
+        
+    
+    end = time.time()
+    print("Finished!")
+    print(f"Time elapsed: {end-start} seconds")
+ 
+
+def cli(args=None):
+    if not args:
+        args = sys.argv[1:]    
+    main(args)
+if __name__ == '__main__':
+    print("this shouldn't show up...")
+
     
 #     parser.add_argument(
 #         "--esmfold",
@@ -344,7 +352,7 @@ if __name__ == '__main__':
     
 
 
-    args = parser.parse_args()
+
 
     
-    main()
+   # main()
