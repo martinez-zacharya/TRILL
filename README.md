@@ -14,7 +14,7 @@
 1. Type ```git clone https://github.com/martinez-zacharya/TRILL``` to clone the repo
 2. I recommend using a virtual environment with conda, venv etc.
 3. Run ```pip install trill-proteins```
-4. ```pip install torch```
+4. ```pip install torch pytorch-lightning```
 5. ```pip install pyg-lib torch-scatter torch-sparse torch-cluster torch-spline-conv torch-geometric -f https://data.pyg.org/whl/torch-1.13.0+cu117.html```
 
 ## Arguments
