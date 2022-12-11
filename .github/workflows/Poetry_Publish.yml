@@ -1,9 +1,7 @@
 name: Poetry Publish
 on:
-  push:
-    branches: [ "main" ]
-  #release:
-    #types: [published]
+  release:
+    types: [published]
 
 jobs:
   Publish:
@@ -24,4 +22,4 @@ jobs:
         with:
           poetry-version: ${{ matrix.poetry-version }}
       - name: View poetry --help
-        run: poetry publish --dry-run --build -u __token__ -p ${{ secrets.PYPI_TOKEN }}
+        run: poetry publish --build -u __token__ -p ${{ secrets.PYPI_TOKEN }}
