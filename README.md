@@ -105,7 +105,7 @@
   ```
   
 ### Fine-Tuning
-  6. In case you wanted to generate certain "types" of proteins, below is an example of fine-tuning ProtGPT2 and then generating proteins with the fine-tuned model. 
+  7. In case you wanted to generate certain "types" of proteins, below is an example of fine-tuning ProtGPT2 and then generating proteins with the fine-tuned model. 
   ```
   trill FineTune 2 --protgpt2 --epochs 100
   ```
