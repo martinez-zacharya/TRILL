@@ -232,8 +232,6 @@ def main(args):
     start = time.time()
     if args.query == None and args.gen == False:
         raise ValueError('An input file is needed when not using --gen')
-    git_repo = git.Repo(os.getcwd(), search_parent_directories=True)
-    git_root = git_repo.git.rev_parse("--show-toplevel")
 
     pl.seed_everything(123)
     
@@ -307,7 +305,7 @@ def main(args):
         else:
             trainer = pl.Trainer(devices=int(args.GPUs), profiler=profiler, accelerator='gpu', max_epochs=int(args.epochs), logger = logger, num_nodes = int(args.nodes), precision = 16, amp_backend='native', strategy = 'deepspeed_stage_3')
             trainer.fit(model=model, train_dataloaders = dataloader)
-            save_path = os.path.join(git_root, f"lightning_logs/version_0/checkpoints/epoch={args.epochs}-step={len(seq_dict_df)}.ckpt")
+            save_path = os.path.join(os.getcwd(), f"lightning_logs/version_0/checkpoints/epoch={args.epochs}-step={len(seq_dict_df)}.ckpt")
             output_path = f"{args.name}_ProtGPT2_{args.epochs}.pt"
             convert_zero_checkpoint_to_fp32_state_dict(save_path, output_path)
             # trainer.save_checkpoint(f"{args.name}_{args.epochs}.pt")
