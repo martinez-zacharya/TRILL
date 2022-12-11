@@ -21,5 +21,5 @@ jobs:
         uses: abatilo/actions-poetry@v2
         with:
           poetry-version: ${{ matrix.poetry-version }}
-      - name: View poetry --help
+      - name: Build and Publish
         run: poetry publish --build -u __token__ -p ${{ secrets.PYPI_TOKEN }}
