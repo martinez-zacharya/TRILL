@@ -1,0 +1,5 @@
+[run]
+omit =
+    trill/utils/WranglingData.py
+    trill/utils/visualize.py
+    trill/trill.py
