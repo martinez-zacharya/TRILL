@@ -16,41 +16,9 @@
 3. ```$ pip install torch pytorch-lightning```
 4. ```$ pip install pyg-lib torch-scatter torch-sparse torch-cluster torch-spline-conv torch-geometric -f https://data.pyg.org/whl/torch-1.13.0+cu117.html```
 
-## Arguments
-
-### Positional Arguments:
-1. name (Name of run)
-2. GPUs (Total # of GPUs requested for each node)
-
-### Optional Arguments:
-- -h, --help (Show help message)
-- --query (Input file. Needs to be either protein fasta (.fa, .faa, .fasta) or structural coordinates (.pdb, .cif))
-- --nodes (Total number of computational nodes. Default is 1)
-- --lr (Learning rate for adam optimizer. Default is 0.0001)
-- --epochs (Number of epochs for fine-tuning transformer. Default is 20)
-- --noTrain (Skips the fine-tuning and embeds the query sequences with the base model)
-- --preTrained_model (Input path to your own pre-trained ESM model)
-- --batch_size (Change batch-size number for fine-tuning. Default is 1)
-- --model (Change ESM model. Default is esm2_t12_35M_UR50D. List of models can be found at https://github.com/facebookresearch/esm)
-- --strategy (Change training strategy. Default is None. List of strategies can be found at https://pytorch-lightning.readthedocs.io/en/stable/extensions/strategy.html)
-- --logger (Enable Tensorboard logger. Default is None)
-- --if1 (Utilize Inverse Folding model 'esm_if1_gvp4_t16_142M_UR50' to facilitate fixed backbone sequence design. Basically converts protein structure to possible sequences)
-- --temp (Choose sampling temperature. Higher temps will have more sequence diversity, but less recovery of the original sequence for ESM_IF1)
-- --genIters (Adjust number of sequences generated for each chain of the input structure for ESM_IF1)
-- --LEGGO (Use deepspeed_stage_3_offload with ESM. Will be removed soon...)
-- --profiler (Utilize PyTorchProfiler)
-- --protgpt2 (Utilize ProtGPT2. Can either fine-tune or generate sequences)
-- --gen (Generate protein sequences using ProtGPT2. Can either use base model or user-submitted fine-tuned model)
-- --seed_seq (Sequence to seed ProtGPT2 Generation)
-- --max_length (Max length of proteins generated from ProtGPT)
-- --do_sample (Whether or not to use sampling ; use greedy decoding otherwise)
-- --top_k (The number of highest probability vocabulary tokens to keep for top-k-filtering)
-- --repetition_penalty (The parameter for repetition penalty. 1.0 means no penalty)
-- --num_return_sequences (Number of sequences for ProtGPT2 to generate)
-
 ## Examples
 
-### Default (Fine-tuning)
+### Default (Fine-tuning ESM2)
   1. The default mode for TRILL is to just fine-tune the base esm2_t12_35M_UR50D model from FAIR with the query input.
   ```
   $ trill fine_tuning_ex 1 --query data/query.fasta
@@ -104,7 +72,7 @@
   $ trill Gen_ProtGPT2 1 --protgpt2 --gen --max_length 100 --num_return_sequences 5
   ```
   
-### Fine-Tuning
+### Fine-Tuning ProtGPT2
   7. In case you wanted to generate certain "types" of proteins, below is an example of fine-tuning ProtGPT2 and then generating proteins with the fine-tuned model. 
   ```
   $ trill FineTune 2 --protgpt2 --epochs 100
@@ -112,6 +80,38 @@
   ```
   $ trill Gen_With_FineTuned 1 --protgpt2 --gen --preTrained_model FineTune_ProtGPT2_100.pt
   ```
+
+## Arguments
+
+### Positional Arguments:
+1. name (Name of run)
+2. GPUs (Total # of GPUs requested for each node)
+
+### Optional Arguments:
+- -h, --help (Show help message)
+- --query (Input file. Needs to be either protein fasta (.fa, .faa, .fasta) or structural coordinates (.pdb, .cif))
+- --nodes (Total number of computational nodes. Default is 1)
+- --lr (Learning rate for adam optimizer. Default is 0.0001)
+- --epochs (Number of epochs for fine-tuning transformer. Default is 20)
+- --noTrain (Skips the fine-tuning and embeds the query sequences with the base model)
+- --preTrained_model (Input path to your own pre-trained ESM model)
+- --batch_size (Change batch-size number for fine-tuning. Default is 1)
+- --model (Change ESM model. Default is esm2_t12_35M_UR50D. List of models can be found at https://github.com/facebookresearch/esm)
+- --strategy (Change training strategy. Default is None. List of strategies can be found at https://pytorch-lightning.readthedocs.io/en/stable/extensions/strategy.html)
+- --logger (Enable Tensorboard logger. Default is None)
+- --if1 (Utilize Inverse Folding model 'esm_if1_gvp4_t16_142M_UR50' to facilitate fixed backbone sequence design. Basically converts protein structure to possible sequences)
+- --temp (Choose sampling temperature. Higher temps will have more sequence diversity, but less recovery of the original sequence for ESM_IF1)
+- --genIters (Adjust number of sequences generated for each chain of the input structure for ESM_IF1)
+- --LEGGO (Use deepspeed_stage_3_offload with ESM. Will be removed soon...)
+- --profiler (Utilize PyTorchProfiler)
+- --protgpt2 (Utilize ProtGPT2. Can either fine-tune or generate sequences)
+- --gen (Generate protein sequences using ProtGPT2. Can either use base model or user-submitted fine-tuned model)
+- --seed_seq (Sequence to seed ProtGPT2 Generation)
+- --max_length (Max length of proteins generated from ProtGPT)
+- --do_sample (Whether or not to use sampling ; use greedy decoding otherwise)
+- --top_k (The number of highest probability vocabulary tokens to keep for top-k-filtering)
+- --repetition_penalty (The parameter for repetition penalty. 1.0 means no penalty)
+- --num_return_sequences (Number of sequences for ProtGPT2 to generate)
 
 ## Misc. Tips
 
