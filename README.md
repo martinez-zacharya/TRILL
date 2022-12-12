@@ -12,9 +12,9 @@
 
 ## Set-Up
 1. I recommend using a virtual environment with conda, venv etc.
-2. Run ```pip install trill-proteins```
-3. ```pip install torch pytorch-lightning```
-4. ```pip install pyg-lib torch-scatter torch-sparse torch-cluster torch-spline-conv torch-geometric -f https://data.pyg.org/whl/torch-1.13.0+cu117.html```
+2. Run ```$ pip install trill-proteins```
+3. ```$ pip install torch pytorch-lightning```
+4. ```$ pip install pyg-lib torch-scatter torch-sparse torch-cluster torch-spline-conv torch-geometric -f https://data.pyg.org/whl/torch-1.13.0+cu117.html```
 
 ## Arguments
 
@@ -53,17 +53,17 @@
 ### Default (Fine-tuning)
   1. The default mode for TRILL is to just fine-tune the base esm2_t12_35M_UR50D model from FAIR with the query input.
   ```
-  trill fine_tuning_ex 1 --query data/query.fasta
+  $ trill fine_tuning_ex 1 --query data/query.fasta
   ```
 ### Embed with base esm2_t12_35M_UR50D model
   2. You can also embed proteins with just the base model from FAIR and completely skip fine-tuning. The output will be a CSV file where each row corresponds to a single protein with the last column being the fasta header.
   ```
-  trill base_embed 1 --query data/query.fasta --noTrain
+  $ trill base_embed 1 --query data/query.fasta --noTrain
   ```
 ### Embedding with a custom pre-trained model
   3. If you have a pre-trained model, you can use it to embed sequences by passing the path to --preTrained_model. 
   ```
-  trill pre_trained 1 --query data/query.fasta --preTrained_model /path/to/models/pre_trained_model.pt
+  $ trill pre_trained 1 --query data/query.fasta --preTrained_model /path/to/models/pre_trained_model.pt
   ```
 ### Distributed Training/Inference
   4. In order to scale/speed up your analyses, you can distribute your training/inference across many GPUs with a few extra flags to your command. You can even fit models that do not normally fit on your GPUs with sharding, CPU-offloading etc. Below is an example slurm batch submission file. The list of strategies can be found here (https://pytorch-lightning.readthedocs.io/en/stable/extensions/strategy.html). The example below utilizes 16 GPUs in total (4(GPUs) * 4(--nodes)) with Fully Sharded Data Parallel and the 650M parameter ESM2 model.
@@ -88,29 +88,29 @@
   ```
   You can then submit this job with:
   ```
-  sbatch distributed_example.slurm
+  $ sbatch distributed_example.slurm
   ```
   More examples for distributed training/inference without slurm coming soon!
   
 ### Generating protein sequences using inverse folding with ESM-IF1
   5. When provided a protein backbone structure (.pdb, .cif), the IF1 model is able to predict a sequence that might be able to fold into the input structure. The example input are the backbone coordinates from DWARF14, a rice hydrolase. For every chain in the structure, 2 in 4ih9.pdb, the following command will generate 3 sequences. In total, 6 sequences will be generated.
   ```
-  trill IF_Test 1 --query data/4ih9.pdb --if1 --genIters 3
+  $ trill IF_Test 1 --query data/4ih9.pdb --if1 --genIters 3
   ```
   
 ### Generating Proteins using ProtGPT2
   6. You can also generate synthetic proteins using ProtGPT2. The command below generates 5 proteins with a max length of 100. The default seed sequence is "M", but you can also change this. Check out the command-line arguments for more details.
   ```
-  trill Gen_ProtGPT2 1 --protgpt2 --gen --max_length 100 --num_return_sequences 5
+  $ trill Gen_ProtGPT2 1 --protgpt2 --gen --max_length 100 --num_return_sequences 5
   ```
   
 ### Fine-Tuning
   7. In case you wanted to generate certain "types" of proteins, below is an example of fine-tuning ProtGPT2 and then generating proteins with the fine-tuned model. 
   ```
-  trill FineTune 2 --protgpt2 --epochs 100
+  $ trill FineTune 2 --protgpt2 --epochs 100
   ```
   ```
-  trill Gen_With_FineTuned 1 --protgpt2 --gen --preTrained_model FineTune_ProtGPT2_100.pt
+  $ trill Gen_With_FineTuned 1 --protgpt2 --gen --preTrained_model FineTune_ProtGPT2_100.pt
   ```
 
 ## Misc. Tips
