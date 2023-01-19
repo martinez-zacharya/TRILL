@@ -4,10 +4,12 @@ version = "0.2.3"
 description = "Sandbox (in progress) for Computational Protein Design"
 authors = ["Zachary Martinez <martinez.zacharya@gmail.com>"]
 readme = "README.md"
+repository = "https://github.com/martinez-zacharya/TRILL"
+keywords = ["NLP", "Natural Language Processing", "Protein Design"]
 packages = [{include = "trill"}]
 
 [tool.poetry.dependencies]
-python = "^3.7"
+python = "^3.8"
 pytest = "^7.2.0"
 fair-esm = "^2.0.0"
 GitPython = "^3.1.29"
@@ -20,7 +22,7 @@ deepspeed = "^0.7.6"
 fairscale = "^0.4.13"
 
 [tool.poetry.scripts]
-trill = "trill.trill:cli"
+trill = "trill.trill_main:cli"
 
 
 [build-system]

@@ -59,9 +59,15 @@ class ESM(pl.LightningModule):
         pred = self.esm(toks, repr_layers=self.repr_layers, return_contacts=False)
         representations = {layer: t.to(device="cpu") for layer, t in pred["representations"].items()}
         rep_numpy = representations[self.repr_layers[0]].cpu().detach().numpy()
+        reps = []
         for i in range(len(rep_numpy)):
-            self.reps.append(tuple([rep_numpy[i].mean(0), labels[i]]))
-        return True
+            # self.reps.append(tuple([rep_numpy[i].mean(0), labels[i]]))
+            reps.append(tuple([rep_numpy[i].mean(0), labels[i]]))
+        # newdf = pd.DataFrame(reps, columns = ['Embeddings', 'Label'])
+        # finaldf = newdf['Embeddings'].apply(pd.Series)
+        # finaldf['Label'] = newdf['Label']
+        # return finaldf
+        return reps
     
 # class ESMFold(pl.LightningModule):
 #     def __init__(self):
@@ -180,4 +186,15 @@ class ProtGPT2(pl.LightningModule):
         
     
     
-    
+from pytorch_lightning.callbacks import BasePredictionWriter
+
+class CustomWriter(BasePredictionWriter):
+
+    def __init__(self, output_dir, write_interval):
+        super().__init__(write_interval)
+        self.output_dir = output_dir
+
+    def write_on_epoch_end(self, trainer, pl_module, predictions, batch_indices):
+        # this will create N (num processes) files in `output_dir` each containing
+        # the predictions of it's respective rank
+        torch.save(predictions, os.path.join(self.output_dir, f"predictions_{trainer.global_rank}.pt"))
