@@ -79,6 +79,12 @@
   ```
   $ trill Gen_With_FineTuned 1 --protgpt2 --gen --preTrained_model FineTune_ProtGPT2_100.pt
   ```
+  
+### Predicting protein structure using ESMFold
+  8. You can predict 3D protein structures rapidly in bulk using ESMFold. The output will be PDB files.
+  ```
+  $ trill fold_test 1 --query data/query.fasta --esmfold
+  ```
 
 ## Arguments
 
@@ -111,6 +117,7 @@
 - --top_k (The number of highest probability vocabulary tokens to keep for top-k-filtering)
 - --repetition_penalty (The parameter for repetition penalty. 1.0 means no penalty)
 - --num_return_sequences (Number of sequences for ProtGPT2 to generate)
+- --esmfold (Predict protein structures using ESMFold)
 
 ## Misc. Tips
 
