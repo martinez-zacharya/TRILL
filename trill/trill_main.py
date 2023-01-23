@@ -265,6 +265,13 @@ def main(args):
         model = ProtGPT2(int(args.lr))
         model = model.load_from_checkpoint(args.preTrained_model, strict = False)
         tokenizer = AutoTokenizer.from_pretrained("nferruz/ProtGPT2")
+    elif args.esmfold == True:
+        print(f'Downloading esmfold_v1...')
+        tokenizer = AutoTokenizer.from_pretrained("facebook/esmfold_v1")
+        model = EsmForProteinFolding.from_pretrained("facebook/esmfold_v1", device_map="auto")
+        # model = model.cuda()
+        model.esm = model.esm.half()
+        # model.trunk.set_chunk_size(64)
     else:
         model = ESM(eval(model_import_name), float(args.lr), args.LEGGO)
         
@@ -341,11 +348,6 @@ def main(args):
             # convert_zero_checkpoint_to_fp32_state_dict(save_path, output_path)
             # trainer.save_checkpoint(f"{args.name}_{args.epochs}.pt")
     elif args.esmfold == True:
-        tokenizer = AutoTokenizer.from_pretrained("facebook/esmfold_v1")
-        model = EsmForProteinFolding.from_pretrained("facebook/esmfold_v1", low_cpu_mem_usage=True)
-        model = model.cuda()
-        model.esm = model.esm.half()
-        # model.trunk.set_chunk_size(64)
         esmfold_tokenized = tokenizer(fold_df.Sequence.tolist(), padding=False, add_special_tokens=False)['input_ids']
         outputs = []
         with torch.no_grad():
