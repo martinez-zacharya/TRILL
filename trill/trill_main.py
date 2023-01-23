@@ -256,8 +256,6 @@ def main(args):
     model_import_name = f'esm.pretrained.{args.model}()'
     if args.if1 == True:
         pass
-    # elif args.esmfold == True:
-    #     model = ESMFold()
     elif args.protgpt2 == True and args.preTrained_model == False:
         model = ProtGPT2(int(args.lr))
         tokenizer = AutoTokenizer.from_pretrained("nferruz/ProtGPT2")
