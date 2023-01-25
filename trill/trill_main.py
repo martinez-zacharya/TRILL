@@ -23,7 +23,7 @@ from transformers import DataCollatorForLanguageModeling, AutoTokenizer, EsmForP
 from esm.inverse_folding.util import load_structure, extract_coords_from_structure
 from esm.inverse_folding.multichain_util import extract_coords_from_complex, sample_sequence_in_complex
 from pytorch_lightning.callbacks import ModelCheckpoint
-from trill.utils.strategy_tuner import tune_esm_inference, tune_esm_train
+# from trill.utils.strategy_tuner import tune_esm_inference, tune_esm_train
 from trill.utils.protgpt2_utils import ProtGPT2_wrangle
 from trill.utils.esm_utils import ESM_IF1_Wrangle, coordDataset, clean_embeddings, ESM_IF1, convert_outputs_to_pdb
 from pyfiglet import Figlet
@@ -279,7 +279,7 @@ def main(args):
             tokenizer = AutoTokenizer.from_pretrained("nferruz/ProtGPT2")
         elif args.protgpt2 == True and args.preTrained_model != False:
             model = ProtGPT2(int(args.lr))
-            model = model.load_from_checkpoint(args.preTrained_model, strict = False)
+            model = model.load_from_checkpoint(args.preTrained_model, strict = False, lr = 0.0001)
             tokenizer = AutoTokenizer.from_pretrained("nferruz/ProtGPT2")
         elif args.esmfold == True:
             print(f'Downloading esmfold_v1...')
@@ -359,7 +359,7 @@ def main(args):
             else:
                 trainer = pl.Trainer(devices=int(args.GPUs), profiler=profiler, accelerator='gpu', max_epochs=int(args.epochs), logger = logger, num_nodes = int(args.nodes), precision = 16, strategy = 'deepspeed_stage_3_offload')
                 trainer.fit(model=model, train_dataloaders = dataloader)
-                save_path = os.path.join(os.getcwd(), f"checkpoints/zpoch={int(args.epochs) - 1}-step={len(seq_dict_df)}.ckpt")
+                save_path = os.path.join(os.getcwd(), f"checkpoints/epoch={int(args.epochs) - 1}-step={len(seq_dict_df)}.ckpt")
                 output_path = f"{args.name}_ProtGPT2_{args.epochs}.pt"
                 convert_zero_checkpoint_to_fp32_state_dict(save_path, output_path)
                 # trainer.save_checkpoint(f"{args.name}_{args.epochs}.pt")
