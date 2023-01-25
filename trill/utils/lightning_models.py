@@ -161,9 +161,9 @@ class ProtGPT2(pl.LightningModule):
         return(loss)
         
     def configure_optimizers(self):
-        # optimizer = DeepSpeedCPUAdam(self.model.parameters(), lr=1e-5)
+        optimizer = DeepSpeedCPUAdam(self.model.parameters(), lr=1e-5)
         # optimizer = torch.optim.Adam(self.model.parameters(), lr=1e-5)
-        optimizer = FusedAdam(self.model.parameters(), lr=self.lr)
+        # optimizer = FusedAdam(self.model.parameters(), lr=self.lr)
         return optimizer
     
     def generate(self, seed_seq = "M", max_length = 100, do_sample = True, top_k = 950, repetition_penalty = 1.2, num_return_sequences = 5, eos_token_id=0):
