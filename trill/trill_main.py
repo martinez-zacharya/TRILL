@@ -386,10 +386,14 @@ def main(args):
         else:
             if args.LEGGO:
                 trainer = pl.Trainer(devices=int(args.GPUs), profiler = profiler,accelerator='gpu',max_epochs=int(args.epochs),logger=logger, num_nodes=int(args.nodes), precision = 16, amp_backend='native', strategy=DeepSpeedStrategy(stage=3, offload_optimizer=True, offload_parameters=True))
+                trainer.fit(model=model, train_dataloaders=dataloader)
+                save_path = os.path.join(os.getcwd(), f"checkpoints/epoch={int(args.epochs) - 1}-step={len(dataloader)}.ckpt")
+                output_path = f"{args.name}_esm2_{args.epochs}.pt"
+                convert_zero_checkpoint_to_fp32_state_dict(save_path, output_path)          
             else:
                 trainer = pl.Trainer(devices=int(args.GPUs), profiler = profiler, accelerator='gpu', strategy = args.strategy, max_epochs=int(args.epochs), logger=logger, num_nodes=int(args.nodes), precision = 16, amp_backend='native', enable_checkpointing=False)        
-            trainer.fit(model=model, train_dataloaders=dataloader)
-            trainer.save_checkpoint(f"{args.name}_{args.model}_{args.epochs}.pt")
+                trainer.fit(model=model, train_dataloaders=dataloader)
+                trainer.save_checkpoint(f"{args.name}_{args.model}_{args.epochs}.pt")
         
     
     end = time.time()
