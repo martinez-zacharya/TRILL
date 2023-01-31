@@ -27,10 +27,10 @@
   ```
   $ trill base_embed 1 --query data/query.fasta --noTrain
   ```
-### 3. Embedding with a custom pre-trained model
-  If you have a pre-trained model, you can use it to embed sequences by passing the path to --preTrained_model. 
+### 3. Embedding with a custom finetuned model
+  If you have a pre-trained model, you can use it to embed sequences by passing the path to --preTrained_model. Make sure to include what the base model was for your finetuned model with --model.
   ```
-  $ trill pre_trained 1 --query data/query.fasta --preTrained_model /path/to/models/pre_trained_model.pt
+  $ trill pre_trained 1 --query data/query.fasta --preTrained_model /path/to/models/finetuned_esm2_t30_150M_UR50D.pt --model esm2_t30_150M_UR50D
   ```
 ### 4. Distributed Training/Inference
   In order to scale/speed up your analyses, you can distribute your training/inference across many GPUs with a few extra flags to your command. You can even fit models that do not normally fit on your GPUs with sharding, CPU-offloading etc. Below is an example slurm batch submission file. The list of strategies can be found here (https://pytorch-lightning.readthedocs.io/en/stable/extensions/strategy.html). The example below utilizes 16 GPUs in total (4(GPUs) * 4(--nodes)) with Fully Sharded Data Parallel and the 650M parameter ESM2 model.
