@@ -7,8 +7,7 @@ build:
 
 sphinx:
   configuration: conf.py
-
+  
 python:
   install:
-    - method: pip
-      path: sphinx-argparse
+    - requirements: doc_requirements.txt
