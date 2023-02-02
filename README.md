@@ -8,7 +8,11 @@
 [![pypi version](https://img.shields.io/pypi/v/trill-proteins)](https://pypi.org/project/trill-proteins)
 ![status](https://github.com/martinez-zacharya/TRILL/workflows/CI/badge.svg)
 # TRILL
-**TR**aining and **I**nference using the **L**anguage of **L**ife
+**TR**aining and **I**nference using the **L**anguage of **L**ife is a sandbox for creative protein engineering and discovery. As a bioengineer myself, deep-learning based approaches for protein design and analysis are of great interest to me. However, many of these deep-learning models are rather unwieldy, especially for non ML-practitioners, due to their sheer size. Not only does TRILL allow researchers to perform inference on their proteins of interest using a variety of models, but it also democratizes the efficient fine-tuning of large-language models. Whether using Google Colab with one GPU or a supercomputer with many, TRILL empowers scientists to leverage models with millions to billions of parameters without worrying (too much) about hardware constraints. Currently, TRILL supports using these models as of v0.4.0:
+- ESM2 (All sizes, depending on hardware constraints)
+- ESM-IF1 (Generate synthetic proteins using Inverse-Folding)
+- ESMFold (Predict 3D protein structure)
+- ProtGPT2 (Generate synthetic proteins)
 
 ## Set-Up
 1. I recommend using a virtual environment with conda, venv etc.
@@ -88,42 +92,6 @@
   ```
   $ trill example_5 1 fold data/query.fasta
   ```  
-
-## Arguments
-
-### Positional Arguments:
-1. name (Name of run)
-2. GPUs (Total # of GPUs requested for each node)
-
-### Optional Arguments:
-- -h, --help (Show help message)
-- --query (Input file. Needs to be either protein fasta (.fa, .faa, .fasta) or structural coordinates (.pdb, .cif))
-- --nodes (Total number of computational nodes. Default is 1)
-- --lr (Learning rate for adam optimizer. Default is 0.0001)
-- --epochs (Number of epochs for fine-tuning transformer. Default is 20)
-- --noTrain (Skips the fine-tuning and embeds the query sequences with the base model)
-- --preTrained_model (Input path to your own pre-trained ESM model)
-- --batch_size (Change batch-size number for fine-tuning. Default is 1)
-- --model (Change ESM model. Default is esm2_t12_35M_UR50D. List of models can be found at https://github.com/facebookresearch/esm)
-- --strategy (Change training strategy. Default is None. List of strategies can be found at https://pytorch-lightning.readthedocs.io/en/stable/extensions/strategy.html)
-- --logger (Enable Tensorboard logger. Default is None)
-- --if1 (Utilize Inverse Folding model 'esm_if1_gvp4_t16_142M_UR50' to facilitate fixed backbone sequence design. Basically converts protein structure to possible sequences)
-- --temp (Choose sampling temperature. Higher temps will have more sequence diversity, but less recovery of the original sequence for ESM_IF1)
-- --genIters (Adjust number of sequences generated for each chain of the input structure for ESM_IF1)
-- --LEGGO (Use deepspeed_stage_3_offload with ESM. Will be removed soon...)
-- --profiler (Utilize PyTorchProfiler)
-- --protgpt2 (Utilize ProtGPT2. Can either fine-tune or generate sequences)
-- --gen (Generate protein sequences using ProtGPT2. Can either use base model or user-submitted fine-tuned model)
-- --seed_seq (Sequence to seed ProtGPT2 Generation)
-- --max_length (Max length of proteins generated from ProtGPT)
-- --do_sample (Whether or not to use sampling ; use greedy decoding otherwise)
-- --top_k (The number of highest probability vocabulary tokens to keep for top-k-filtering)
-- --repetition_penalty (The parameter for repetition penalty. 1.0 means no penalty)
-- --num_return_sequences (Number of sequences for ProtGPT2 to generate)
-- --esmfold (Predict protein structures using ESMFold)
-
 ## Misc. Tips
 
 - Make sure there are no "\*" in the protein sequences
-- Don't run jobs on the login node, only submit jobs with sbatch or srun on the HPC
-- Caltech HPC Docs https://www.hpc.caltech.edu/documentation
