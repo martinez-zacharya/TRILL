@@ -1,3 +1,4 @@
-#from sphinx-argparse import extensions
+project = "TRILL"
+author = "Zachary A. Martinez"
 
 extensions = ['sphinxarg.ext']
