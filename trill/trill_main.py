@@ -398,7 +398,215 @@ if __name__ == '__main__':
     
 
     
-        
+def return_parser():
+    parser = argparse.ArgumentParser()
+
+    parser.add_argument(
+        "name",
+        help = "Name of run",
+        action = "store"
+        )
+
+    
+    parser.add_argument(
+        "GPUs",
+        help="Input total number of GPUs per node",
+        action="store",
+        default = 1
+)
+
+    subparsers = parser.add_subparsers(dest='command')
+
+    embed = subparsers.add_parser('embed', help='Embed proteins of interest')
+
+    embed.add_argument("query", 
+        help="Input fasta file", 
+        action="store"
+)
+    embed.add_argument(
+        "--batch_size",
+        help="Change batch-size number for embedding proteins. Default is 1",
+        action="store",
+        default = 1,
+        dest="batch_size",
+)
+
+    embed.add_argument(
+        "--preTrained_model",
+        help="Input path to your own pre-trained ESM model",
+        action="store",
+        default = False,
+        dest="preTrained_model",
+)
+    embed.add_argument(
+        "--model",
+        help="Change model. Default is esm2_t12_35M_UR50D. You can choose either ProtGPT2 or various ESM2. List of ESM2 models can be found at https://github.com/facebookresearch/esm",
+        action="store",
+        default = 'esm2_t12_35M_UR50D',
+        dest="model",
+)
+##############################################################################################################
+
+    finetune = subparsers.add_parser('finetune', help='Fine-tune models')
+
+    finetune.add_argument("query", 
+        help="Input fasta file", 
+        action="store"
+)
+    finetune.add_argument("--epochs", 
+        help="Number of epochs for fine-tuning. Default is 20", 
+        action="store",
+        default=20,
+        dest="epochs",
+        )
+    finetune.add_argument(
+        "--lr",
+        help="Learning rate for optimizer. Default is 0.0001",
+        action="store",
+        default=0.0001,
+        dest="lr",
+)
+    finetune.add_argument(
+        "--model",
+        help="Change model. Default is esm2_t12_35M_UR50D. You can choose either ProtGPT2 or various ESM2. List of ESM2 models can be found at https://github.com/facebookresearch/esm",
+        action="store",
+        default = 'esm2_t12_35M_UR50D',
+        dest="model",
+)
+    finetune.add_argument(
+        "--LEGGO",
+        help="deepspeed_stage_3_offload.",
+        action="store_true",
+        default=False,
+        dest="LEGGO",
+)
+    finetune.add_argument(
+        "--batch_size",
+        help="Change batch-size number for fine-tuning. Default is 1",
+        action="store",
+        default = 1,
+        dest="batch_size",
+)
+
+    finetune.add_argument(
+        "--strategy",
+        help="Change training strategy. Default is None. List of strategies can be found at https://pytorch-lightning.readthedocs.io/en/stable/extensions/strategy.html",
+        action="store",
+        default = None,
+        dest="strategy",
+)
+##############################################################################################################
+    generate = subparsers.add_parser('generate', help='Generate proteins using either ESM-IF1 or ProtGPT2')
+    generate.add_argument(
+        "model",
+        help="Choose between Inverse Folding model 'esm_if1_gvp4_t16_142M_UR50' to facilitate fixed backbone sequence design or ProtGPT2.",
+        choices = ['ESM-IF1','ProtGPT2']
+)
+    generate.add_argument(
+        "--finetuned_protgpt2",
+        help="Input path to your own finetuned ProtGPT2 model",
+        action="store",
+        default = False,
+)
+    generate.add_argument(
+        "--temp",
+        help="Choose sampling temperature for ESM_IF1.",
+        action="store",
+        default = 1.,
+        dest="temp",
+)
+    
+    generate.add_argument(
+        "--genIters",
+        help="Choose sampling iteration number for ESM_IF1.",
+        action="store",
+        default = 1,
+        dest="genIters",
+)
+
+    generate.add_argument(
+        "--seed_seq",
+        help="Sequence to seed ProtGPT2 Generation",
+        default='M',
+        dest="seed_seq",
+)
+    generate.add_argument(
+        "--max_length",
+        help="Max length of proteins generated from ProtGPT2",
+        default=333,
+        dest="max_length",
+)
+    generate.add_argument(
+        "--do_sample",
+        help="Whether or not to use sampling for ProtGPT2 ; use greedy decoding otherwise",
+        default=True,
+        dest="do_sample",
+)
+    generate.add_argument(
+        "--top_k",
+        help="The number of highest probability vocabulary tokens to keep for top-k-filtering for ProtGPT2",
+        default=950,
+        dest="top_k",
+)
+    generate.add_argument(
+        "--repetition_penalty",
+        help="The parameter for repetition penalty for ProtGPT2. 1.0 means no penalty",
+        default=1.2,
+        dest="repetition_penalty",
+)
+    generate.add_argument(
+        "--num_return_sequences",
+        help="Number of sequences for ProtGPT2 to generate. Default is 5",
+        default=5,
+        dest="num_return_sequences",
+)
+
+    generate.add_argument("--query", 
+        help="Input pdb or cif file for inverse folding with ESM_IF1", 
+        action="store"
+        )
+##############################################################################################################
+    fold = subparsers.add_parser('fold', help='Predict 3D protein structures using ESMFold')
+    fold.add_argument("query", 
+        help="Input fasta file", 
+        action="store"
+        )
+##############################################################################################################
+
+
+    parser.add_argument(
+        "--nodes",
+        help="Input total number of nodes. Default is 1",
+        action="store",
+        default = 1
+)
+    
+
+    parser.add_argument(
+        "--logger",
+        help="Enable Tensorboard logger. Default is None",
+        action="store",
+        default = False,
+        dest="logger",
+)
+
+    parser.add_argument(
+        "--profiler",
+        help="Utilize PyTorchProfiler",
+        action="store_true",
+        default=False,
+        dest="profiler",
+)
+
+
+    parser.add_argument(
+        "--tune",
+        help="Tune TRILL to figure out what models are able to be used on the available hardware",
+        action="store_true",
+        default=False,
+        dest="tune",
+)
+    return parser
     
 
 
