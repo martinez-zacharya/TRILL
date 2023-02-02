@@ -1,4 +1,4 @@
-Command line utilities
+Home
 **********************
 
 .. toctree::
