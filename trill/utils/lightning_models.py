@@ -69,67 +69,6 @@ class ESM(pl.LightningModule):
         # return finaldf
         return reps
     
-# class ESMFold(pl.LightningModule):
-#     def __init__(self):
-#         super().__init__()
-#         self.esmfold = esm.pretrained.esmfold_v1()
-#         self.esmfold.set_chunk_size(100)
-#         self.preds = []
-        
-#     def training_step(self, batch, batch_idx):
-#         pass
-    
-#     def configure_optimizers(self):
-#         optimizer = DeepSpeedCPUAdam(self.esmfold.parameters(), lr=1e-5)
-#         return optimizer
-    
-#     def predict_step(self, batch, batch_idx):
-#         labels, seqs = batch
-#         print(seqs)
-#         print(seqs[0])
-#         print(type(seqs[0]))
-#         output = self.esmfold.infer(seqs[0])
-#         pdb = model.output_to_pdb(output)[0]
-#         self.preds.append(tuple([pdb, labels]))
-#         return True
-        
-        
-class old_ProtGPT2(pl.LightningModule):
-    def __init__(self, pretrained = None):
-        super().__init__()
-        if pretrained != None:
-            self.model = AutoModelForCausalLM.from_pretrained("nferruz/ProtGPT2")
-            # self.model = self.model.load_from_checkpoint(pretrained)
-            # self.model = weights_update(self.model, checkpoint=pretrained)
-        else:
-            self.model = AutoModelForCausalLM.from_pretrained("nferruz/ProtGPT2")
-        self.tokenizer = AutoTokenizer.from_pretrained("nferruz/ProtGPT2")
-
-    def training_step(self, batch, batch_idx):
-        self.tokenizer.pad_token = self.tokenizer.eos_token
-        tokenized = self.tokenizer(
-        batch["Labels"],
-        padding=True,
-        return_special_tokens_mask=True
-    )
-        att = torch.LongTensor(tokenized['attention_mask']).cuda()
-        data_collator = DataCollatorForLanguageModeling(tokenizer = self.tokenizer, mlm=False)
-        collated = data_collator([tokenized['input_ids']])
-        outputs = self.model(collated['input_ids'].cuda(), labels = collated['labels'].cuda(), attention_mask = att, return_dict = True)
-        loss = outputs[0]
-        self.log("loss", loss)
-        return(loss)
-        
-    def configure_optimizers(self):
-        # optimizer = DeepSpeedCPUAdam(self.model.parameters(), lr=1e-5)
-        optimizer = torch.optim.Adam(self.trainer.model.parameters(), lr=1e-5)
-        return optimizer
-    
-    def generate(self, seed_seq="M", max_length=333, do_sample = True, top_k=950, repetition_penalty=1.2, num_return_sequences=10, eos_token_id=0):
-        generator = pipeline('text-generation', model = self.model, tokenizer=self.tokenizer)
-        outseqs = generator(seed_seq, max_length=max_length, do_sample =do_sample, top_k=top_k, repetition_penalty=repetition_penalty, num_return_sequences=num_return_sequences, eos_token_id=eos_token_id)
-        outseqs = [samp['generated_text'].replace('\n','') for samp in outseqs]
-        return outseqs
     
 class ProtGPT2(pl.LightningModule):
     def __init__(self, lr):
@@ -173,16 +112,6 @@ class ProtGPT2(pl.LightningModule):
         return outseqs
 
     
-# class ProtGPT2Dataset(torch.utils.data.Dataset):
-#     def __init__(self, input):
-#         self.labels = list(input.keys())
-#         self.seqs = list(input.values())
-#     def __getitem__(self, idx):
-#         label = self.labels[idx]
-#         seq = self.seqs[idx]
-#         return {'input_ids': seq, 'text': label }
-#     def __len__(self):
-#         return len(self.labels)
         
     
     
