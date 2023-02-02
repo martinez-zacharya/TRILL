@@ -82,7 +82,7 @@ def main(args):
 
     finetune = subparsers.add_parser('finetune', help='Fine-tune models')
 
-    finetune.add_argument("--query", 
+    finetune.add_argument("query", 
         help="Input fasta file", 
         action="store"
 )
