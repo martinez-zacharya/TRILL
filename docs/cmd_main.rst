@@ -1,5 +1,5 @@
 .. argparse::
-   :filename: trill/trill_main.py
+   :filename: ../trill/trill_main.py
    :func: return_parser
    :prog: trill
 
