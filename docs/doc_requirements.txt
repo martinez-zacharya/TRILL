@@ -1,3 +1,2 @@
 sphinx-argparse
 myst-parser
-trill-proteins
