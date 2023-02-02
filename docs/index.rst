@@ -1,4 +1,4 @@
 .. toctree::
    :maxdepth: 2
-
-   cmd
+   
+   cmd_main
