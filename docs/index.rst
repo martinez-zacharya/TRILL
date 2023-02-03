@@ -2,4 +2,4 @@
    :maxdepth: 2
    
    home
-   cmd
+   cmd_main
