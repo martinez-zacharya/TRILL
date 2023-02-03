@@ -16,8 +16,13 @@ TRILL (**TR**aining and **I**nference using the **L**anguage of **L**ife) is a s
 
 ## Set-Up
 1. I recommend using a virtual environment with conda, venv etc.
-2. Run ```$ pip install trill-proteins```
-3. ```$ pip install pyg-lib torch-scatter torch-sparse torch-cluster torch-spline-conv torch-geometric -f https://data.pyg.org/whl/torch-1.13.0+cu117.html```
+2. Run the following commands
+```
+$ pip install trill-proteins
+```
+```
+$ pip install pyg-lib torch-scatter torch-sparse torch-cluster torch-spline-conv torch-geometric -f https://data.pyg.org/whl/torch-1.13.0+cu117.html
+```
 
 ## Examples
 
