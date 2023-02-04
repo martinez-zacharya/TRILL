@@ -73,7 +73,7 @@ def main(args):
 )
     embed.add_argument(
         "--model",
-        help="Change model. Default is esm2_t12_35M_UR50D. You can choose either ProtGPT2 or various ESM2. List of ESM2 models can be found at https://github.com/facebookresearch/esm",
+        help="Change model. Default is esm2_t12_35M_UR50D. You can choose from a list of ESM2 models which can be found at https://github.com/facebookresearch/esm",
         action="store",
         default = 'esm2_t12_35M_UR50D',
         dest="model",
