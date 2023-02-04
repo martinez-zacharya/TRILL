@@ -248,9 +248,13 @@ def main(args):
     #     raise ValueError('An input file is needed when not using --gen')
 
     pl.seed_everything(123)
+    
+    
     torch.backends.cuda.matmul.allow_tf32 = True
-    if args.tune == True:
-        data = esm.data.FastaBatchedDataset.from_file(args.query)
+    if args.nodes <= '0':
+            raise Exception(f'There needs to be at least one cpu node to use TRILL')
+    #if args.tune == True:
+        #data = esm.data.FastaBatchedDataset.from_file(args.query)
         # tune_esm_inference(data)
         # tune_esm_train(data, int(args.GPUs))
 
