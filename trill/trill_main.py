@@ -232,13 +232,13 @@ def main(args):
 )
 
 
-    parser.add_argument(
-        "--tune",
-        help="Tune TRILL to figure out what models are able to be used on the available hardware",
-        action="store_true",
-        default=False,
-        dest="tune",
-)
+    # parser.add_argument(
+     #   "--tune",
+      #  help="Tune TRILL to figure out what models are able to be used on the available hardware",
+       # action="store_true",
+      #  default=False,
+       # dest="tune",
+#)
 
     
 
