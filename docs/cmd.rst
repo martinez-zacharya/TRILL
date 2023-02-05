@@ -9,3 +9,4 @@ Home
    cmd_finetune
    cmd_generate
    cmd_fold
+   cmd_visualize
