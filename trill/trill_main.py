@@ -245,7 +245,7 @@ def main(args):
     
     
     torch.backends.cuda.matmul.allow_tf32 = True
-    if args.nodes <= '0':
+    if int(args.nodes) <= 0:
             raise Exception(f'There needs to be at least one cpu node to use TRILL')
     #if args.tune == True:
         #data = esm.data.FastaBatchedDataset.from_file(args.query)
@@ -268,11 +268,11 @@ def main(args):
             File needs to be a protein fasta (.fa, .fasta, .faa)')
         else:
             model_import_name = f'esm.pretrained.{args.model}()'
-            model = ESM(eval(model_import_name), float(args.lr), args.LEGGO)
+            model = ESM(eval(model_import_name), 0.0001, False)
             data = esm.data.FastaBatchedDataset.from_file(args.query)
             dataloader = torch.utils.data.DataLoader(data, shuffle = False, batch_size = int(args.batch_size), num_workers=0, collate_fn=model.alphabet.get_batch_converter())
             pred_writer = CustomWriter(output_dir=".", write_interval="epoch")
-            trainer = pl.Trainer(enable_checkpointing=False, callbacks=[pred_writer], devices=int(args.GPUs), strategy = args.strategy, accelerator='gpu', logger=logger, num_nodes=int(args.nodes))
+            trainer = pl.Trainer(enable_checkpointing=False, callbacks=[pred_writer], devices=int(args.GPUs), accelerator='gpu', logger=logger, num_nodes=int(args.nodes))
 
             if args.preTrained_model == False:
                 trainer.predict(model, dataloader)
@@ -293,7 +293,7 @@ def main(args):
 
 
             else:
-                model = weights_update(model = ESM(eval(model_import_name), float(args.lr)), checkpoint = torch.load(args.preTrained_model))
+                model = weights_update(model = ESM(eval(model_import_name), 0.0001, False), checkpoint = torch.load(args.preTrained_model))
                 trainer.predict(model, dataloader)
 
 
