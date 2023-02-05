@@ -22,7 +22,9 @@ from pytorch_lightning.callbacks import ModelCheckpoint
 # from trill.utils.strategy_tuner import tune_esm_inference, tune_esm_train
 from trill.utils.protgpt2_utils import ProtGPT2_wrangle
 from trill.utils.esm_utils import ESM_IF1_Wrangle, ESM_IF1, convert_outputs_to_pdb
+from trill.utils.visualize import reduce_dims, viz
 from pyfiglet import Figlet
+import bokeh
 # os.environ['CUDA_LAUNCH_BLOCKING'] = '1'
 os.environ["TOKENIZERS_PARALLELISM"] = "false"
 
@@ -200,9 +202,30 @@ def main(args):
         )
 ##############################################################################################################
     fold = subparsers.add_parser('fold', help='Predict 3D protein structures using ESMFold')
+
     fold.add_argument("query", 
         help="Input fasta file", 
         action="store"
+        )
+##############################################################################################################
+
+##############################################################################################################
+    visualize = subparsers.add_parser('visualize', help='Reduce dimensionality of embeddings to 2D')
+
+    visualize.add_argument("embeddings", 
+        help="Embeddings to be visualized", 
+        action="store"
+        )
+    
+    visualize.add_argument("--method", 
+        help="Method for reducing dimensions of embeddings. Default is PCA, but you can also choose UMAP or tSNE", 
+        action="store",
+        default="PCA"
+        )
+    visualize.add_argument("--group", 
+        help="Grouping for color scheme of output scatterplot. Choose this option if the labels in your embedding csv are grouped by the last pattern separated by an underscore. For example, 'Protein1_group1', 'Protein2_group1', 'Protein3_group2'. By default, all points are treated as same group.", 
+        action="store_true",
+        default=False
         )
 ##############################################################################################################
 
@@ -262,7 +285,13 @@ def main(args):
         else:
             profiler = None
 
-    if args.command == 'embed':
+    if args.command == 'visualize':
+        reduced_df, incsv = reduce_dims(args.name, args.embeddings, args.method)
+        fig = viz(reduced_df, args.name, args.group)
+        bokeh.io.output_file(filename=f'{args.name}_{args.method}_{incsv}.html', title=args.name) 
+        bokeh.io.save(fig, filename=f'{args.name}_{args.method}_{incsv}.html', title = args.name)
+
+    elif args.command == 'embed':
         if args.query.endswith(('.fasta', '.faa', '.fa')) == False:
             raise Exception(f'Input query file - {args.query} is not a valid file format.\
             File needs to be a protein fasta (.fa, .fasta, .faa)')
@@ -570,7 +599,27 @@ def return_parser():
         action="store"
         )
 ##############################################################################################################
+##############################################################################################################
+    visualize = subparsers.add_parser('visualize', help='Reduce dimensionality of embeddings to 2D')
 
+    visualize.add_argument("embeddings", 
+        help="Embeddings in a csv to be visualized with last column as label", 
+        action="store"
+        )
+    
+    visualize.add_argument("--method", 
+        help="Method for reducing dimensions of embeddings. Default is PCA, but you can also choose UMAP or tSNE", 
+        action="store",
+        default="PCA"
+        )
+    
+    visualize.add_argument("--group", 
+        help="Grouping for color scheme of output scatterplot. Choose this option if the labels in your embedding csv are grouped by the last pattern separated by an underscore. For example, 'Protein1_group1', 'Protein2_group1', 'Protein3_group2'. By default, all points are treated as same group.", 
+        action="store_true",
+        default=False
+        )
+
+##############################################################################################################
 
     parser.add_argument(
         "--nodes",
