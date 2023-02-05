@@ -10,6 +10,7 @@ packages = [{include = "trill"}]
 
 [tool.poetry.dependencies]
 python = "^3.8"
+llvmlite = "^0.39.1"
 pytest = "^7.2.0"
 fair-esm = "^2.0.0"
 GitPython = "^3.1.29"
@@ -22,6 +23,8 @@ pyfiglet = "^0.8.post1"
 deepspeed = "^0.7.6"
 fairscale = "^0.4.13"
 pytorch-lightning = "^1.9.0"
+umap-learn = "^0.5.3"
+bokeh = "^3.0.3"
 
 [tool.poetry.scripts]
 trill = "trill.trill_main:cli"
