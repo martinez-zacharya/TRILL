@@ -222,7 +222,11 @@ def main(args):
         action="store",
         default="PCA"
         )
-
+    visualize.add_argument("--group", 
+        help="Grouping for color scheme of output scatterplot. Choose this option if the labels in your embedding csv are grouped by the last pattern separated by an underscore. For example, 'Protein1_group1', 'Protein2_group1', 'Protein3_group2'. By default, all points are treated as same group.", 
+        action="store_true",
+        default=False
+        )
 ##############################################################################################################
 
 
@@ -283,7 +287,7 @@ def main(args):
 
     if args.command == 'visualize':
         reduced_df, incsv = reduce_dims(args.name, args.embeddings, args.method)
-        fig = viz(reduced_df, args.name)
+        fig = viz(reduced_df, args.name, args.group)
         bokeh.io.output_file(filename=f'{args.name}_{args.method}_{incsv}.html', title=args.name) 
         bokeh.io.save(fig, filename=f'{args.name}_{args.method}_{incsv}.html', title = args.name)
 
@@ -599,7 +603,7 @@ def return_parser():
     visualize = subparsers.add_parser('visualize', help='Reduce dimensionality of embeddings to 2D')
 
     visualize.add_argument("embeddings", 
-        help="Embeddings to be visualized", 
+        help="Embeddings in a csv to be visualized with last column as label", 
         action="store"
         )
     
@@ -607,6 +611,12 @@ def return_parser():
         help="Method for reducing dimensions of embeddings. Default is PCA, but you can also choose UMAP or tSNE", 
         action="store",
         default="PCA"
+        )
+    
+    visualize.add_argument("--group", 
+        help="Grouping for color scheme of output scatterplot. Choose this option if the labels in your embedding csv are grouped by the last pattern separated by an underscore. For example, 'Protein1_group1', 'Protein2_group1', 'Protein3_group2'. By default, all points are treated as same group.", 
+        action="store_true",
+        default=False
         )
 
 ##############################################################################################################

@@ -52,54 +52,68 @@ def create_group(row):
     return row.split('_')[-1]
 
 
-def viz(reduced_df, title):
-
+def viz(reduced_df, title, grouped):
     col1, col2, _ = reduced_df.columns
-    reduced_df['Group'] = reduced_df['Label'].apply(create_group)
-
     fig = figure(
-    title=title,
-    width=600, 
-    height=600, 
-    x_axis_label = col1, 
-    y_axis_label = col2
-    )
-
-    # Color scheme - https://colorbrewer2.org/?type=qualitative&scheme=Dark2&n=3
-    palette = ['#68023F',
-               '#008169',
-               '#EF0096',
-               '#00DCB5',
-               '#FFCFE2',
-               '#003C86',
-               '#9400E6',
-               '#009FFA',
-               '#FF71FD',
-               '#7CFFFA',
-               '#6A0213',
-               '#008607',
-               '#F60239',
-               '#00E307',
-               '#FFDC3D']
-    for group, color in zip((reduced_df.Group.unique()), palette):
-      fig.circle(
-          source = reduced_df.loc[reduced_df['Group'] == group, :],
-          color = color,
-          x = col1,
-          y = col2,
-          legend_label = group
+        title=title,
+        width=600, 
+        height=600, 
+        x_axis_label = col1, 
+        y_axis_label = col2
         )
-    
-
-    fig.add_tools(
-        HoverTool(
-            tooltips=[("Protein", "@Label")]
+    if grouped == True:
+        reduced_df['Group'] = reduced_df['Label'].apply(create_group)
+        # palette from http://mkweb.bcgsc.ca/colorblind/palettes/15.color.blindness.palette.txt
+        palette = ['#68023F',
+                '#008169',
+                '#EF0096',
+                '#00DCB5',
+                '#FFCFE2',
+                '#003C86',
+                '#9400E6',
+                '#009FFA',
+                '#FF71FD',
+                '#7CFFFA',
+                '#6A0213',
+                '#008607',
+                '#F60239',
+                '#00E307',
+                '#FFDC3D']
+        for group, color in zip((reduced_df.Group.unique()), palette):
+            fig.circle(
+            source = reduced_df.loc[reduced_df['Group'] == group, :],
+            color = color,
+            x = col1,
+            y = col2,
+            legend_label = group
             )
-        )
-    fig.legend.click_policy="hide"
+        
 
-    return(fig)
+        fig.add_tools(
+            HoverTool(
+                tooltips=[("Protein", "@Label")]
+                )
+            )
+        fig.legend.click_policy="hide"
+
+        return(fig)
+    else:
+        fig.circle(
+        source = reduced_df,
+        color = '#68023F',
+        x = col1,
+        y = col2,
+        )
     
+
+        fig.add_tools(
+            HoverTool(
+                tooltips=[("Protein", "@Label")]
+                )
+            )
+
+        return(fig)
+        
 
 
 
