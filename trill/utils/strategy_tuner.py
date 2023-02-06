@@ -155,13 +155,14 @@ def tune_protgpt2_train(data, gpu, strategy):
             model.wipe_memory()
     return(limits)
 
-def tune_esmfold(data, gpu):
+def tune_esmfold(data, gpu, strategy):
     limit = 0
 
     tokenizer = AutoTokenizer.from_pretrained("facebook/esmfold_v1")
     model = EsmForProteinFolding.from_pretrained("facebook/esmfold_v1", device_map="auto")
     model.esm = model.esm.half()
-    # model.trunk.set_chunk_size(32)
+    if strategy != None:
+        model.trunk.set_chunk_size(int(strategy))
     fold_df = pd.DataFrame(list(data), columns = ["Entry", "Sequence"])
     outputs = []
     with torch.no_grad():
@@ -176,5 +177,6 @@ def tune_esmfold(data, gpu):
                 if 'out of memory' in str(e):
                     break
                 else:
+                    print(e)
                     pass
     return limit

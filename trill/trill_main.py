@@ -249,7 +249,7 @@ def main(args):
         default = False
         )
     tune.add_argument("--strategy", 
-        help="Choose a specific strategy if you want", 
+        help="Choose a specific strategy if you want. You can also pass either 64, or 32 for model.trunk.set_chunk_size(x)", 
         action="store",
         default = None,
         )     
@@ -320,7 +320,7 @@ def main(args):
             protgpt2_train_limits = tune_protgpt2_train(data, int(args.GPUs), args.strategy)
             print(protgpt2_train_limits)
         elif args.tune_command == 'Fold':
-            esmfold_tuning = tune_esmfold(data, int(args.GPUs))
+            esmfold_tuning = tune_esmfold(data, int(args.GPUs), args.strategy)
             print(esmfold_tuning)
 
 
