@@ -21,9 +21,7 @@ from pytorch_lightning.profilers import PyTorchProfiler
 from deepspeed.ops.adam import DeepSpeedCPUAdam
 from transformers import pipeline, AutoTokenizer, AutoModelForCausalLM, DataCollatorForLanguageModeling
 from esm.inverse_folding.multichain_util import sample_sequence_in_complex
-from colossalai.nn.optimizer import HybridAdam, CPUAdam
 from deepspeed.ops.adam import FusedAdam
-from colossalai.utils import colo_set_process_memory_fraction
 # from utils.protein_mpnn_utils import StructureDataset, StructureDatasetPDB, ProteinMPNN, loss_nll, loss_smoothed, gather_edges, gather_nodes, gather_nodes_t, cat_neighbors_nodes, _scores, _S_to_seq, tied_featurize, parse_PDB
 
 

@@ -7,24 +7,28 @@ import gc
 import os
 import sys
 import torch.nn as nn
+from trill.utils.mask import maskInputs
 import torch.nn.functional as F
 import pandas as pd
 from pytorch_lightning.loggers import TensorBoardLogger
 from pytorch_lightning.profilers import PyTorchProfiler
 from pytorch_lightning.strategies import DeepSpeedStrategy
 from tqdm import tqdm
+import torch.nn.functional as F
+from pytorch_lightning.strategies.colossalai import ColossalAIStrategy
 sys.path.insert(0, 'utils')
 from pytorch_lightning.utilities.deepspeed import convert_zero_checkpoint_to_fp32_state_dict
-from trill.utils.lightning_models import ESM, ProtGPT2, CustomWriter
+from trill.utils.lightning_models import ESM, ProtGPT2, CustomWriter, colossal_ESM
 from trill.utils.update_weights import weights_update
 from transformers import AutoTokenizer, EsmForProteinFolding
 from pytorch_lightning.callbacks import ModelCheckpoint
-# from trill.utils.strategy_tuner import tune_esm_inference, tune_esm_train
+from trill.utils.strategy_tuner import tune_esm_inference, tune_esmfold, tune_esm_train, tune_protgpt2_train
 from trill.utils.protgpt2_utils import ProtGPT2_wrangle
 from trill.utils.esm_utils import ESM_IF1_Wrangle, ESM_IF1, convert_outputs_to_pdb
 from trill.utils.visualize import reduce_dims, viz
 from pyfiglet import Figlet
 import bokeh
+
 # os.environ['CUDA_LAUNCH_BLOCKING'] = '1'
 os.environ["TOKENIZERS_PARALLELISM"] = "false"
 
@@ -228,6 +232,15 @@ def main(args):
         default=False
         )
 ##############################################################################################################
+##############################################################################################################
+    tune = subparsers.add_parser('tune', help='Test what models and strategies are viable given your input and hardware')
+
+    tune.add_argument("query", 
+        help="Input fasta file", 
+        action="store"
+        )
+
+##############################################################################################################
 
 
     parser.add_argument(
@@ -270,10 +283,6 @@ def main(args):
     torch.backends.cuda.matmul.allow_tf32 = True
     if int(args.nodes) <= 0:
             raise Exception(f'There needs to be at least one cpu node to use TRILL')
-    #if args.tune == True:
-        #data = esm.data.FastaBatchedDataset.from_file(args.query)
-        # tune_esm_inference(data)
-        # tune_esm_train(data, int(args.GPUs))
 
     else:    
         if args.logger == True:
@@ -285,7 +294,19 @@ def main(args):
         else:
             profiler = None
 
-    if args.command == 'visualize':
+    if args.command == 'tune':
+        data = esm.data.FastaBatchedDataset.from_file(args.query)
+        inference_limits = tune_esm_inference(data)
+        print(f'Inference Limits: {inference_limits}')
+        finetune_limits = tune_esm_train(args.query, int(args.GPUs))
+        print(f'Finetune Limits: {finetune_limits}')
+        protgpt2_train_limits = tune_protgpt2_train(data, int(args.GPUs))
+        print(protgpt2_train_limits)
+        esmfold_tuning = tune_esmfold(data, int(args.GPUs))
+        print(esmfold_tuning)
+
+
+    elif args.command == 'visualize':
         reduced_df, incsv = reduce_dims(args.name, args.embeddings, args.method)
         fig = viz(reduced_df, args.name, args.group)
         bokeh.io.output_file(filename=f'{args.name}_{args.method}_{incsv}.html', title=args.name) 
@@ -331,13 +352,12 @@ def main(args):
         data = esm.data.FastaBatchedDataset.from_file(args.query)
         len_data = len(data)
         if args.model == 'ProtGPT2':
-            model = ProtGPT2(int(args.lr))
+            model = ProtGPT2(float(args.lr))
             tokenizer = AutoTokenizer.from_pretrained("nferruz/ProtGPT2")
             seq_dict_df = ProtGPT2_wrangle(data, tokenizer)
             dataloader = torch.utils.data.DataLoader(seq_dict_df, shuffle = False, batch_size = int(args.batch_size), num_workers=0)
             trainer = pl.Trainer(devices=int(args.GPUs), profiler=profiler, accelerator='gpu', max_epochs=int(args.epochs), logger = logger, num_nodes = int(args.nodes), precision = 16, strategy = 'deepspeed_stage_2_offload')
             trainer.fit(model=model, train_dataloaders = dataloader)
-            print(len_data)
             save_path = os.path.join(os.getcwd(), f"checkpoints/epoch={int(args.epochs) - 1}-step={len_data*int(args.epochs)}.ckpt")
             output_path = f"{args.name}_ProtGPT2_{args.epochs}.pt"
             try:
@@ -346,9 +366,9 @@ def main(args):
                 print(f'Exception {e} has occured on attempted save of your deepspeed trained model. If this has to do with CPU RAM, please try pytorch_lightning.utilities.deepspeedconvert_zero_checkpoint_to_fp32_state_dict(your_checkpoint.ckpt, full_model.pt')
         else:
             model_import_name = f'esm.pretrained.{args.model}()'
-            model = ESM(eval(model_import_name), float(args.lr), args.LEGGO)
-            dataloader = torch.utils.data.DataLoader(data, shuffle = False, batch_size = int(args.batch_size), num_workers=0, collate_fn=model.alphabet.get_batch_converter())
             if args.LEGGO:
+                model = ESM(eval(model_import_name), float(args.lr), args.LEGGO)
+                dataloader = torch.utils.data.DataLoader(data, shuffle = False, batch_size = int(args.batch_size), num_workers=0, collate_fn=model.alphabet.get_batch_converter())
                 trainer = pl.Trainer(devices=int(args.GPUs), profiler = profiler,accelerator='gpu',max_epochs=int(args.epochs),logger=logger, num_nodes=int(args.nodes), precision = 16, strategy=DeepSpeedStrategy(stage=3, offload_optimizer=True, offload_parameters=True))
                 trainer.fit(model=model, train_dataloaders=dataloader)
                 save_path = os.path.join(os.getcwd(), f"checkpoints/epoch={int(args.epochs) - 1}-step={len_data*int(args.epochs)}.ckpt")
@@ -357,7 +377,9 @@ def main(args):
                     convert_zero_checkpoint_to_fp32_state_dict(save_path, output_path)
                 except Exception as e:
                     print(f'Exception {e} has occured on attempted save of your deepspeed trained model. If this has to do with CPU RAM, please try pytorch_lightning.utilities.deepspeedconvert_zero_checkpoint_to_fp32_state_dict(your_checkpoint.ckpt, full_model.pt')       
-            elif args.strategy == 'deepspeed_stage_3' or args.strategy == 'deepspeed_stage_3_offload' or args.strategy == 'deepspeed_stage_2' or args.strategy == 'deepspeed_stage_2_offload':
+            elif args.strategy == 'deepspeed_stage_1' or args.strategy == 'deepspeed_stage_3' or args.strategy == 'deepspeed_stage_3_offload' or args.strategy == 'deepspeed_stage_2' or args.strategy == 'deepspeed_stage_2_offload':
+                model = ESM(eval(model_import_name), float(args.lr), args.LEGGO)
+                dataloader = torch.utils.data.DataLoader(data, shuffle = False, batch_size = int(args.batch_size), num_workers=0, collate_fn=model.alphabet.get_batch_converter())
                 save_path = os.path.join(os.getcwd(), f"checkpoints/epoch={int(args.epochs) - 1}-step={len_data*int(args.epochs)}.ckpt")
                 output_path = f"{args.name}_esm2_{args.epochs}.pt"
                 trainer = pl.Trainer(devices=int(args.GPUs), profiler = profiler, accelerator='gpu', strategy = args.strategy, max_epochs=int(args.epochs), logger=logger, num_nodes=int(args.nodes), precision = 16,  enable_checkpointing=False)        
@@ -367,6 +389,56 @@ def main(args):
                     convert_zero_checkpoint_to_fp32_state_dict(f"{args.name}_{args.model}_{args.epochs}.pt", output_path)
                 except Exception as e:
                     print(f'Exception {e} has occured on attempted save of your deepspeed trained model. If this has to do with CPU RAM, please try pytorch_lightning.utilities.deepspeedconvert_zero_checkpoint_to_fp32_state_dict(your_checkpoint.ckpt, full_model.pt')       
+            # elif args.strategy == "colossalai":
+            #     alphabet = esm.data.Alphabet.from_architecture("ESM-1b")
+            #     model, _ = eval(model_import_name)
+            #     criterion = torch.nn.CrossEntropyLoss()
+            #     optimizer = torch.optim.Adam(model.parameters(), lr = int(args.lr))
+            #     # dataloader = torch.utils.data.DataLoader(data, shuffle = True, batch_size = int(args.batch_size), num_workers=0, collate_fn=alphabet.get_batch_converter())
+            #     dataloader = colossalai.utils.get_dataloader(data, batch_size = int(args.batch_size), collate_fn=alphabet.get_batch_converter())
+            #     with open('tmp_config.py', 'w+') as config:
+            #         config.write('from colossalai.amp import AMP_TYPE \n')
+            #         config.write(f'BATCH_SIZE = {int(args.batch_size)} \n')
+            #         config.write(f'NUM_EPOCHS = {int(args.epochs)} \n')
+            #         config.write('fp16 = dict(mode = AMP_TYPE.TORCH) \n')
+            #         # config.write("parallel = dict(tensor=dict(size=1, mode='sequence'))")
+            #     colossalai.launch(config='./tmp_config.py', rank=0, world_size=1, host='localhost', port='13579')
+            #     engine, train_dataloader, _, _ = colossalai.initialize(model,
+            #                                                          optimizer,
+            #                                                          criterion,
+            #                                                          dataloader
+            #                                                          )
+            #     # logger = get_dist_logger()
+            #     # trainer = Trainer(
+            #     #     engine=engine,
+            #     #     logger=logger
+            #     # )
+            #     hook_list = [hooks.LossHook()]
+            #     for epoch in tqdm(range(int(args.epochs))):
+            #         engine.train()
+            #         for labels, seqs, toks in train_dataloader:
+            #             toks = toks.cuda()
+            #             engine.zero_grad()
+            #             del seqs, labels
+            #             masked_toks = maskInputs(toks)
+            #             print(toks.size())
+            #             output = engine(masked_toks, repr_layers = [-1], return_contacts=False)
+            #             loss = engine.criterion(output['logits'].permute(0,2,1), toks)
+            #             del masked_toks, toks
+            #             engine.backward(loss)
+            #             engine.step()
+
+            #     # trainer.fit(
+            #     #     train_dataloader=train_dataloader,
+            #     #     epochs=int(args.epochs),
+            #     #     test_interval=1,
+            #     #     hooks=hook_list,
+            #     #     display_progress=True
+            #     # )
+            #     # model = colossal_ESM()
+            #     # alphabet = esm.data.Alphabet.from_architecture("ESM-1b")
+            #     # trainer = pl.Trainer(devices=int(args.GPUs), profiler = profiler, accelerator='gpu', strategy = args.strategy, max_epochs=int(args.epochs), logger=logger, num_nodes=int(args.nodes), precision = 16,  enable_checkpointing=False)        
+            #     # trainer.fit(model=model, train_dataloaders=dataloader)
             else:
                 trainer = pl.Trainer(devices=int(args.GPUs), profiler = profiler, accelerator='gpu', strategy = args.strategy, max_epochs=int(args.epochs), logger=logger, num_nodes=int(args.nodes), precision = 16, amp_backend='native', enable_checkpointing=False)        
                 trainer.fit(model=model, train_dataloaders=dataloader)
