@@ -23,10 +23,6 @@ def tune_esm_inference(data, gpu, billions, strategy):
         ESM2_list = [
             'esm2_t48_15B_UR50D',
             'esm2_t36_3B_UR50D',
-            'esm2_t33_650M_UR50D',
-            'esm2_t30_150M_UR50D',
-            'esm2_t12_35M_UR50D',
-            'esm2_t6_8M_UR50D'
         ]
     else:
         ESM2_list = [
@@ -79,10 +75,6 @@ def tune_esm_train(data, gpu, billions, strategy):
         ESM2_list = [
             'esm2_t48_15B_UR50D',
             'esm2_t36_3B_UR50D',
-            'esm2_t33_650M_UR50D',
-            'esm2_t30_150M_UR50D',
-            'esm2_t12_35M_UR50D',
-            'esm2_t6_8M_UR50D'
         ]
     else:
         ESM2_list = [
