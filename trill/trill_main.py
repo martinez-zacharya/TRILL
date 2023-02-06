@@ -349,7 +349,7 @@ def main(args):
             model = ESM(eval(model_import_name), float(args.lr), args.LEGGO)
             dataloader = torch.utils.data.DataLoader(data, shuffle = False, batch_size = int(args.batch_size), num_workers=0, collate_fn=model.alphabet.get_batch_converter())
             if args.LEGGO:
-                trainer = pl.Trainer(devices=int(args.GPUs), profiler = profiler,accelerator='gpu',max_epochs=int(args.epochs),logger=logger, num_nodes=int(args.nodes), precision = 16, amp_backend='native', strategy=DeepSpeedStrategy(stage=3, offload_optimizer=True, offload_parameters=True))
+                trainer = pl.Trainer(devices=int(args.GPUs), profiler = profiler,accelerator='gpu',max_epochs=int(args.epochs),logger=logger, num_nodes=int(args.nodes), precision = 16, strategy=DeepSpeedStrategy(stage=3, offload_optimizer=True, offload_parameters=True))
                 trainer.fit(model=model, train_dataloaders=dataloader)
                 save_path = os.path.join(os.getcwd(), f"checkpoints/epoch={int(args.epochs) - 1}-step={len_data*int(args.epochs)}.ckpt")
                 output_path = f"{args.name}_esm2_{args.epochs}.pt"
@@ -360,9 +360,11 @@ def main(args):
             elif args.strategy == 'deepspeed_stage_3' or args.strategy == 'deepspeed_stage_3_offload' or args.strategy == 'deepspeed_stage_2' or args.strategy == 'deepspeed_stage_2_offload':
                 save_path = os.path.join(os.getcwd(), f"checkpoints/epoch={int(args.epochs) - 1}-step={len_data*int(args.epochs)}.ckpt")
                 output_path = f"{args.name}_esm2_{args.epochs}.pt"
-
+                trainer = pl.Trainer(devices=int(args.GPUs), profiler = profiler, accelerator='gpu', strategy = args.strategy, max_epochs=int(args.epochs), logger=logger, num_nodes=int(args.nodes), precision = 16,  enable_checkpointing=False)        
+                trainer.fit(model=model, train_dataloaders=dataloader)
+                trainer.save_checkpoint(f"{args.name}_{args.model}_{args.epochs}.pt")
                 try:
-                    convert_zero_checkpoint_to_fp32_state_dict(save_path, output_path)
+                    convert_zero_checkpoint_to_fp32_state_dict(f"{args.name}_{args.model}_{args.epochs}.pt", output_path)
                 except Exception as e:
                     print(f'Exception {e} has occured on attempted save of your deepspeed trained model. If this has to do with CPU RAM, please try pytorch_lightning.utilities.deepspeedconvert_zero_checkpoint_to_fp32_state_dict(your_checkpoint.ckpt, full_model.pt')       
             else:
