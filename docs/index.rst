@@ -3,3 +3,4 @@
    
    home
    cmd_main
+   viz_example
