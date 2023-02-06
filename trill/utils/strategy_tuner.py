@@ -107,11 +107,11 @@ def tune_esm_train(data, gpu, billions, strategy):
         torch.cuda.empty_cache()
         for strat in strat_list:
             try:
-                dataset = esm.data.FastaBatchedDataset.from_file(data)
+                # dataset = esm.data.FastaBatchedDataset.from_file(data)
                 torch.cuda.empty_cache()
                 model_import_name = f'esm.pretrained.{esm2}()'
                 model = tuner_ESM(eval(model_import_name), float(0.0001), strat)
-                dataloader = torch.utils.data.DataLoader(dataset, shuffle = False, batch_size = 1, num_workers=0, collate_fn=model.alphabet.get_batch_converter())
+                dataloader = torch.utils.data.DataLoader(data, shuffle = False, batch_size = 1, num_workers=0, collate_fn=model.alphabet.get_batch_converter())
                 trainer = pl.Trainer(devices=gpu, accelerator='gpu', strategy = strat, max_epochs=1, num_nodes=1, precision = 16, enable_checkpointing=False, replace_sampler_ddp=False)        
                 # time.sleep(30)
                 trainer.fit(model=model, train_dataloaders=dataloader)

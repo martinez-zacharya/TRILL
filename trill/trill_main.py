@@ -10,6 +10,7 @@ import torch.nn as nn
 from trill.utils.mask import maskInputs
 import torch.nn.functional as F
 import pandas as pd
+import subprocess
 from pytorch_lightning.loggers import TensorBoardLogger
 from pytorch_lightning.profilers import PyTorchProfiler
 from pytorch_lightning.strategies import DeepSpeedStrategy
@@ -211,6 +212,11 @@ def main(args):
         help="Input fasta file", 
         action="store"
         )
+    fold.add_argument("--strategy", 
+        help="Choose a specific strategy if you want. You can also pass either 64, or 32 for model.trunk.set_chunk_size(x)", 
+        action="store",
+        default = None,
+        )    
 ##############################################################################################################
 
 ##############################################################################################################
@@ -235,10 +241,10 @@ def main(args):
 ##############################################################################################################
     tune = subparsers.add_parser('tune', help='Test what models and strategies are viable given your input and hardware')
 
-    tune.add_argument("query", 
-        help="Input fasta file", 
-        action="store"
-        )
+    # tune.add_argument("query", 
+    #     help="Input fasta file", 
+    #     action="store"
+    #     )
     tune.add_argument("tune_command", 
         help="Command to tune", 
         choices = ['Finetune_ESM2','Finetune_ProtGPT2', 'Embed', 'Fold']
@@ -288,8 +294,6 @@ def main(args):
 
     args = parser.parse_args()
     start = time.time()
-    # if args.query == None and args.gen == False:
-    #     raise ValueError('An input file is needed when not using --gen')
 
     pl.seed_everything(123)
     
@@ -309,12 +313,13 @@ def main(args):
             profiler = None
 
     if args.command == 'tune':
-        data = esm.data.FastaBatchedDataset.from_file(args.query)
+        subprocess.run(["wget", "-nc", "https://raw.githubusercontent.com/martinez-zacharya/TRILL/main/trill/data/tuner.fasta"])
+        data = esm.data.FastaBatchedDataset.from_file('tuner.fasta')
         if args.tune_command == 'Embed':
             inference_limits = tune_esm_inference(data, int(args.GPUs), args.billions, args.strategy)
             print(f'Inference Limits: {inference_limits}')
         elif args.tune_command == 'Finetune_ESM2':   
-            finetune_limits = tune_esm_train(args.query, int(args.GPUs), args.billions, args.strategy)
+            finetune_limits = tune_esm_train(data, int(args.GPUs), args.billions, args.strategy)
             print(f'Finetune Limits: {finetune_limits}')
         elif args.tune_command == 'Finetune_ProtGPT2': 
             protgpt2_train_limits = tune_protgpt2_train(data, int(args.GPUs), args.strategy)
@@ -485,6 +490,8 @@ def main(args):
         tokenizer = AutoTokenizer.from_pretrained("facebook/esmfold_v1")
         model = EsmForProteinFolding.from_pretrained("facebook/esmfold_v1", device_map="auto")
         model.esm = model.esm.half()
+        if strategy != None:
+            model.trunk.set_chunk_size(int(strategy))
         fold_df = pd.DataFrame(list(data), columns = ["Entry", "Sequence"])
         outputs = []
         with torch.no_grad():
