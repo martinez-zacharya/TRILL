@@ -63,6 +63,7 @@ def tune_esm_inference(data, gpu, billions):
 
         except Exception as e:
             limits.append((esm2, model.max_size))
+        print((esm2, model.max_size))
     return limits
 
 

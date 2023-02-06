@@ -308,13 +308,13 @@ def main(args):
         if args.tune_command == 'Embed':
             inference_limits = tune_esm_inference(data, int(args.GPUs), args.billions)
             print(f'Inference Limits: {inference_limits}')
-        elif args.tune == 'Finetune_ESM2':   
+        elif args.tune_command == 'Finetune_ESM2':   
             finetune_limits = tune_esm_train(args.query, int(args.GPUs), args.billions)
             print(f'Finetune Limits: {finetune_limits}')
-        elif args.tune == 'Finetune_ProtGPT2': 
+        elif args.tune_command == 'Finetune_ProtGPT2': 
             protgpt2_train_limits = tune_protgpt2_train(data, int(args.GPUs))
             print(protgpt2_train_limits)
-        elif args.tune == 'Fold':
+        elif args.tune_command == 'Fold':
             esmfold_tuning = tune_esmfold(data, int(args.GPUs))
             print(esmfold_tuning)
 
