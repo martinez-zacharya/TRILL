@@ -239,6 +239,15 @@ def main(args):
         help="Input fasta file", 
         action="store"
         )
+    tune.add_argument("tune_command", 
+        help="Command to tune", 
+        choices = ['Finetune_ESM2','Finetune_ProtGPT2', 'Embed', 'Fold']
+        )
+    tune.add_argument("--billions", 
+        help="Try to use 3B and 15B billion parameter ESM models, proceed at your own risk...", 
+        action="store_true",
+        default = False
+        )      
 
 ##############################################################################################################
 
@@ -296,14 +305,18 @@ def main(args):
 
     if args.command == 'tune':
         data = esm.data.FastaBatchedDataset.from_file(args.query)
-        inference_limits = tune_esm_inference(data)
-        print(f'Inference Limits: {inference_limits}')
-        finetune_limits = tune_esm_train(args.query, int(args.GPUs))
-        print(f'Finetune Limits: {finetune_limits}')
-        protgpt2_train_limits = tune_protgpt2_train(data, int(args.GPUs))
-        print(protgpt2_train_limits)
-        esmfold_tuning = tune_esmfold(data, int(args.GPUs))
-        print(esmfold_tuning)
+        if args.tune_command == 'Embed':
+            inference_limits = tune_esm_inference(data, int(args.GPUs), args.billions)
+            print(f'Inference Limits: {inference_limits}')
+        elif args.tune == 'Finetune_ESM2':   
+            finetune_limits = tune_esm_train(args.query, int(args.GPUs), args.billions)
+            print(f'Finetune Limits: {finetune_limits}')
+        elif args.tune == 'Finetune_ProtGPT2': 
+            protgpt2_train_limits = tune_protgpt2_train(data, int(args.GPUs))
+            print(protgpt2_train_limits)
+        elif args.tune == 'Fold':
+            esmfold_tuning = tune_esmfold(data, int(args.GPUs))
+            print(esmfold_tuning)
 
 
     elif args.command == 'visualize':

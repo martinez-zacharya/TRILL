@@ -12,17 +12,26 @@ from tqdm import tqdm
 # strategy and hyperparameters to use given the
 # input, model selection and hardware
 
-def tune_esm_inference(data):
+def tune_esm_inference(data, gpu, billions):
 
     limits = []
-    ESM2_list = [
-        #'esm2_t48_15B_UR50D',
-        'esm2_t36_3B_UR50D',
-        'esm2_t33_650M_UR50D',
-        'esm2_t30_150M_UR50D',
-        'esm2_t12_35M_UR50D',
-        'esm2_t6_8M_UR50D'
-    ]
+
+    if billions == True:
+        ESM2_list = [
+            'esm2_t48_15B_UR50D',
+            'esm2_t36_3B_UR50D',
+            'esm2_t33_650M_UR50D',
+            'esm2_t30_150M_UR50D',
+            'esm2_t12_35M_UR50D',
+            'esm2_t6_8M_UR50D'
+        ]
+    else:
+        ESM2_list = [
+            'esm2_t33_650M_UR50D',
+            'esm2_t30_150M_UR50D',
+            'esm2_t12_35M_UR50D',
+            'esm2_t6_8M_UR50D'
+        ]
 
 
     ESM2_list.reverse()
@@ -33,7 +42,7 @@ def tune_esm_inference(data):
             model = tuner_ESM(eval(model_import_name), float(0.0001))
             dataloader = torch.utils.data.DataLoader(data, shuffle = False, batch_size = 1, num_workers=0, collate_fn=model.alphabet.get_batch_converter())
             pred_writer = CustomWriter(output_dir=".", write_interval="epoch")
-            trainer = pl.Trainer(enable_checkpointing=False, callbacks=[pred_writer], devices=1, accelerator='gpu', num_nodes=1)
+            trainer = pl.Trainer(enable_checkpointing=False, callbacks=[pred_writer], devices=gpu, accelerator='gpu', num_nodes=1)
             len_pls = trainer.predict(model, dataloader)
             cwd_files = os.listdir()
             pt_files = [file for file in cwd_files if 'predictions_' in file]
@@ -61,14 +70,23 @@ def tune_esm_inference(data):
 
 def tune_esm_train(data, gpu):
     limits = []
-    ESM2_list = [
-        #'esm2_t48_15B_UR50D',
-        #'esm2_t36_3B_UR50D',
-        'esm2_t33_650M_UR50D',
-        'esm2_t30_150M_UR50D',
-        'esm2_t12_35M_UR50D',
-        'esm2_t6_8M_UR50D'
-    ]
+
+    if billions == True:
+        ESM2_list = [
+            'esm2_t48_15B_UR50D',
+            'esm2_t36_3B_UR50D',
+            'esm2_t33_650M_UR50D',
+            'esm2_t30_150M_UR50D',
+            'esm2_t12_35M_UR50D',
+            'esm2_t6_8M_UR50D'
+        ]
+    else:
+        ESM2_list = [
+            'esm2_t33_650M_UR50D',
+            'esm2_t30_150M_UR50D',
+            'esm2_t12_35M_UR50D',
+            'esm2_t6_8M_UR50D'
+        ]
 
     strat_list = [
         None,
