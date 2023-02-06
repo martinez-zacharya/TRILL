@@ -247,7 +247,12 @@ def main(args):
         help="Try to use 3B and 15B billion parameter ESM models, proceed at your own risk...", 
         action="store_true",
         default = False
-        )      
+        )
+    tune.add_argument("--strategy", 
+        help="Choose a specific strategy if you want", 
+        action="store",
+        default = None,
+        )     
 
 ##############################################################################################################
 
@@ -306,13 +311,13 @@ def main(args):
     if args.command == 'tune':
         data = esm.data.FastaBatchedDataset.from_file(args.query)
         if args.tune_command == 'Embed':
-            inference_limits = tune_esm_inference(data, int(args.GPUs), args.billions)
+            inference_limits = tune_esm_inference(data, int(args.GPUs), args.billions, args.strategy)
             print(f'Inference Limits: {inference_limits}')
         elif args.tune_command == 'Finetune_ESM2':   
-            finetune_limits = tune_esm_train(args.query, int(args.GPUs), args.billions)
+            finetune_limits = tune_esm_train(args.query, int(args.GPUs), args.billions, args.strategy)
             print(f'Finetune Limits: {finetune_limits}')
         elif args.tune_command == 'Finetune_ProtGPT2': 
-            protgpt2_train_limits = tune_protgpt2_train(data, int(args.GPUs))
+            protgpt2_train_limits = tune_protgpt2_train(data, int(args.GPUs), args.strategy)
             print(protgpt2_train_limits)
         elif args.tune_command == 'Fold':
             esmfold_tuning = tune_esmfold(data, int(args.GPUs))

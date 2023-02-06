@@ -12,7 +12,7 @@ from tqdm import tqdm
 # strategy and hyperparameters to use given the
 # input, model selection and hardware
 
-def tune_esm_inference(data, gpu, billions):
+def tune_esm_inference(data, gpu, billions, strategy):
 
     limits = []
 
@@ -31,7 +31,7 @@ def tune_esm_inference(data, gpu, billions):
             'esm2_t30_150M_UR50D',
             'esm2_t12_35M_UR50D',
             'esm2_t6_8M_UR50D'
-        ]
+        ] 
 
 
     ESM2_list.reverse()
@@ -42,7 +42,7 @@ def tune_esm_inference(data, gpu, billions):
             model = tuner_ESM(eval(model_import_name), float(0.0001))
             dataloader = torch.utils.data.DataLoader(data, shuffle = False, batch_size = 1, num_workers=0, collate_fn=model.alphabet.get_batch_converter())
             pred_writer = CustomWriter(output_dir=".", write_interval="epoch")
-            trainer = pl.Trainer(enable_checkpointing=False, callbacks=[pred_writer], devices=gpu, accelerator='gpu', num_nodes=1)
+            trainer = pl.Trainer(enable_checkpointing=False, callbacks=[pred_writer], devices=gpu, accelerator='gpu', num_nodes=1, strategy = strategy)
             len_pls = trainer.predict(model, dataloader)
             cwd_files = os.listdir()
             pt_files = [file for file in cwd_files if 'predictions_' in file]
@@ -69,7 +69,7 @@ def tune_esm_inference(data, gpu, billions):
 
 
 
-def tune_esm_train(data, gpu):
+def tune_esm_train(data, gpu, billions, strategy):
     limits = []
 
     if billions == True:
@@ -89,15 +89,17 @@ def tune_esm_train(data, gpu):
             'esm2_t6_8M_UR50D'
         ]
 
-    strat_list = [
-        None,
-        'deepspeed_stage_1',
-        'deepspeed_stage_2',
-        'deepspeed_stage_2_offload',
-        'deepspeed_stage_3',
-        'deepspeed_stage_3_offload'
-    ]
-
+    if strategy == None:
+        strat_list = [
+            None,
+            'deepspeed_stage_1',
+            'deepspeed_stage_2',
+            'deepspeed_stage_2_offload',
+            'deepspeed_stage_3',
+            'deepspeed_stage_3_offload'
+        ]
+    else:
+        strat_list = [strategy]
     ESM2_list.reverse()
     for esm2 in ESM2_list:
         torch.cuda.empty_cache()
@@ -123,16 +125,19 @@ def tune_esm_train(data, gpu):
                 del model, dataloader, dataset
     return(limits)
 
-def tune_protgpt2_train(data, gpu):
+def tune_protgpt2_train(data, gpu, strategy):
     limits = []
-    strat_list = [
-        # None,
-        # 'deepspeed_stage_1',
-        # 'deepspeed_stage_2',
-        'deepspeed_stage_2_offload',
-        # 'deepspeed_stage_3',
-        # 'deepspeed_stage_3_offload'
-    ]
+    if strategy == None:
+        strat_list = [
+            None,
+            'deepspeed_stage_1',
+            'deepspeed_stage_2',
+            'deepspeed_stage_2_offload',
+            'deepspeed_stage_3',
+            'deepspeed_stage_3_offload'
+        ]
+    else:
+        strat_list = [strategy]
     for strat in strat_list:
         torch.cuda.empty_cache()
         try:
