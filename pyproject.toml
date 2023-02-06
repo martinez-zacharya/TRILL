@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "trill-proteins"
-version = "0.4.3"
+version = "0.4.4"
 description = "Sandbox (in progress) for Computational Protein Design"
 authors = ["Zachary Martinez <martinez.zacharya@gmail.com>"]
 readme = "README.md"
