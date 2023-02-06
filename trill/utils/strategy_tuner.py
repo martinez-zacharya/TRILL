@@ -63,10 +63,10 @@ def tune_esm_inference(data, gpu, billions, strategy):
                 os.remove(file)
             # print(f'{esm2} is able to be used on your current GPU!!!')
             os.remove(f'{esm2}.csv')
-
+            limits.append((esm2, strat, model.max_size))
         except Exception as e:
-            limits.append((esm2, model.max_size))
-        print((esm2, model.max_size))
+            limits.append((esm2, strat, model.max_size))
+        # print((esm2, model.max_size))
     return limits
 
 
