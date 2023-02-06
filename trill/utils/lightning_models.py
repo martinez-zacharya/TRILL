@@ -14,6 +14,8 @@ import gc
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 sys.path.append(os.path.dirname(SCRIPT_DIR))
 # sys.path.insert(0, 'utils')
+from accelerate import infer_auto_device_map, init_empty_weights
+from transformers import AutoConfig, AutoModelForCausalLM
 from utils.mask import maskInputs
 from utils.update_weights import weights_update
 from pytorch_lightning.loggers import TensorBoardLogger
@@ -229,10 +231,19 @@ class tuner_ESM(pl.LightningModule):
     
     
 class ProtGPT2(pl.LightningModule):
-    def __init__(self, lr):
+
+    def __init__(self, lr, tokenizer):
         super().__init__()
-        self.tokenizer = AutoTokenizer.from_pretrained("nferruz/ProtGPT2")
-        self.model = AutoModelForCausalLM.from_pretrained("nferruz/ProtGPT2")
+
+        config = AutoConfig.from_pretrained("nferruz/ProtGPT2")
+
+        with init_empty_weights():
+            model = AutoModelForCausalLM.from_config(config)
+
+        device_map = infer_auto_device_map(model)
+        self.model = AutoModelForCausalLM.from_pretrained("nferruz/ProtGPT2", device_map="auto", offload_folder=".")
+        self.tokenizer = tokenizer
+        # self.model = AutoModelForCausalLM.from_pretrained("nferruz/ProtGPT2")
         self.lr = lr
         self.max_size = 0
         self.optimizer = None
