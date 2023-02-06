@@ -15,7 +15,10 @@ from tqdm import tqdm
 def tune_esm_inference(data, gpu, billions, strategy):
 
     limits = []
-
+    if strategy == None:
+        strategy_not = 'not'
+    else:
+        strategy_not = strategy
     if billions == True:
         ESM2_list = [
             'esm2_t48_15B_UR50D',
@@ -39,7 +42,7 @@ def tune_esm_inference(data, gpu, billions, strategy):
         torch.cuda.empty_cache()
         try:
             model_import_name = f'esm.pretrained.{esm2}()'
-            model = tuner_ESM(eval(model_import_name), float(0.0001))
+            model = tuner_ESM(eval(model_import_name), float(0.0001), strategy_not)
             dataloader = torch.utils.data.DataLoader(data, shuffle = False, batch_size = 1, num_workers=0, collate_fn=model.alphabet.get_batch_converter())
             pred_writer = CustomWriter(output_dir=".", write_interval="epoch")
             trainer = pl.Trainer(enable_checkpointing=False, callbacks=[pred_writer], devices=gpu, accelerator='gpu', num_nodes=1, strategy = strategy)
@@ -91,7 +94,6 @@ def tune_esm_train(data, gpu, billions, strategy):
 
     if strategy == None:
         strat_list = [
-            None,
             'deepspeed_stage_1',
             'deepspeed_stage_2',
             'deepspeed_stage_2_offload',
@@ -108,7 +110,7 @@ def tune_esm_train(data, gpu, billions, strategy):
                 dataset = esm.data.FastaBatchedDataset.from_file(data)
                 torch.cuda.empty_cache()
                 model_import_name = f'esm.pretrained.{esm2}()'
-                model = tuner_ESM(eval(model_import_name), float(0.0001))
+                model = tuner_ESM(eval(model_import_name), float(0.0001), strat)
                 dataloader = torch.utils.data.DataLoader(dataset, shuffle = False, batch_size = 1, num_workers=0, collate_fn=model.alphabet.get_batch_converter())
                 trainer = pl.Trainer(devices=gpu, accelerator='gpu', strategy = strat, max_epochs=1, num_nodes=1, precision = 16, enable_checkpointing=False, replace_sampler_ddp=False)        
                 # time.sleep(30)
@@ -117,19 +119,18 @@ def tune_esm_train(data, gpu, billions, strategy):
                 # print(e)
                 limits.append((esm2, strat, model.max_size))
                 model.wipe_memory()
-            else:
-                model.wipe_memory()
-                del model, dataloader, dataset
-            finally:
-                model.wipe_memory()
-                del model, dataloader, dataset
+            # else:
+            #     model.wipe_memory()
+            #     del model, dataloader, dataset
+            # finally:
+            #     model.wipe_memory()
+            #     del model, dataloader, dataset
     return(limits)
 
 def tune_protgpt2_train(data, gpu, strategy):
     limits = []
     if strategy == None:
         strat_list = [
-            None,
             'deepspeed_stage_1',
             'deepspeed_stage_2',
             'deepspeed_stage_2_offload',
@@ -168,9 +169,12 @@ def tune_esmfold(data, gpu):
             tokenized_input = tokenizer([input_ids], return_tensors="pt", add_special_tokens=False)['input_ids']
             tokenized_input = tokenized_input.clone().detach()
             prot_len = len(input_ids)
-            # try:
-            output = model(tokenized_input)
-            limit = prot_len
-            # except Exception as e:
-            #     print(e)
+            try:
+                output = model(tokenized_input)
+                limit = prot_len
+            except RuntimeError as e:
+                if 'out of memory' in str(e):
+                    break
+                else:
+                    pass
     return limit

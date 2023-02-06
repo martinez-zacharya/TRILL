@@ -142,12 +142,8 @@ class colossal_ESM(pl.LightningModule):
         # return finaldf
         return reps
 
-    def on_fit_start(self) -> None:
-        if self.cuda_mem_fraction < 1.0:
-            colo_set_process_memory_fraction(self.cuda_mem_fraction)
-
 class tuner_ESM(pl.LightningModule):
-    def __init__(self, model, lr, leggo = False):
+    def __init__(self, model, lr, strat):
         super().__init__()
         self.esm, self.alphabet = model
         self.repr_layers = [(i + self.esm.num_layers + 1) % (self.esm.num_layers + 1) for i in [-1]]
@@ -155,11 +151,11 @@ class tuner_ESM(pl.LightningModule):
         self.lr = lr
         self.sample_seqs = []
         self.max_size = 0
-        if leggo:
-            self.leggo = True
-        else:
-            self.leggo = False
         self.optimizer = None
+        if "offload" in strat:
+            self.offload = True
+        else:
+            self.offload = False
 
     def training_step(self, batch, batch_idx):
         torch.cuda.empty_cache()
@@ -180,14 +176,16 @@ class tuner_ESM(pl.LightningModule):
         return {"loss": loss}
     
     def configure_optimizers(self):
-        if self.leggo:
+        # if self.leggo:
+        #     return optimizer
+        if self.offload:
             optimizer = DeepSpeedCPUAdam(self.esm.parameters(), lr=self.lr)
-            return optimizer
+            # lr_scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=1)
+            self.optimizer = optimizer
         else:
             optimizer = torch.optim.Adam(self.esm.parameters(), lr=self.lr)
-            lr_scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=1)
             self.optimizer = optimizer
-            return [optimizer], [lr_scheduler]
+        return [optimizer]
     
     def predict_step(self, batch, batch_idx):
         labels, seqs, toks = batch
