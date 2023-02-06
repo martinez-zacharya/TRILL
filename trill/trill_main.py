@@ -365,8 +365,8 @@ def main(args):
         data = esm.data.FastaBatchedDataset.from_file(args.query)
         len_data = len(data)
         if args.model == 'ProtGPT2':
-            model = ProtGPT2(float(args.lr))
             tokenizer = AutoTokenizer.from_pretrained("nferruz/ProtGPT2")
+            model = ProtGPT2(float(args.lr), tokenizer)
             seq_dict_df = ProtGPT2_wrangle(data, tokenizer)
             dataloader = torch.utils.data.DataLoader(seq_dict_df, shuffle = False, batch_size = int(args.batch_size), num_workers=0)
             trainer = pl.Trainer(devices=int(args.GPUs), profiler=profiler, accelerator='gpu', max_epochs=int(args.epochs), logger = logger, num_nodes = int(args.nodes), precision = 16, strategy = 'deepspeed_stage_2_offload')
@@ -459,10 +459,10 @@ def main(args):
 
     elif args.command == 'generate':
         if args.model == 'ProtGPT2':
-            model = ProtGPT2(0.0001)
+            tokenizer = AutoTokenizer.from_pretrained("nferruz/ProtGPT2")
+            model = ProtGPT2(0.0001, tokenizer)
             if args.finetuned_protgpt2 == True:
                 model = model.load_from_checkpoint(args.preTrained_model, strict = False, lr = 0.0001)
-            tokenizer = AutoTokenizer.from_pretrained("nferruz/ProtGPT2")
             generated_output = model.generate(seed_seq=args.seed_seq, max_length=int(args.max_length), do_sample = args.do_sample, top_k=int(args.top_k), repetition_penalty=float(args.repetition_penalty), num_return_sequences=int(args.num_return_sequences))
             gen_seq_df = pd.DataFrame(generated_output, columns=['Generated_Sequence'])
             gen_seq_df.to_csv(f'{args.name}_generated_sequences.csv', index = False)

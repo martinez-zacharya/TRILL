@@ -136,8 +136,8 @@ def tune_protgpt2_train(data, gpu):
     for strat in strat_list:
         torch.cuda.empty_cache()
         try:
-            model = ProtGPT2(0.0001)
             tokenizer = AutoTokenizer.from_pretrained("nferruz/ProtGPT2")
+            model = ProtGPT2(0.0001, tokenizer)
             seq_dict_df = ProtGPT2_wrangle(data, tokenizer)
             dataloader = torch.utils.data.DataLoader(seq_dict_df, shuffle = False, batch_size = 1, num_workers=0)
             trainer = pl.Trainer(devices=gpu, accelerator='gpu', max_epochs=1, num_nodes = 1,replace_sampler_ddp=False, precision = 16, strategy = strat)
