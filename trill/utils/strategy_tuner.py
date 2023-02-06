@@ -129,9 +129,9 @@ def tune_protgpt2_train(data, gpu):
         # None,
         # 'deepspeed_stage_1',
         # 'deepspeed_stage_2',
-        # 'deepspeed_stage_2_offload',
+        'deepspeed_stage_2_offload',
         # 'deepspeed_stage_3',
-        'deepspeed_stage_3_offload'
+        # 'deepspeed_stage_3_offload'
     ]
     for strat in strat_list:
         torch.cuda.empty_cache()
