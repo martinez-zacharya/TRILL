@@ -232,9 +232,12 @@ class tuner_ESM(pl.LightningModule):
     
 class ProtGPT2(pl.LightningModule):
 
-    def __init__(self, lr, tokenizer):
+    def __init__(self, lr, tokenizer, strat):
         super().__init__()
-
+        if "offload" in strat:
+            self.offload = True
+        else:
+            self.offload = False
         config = AutoConfig.from_pretrained("nferruz/ProtGPT2")
 
         with init_empty_weights():
@@ -244,7 +247,7 @@ class ProtGPT2(pl.LightningModule):
         self.model = AutoModelForCausalLM.from_pretrained("nferruz/ProtGPT2", device_map="auto", offload_folder=".")
         self.tokenizer = tokenizer
         # self.model = AutoModelForCausalLM.from_pretrained("nferruz/ProtGPT2")
-        self.lr = lr
+        self.lr = float(lr)
         self.max_size = 0
         self.optimizer = None
         # if pretrained != None:
@@ -272,8 +275,10 @@ class ProtGPT2(pl.LightningModule):
         return(loss)
         
     def configure_optimizers(self):
-        optimizer = DeepSpeedCPUAdam(self.model.parameters(), lr=1e-5)
-        # optimizer = torch.optim.Adam(self.model.parameters(), lr=1e-5)
+        if self.offload:
+            optimizer = DeepSpeedCPUAdam(self.model.parameters(), lr=self.lr)
+        else:
+            optimizer = torch.optim.Adam(self.model.parameters(), lr=self.lr)
         self.optimizer = optimizer
         # optimizer = FusedAdam(self.model.parameters(), lr=self.lr)
         return optimizer
