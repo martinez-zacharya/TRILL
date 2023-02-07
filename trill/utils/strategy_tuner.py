@@ -32,7 +32,8 @@ def tune_esm_inference(data, gpu, billions, strategy):
             'esm2_t6_8M_UR50D'
         ] 
 
-    with open('tune_esm_inference.out', 'w+') as out:
+    if len(ESM_list) > 0:
+        out = open('tune_esm_finetune.out', 'w+')
         ESM2_list.reverse()
         for esm2 in ESM2_list:
             torch.cuda.empty_cache()
@@ -65,6 +66,7 @@ def tune_esm_inference(data, gpu, billions, strategy):
                 model.wipe_memory()
                 # limits.append((esm2, strategy, model.max_size))
             
+    out.close()
     return limits
 
 
@@ -97,7 +99,8 @@ def tune_esm_train(data, gpu, billions, strategy):
     else:
         strat_list = [strategy]
     ESM2_list.reverse()
-    with open('tune_esm_finetune.out', 'w+') as out:
+    if len(ESM_list) > 0:
+        out = open('tune_esm_inference.out', 'w+')
         for esm2 in ESM2_list:
             torch.cuda.empty_cache()
             for strat in strat_list:
@@ -121,6 +124,7 @@ def tune_esm_train(data, gpu, billions, strategy):
                 # finally:
                 #     model.wipe_memory()
                 #     del model, dataloader, dataset
+    out.close()
     return(limits)
 
 def tune_protgpt2_train(data, gpu, strategy):
@@ -135,7 +139,8 @@ def tune_protgpt2_train(data, gpu, strategy):
         ]
     else:
         strat_list = [strategy]
-    with open('tune_protgpt2_finetune.out', 'w+') as out:
+    if len(strat_list) > 0:
+        out = open('tune_protgpt2_finetune.out', 'w+')
         for strat in strat_list:
             torch.cuda.empty_cache()
             try:
@@ -151,6 +156,7 @@ def tune_protgpt2_train(data, gpu, strategy):
             except Exception as e:
                 print(e)
                 model.wipe_memory()
+    out.close()
     return(limits)
 
 def tune_esmfold(data, gpu, strategy):
