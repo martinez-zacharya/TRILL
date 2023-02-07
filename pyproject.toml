@@ -8,6 +8,7 @@ repository = "https://github.com/martinez-zacharya/TRILL"
 keywords = ["NLP", "Natural Language Processing", "Protein Design"]
 packages = [{include = "trill"}]
 license = "MIT"
+documentation = "https://trill.readthedocs.io/en/latest/home.html"
 
 [tool.poetry.dependencies]
 python = "^3.8"
