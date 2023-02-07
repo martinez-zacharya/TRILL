@@ -32,37 +32,39 @@ def tune_esm_inference(data, gpu, billions, strategy):
             'esm2_t6_8M_UR50D'
         ] 
 
-
-    ESM2_list.reverse()
-    for esm2 in ESM2_list:
-        torch.cuda.empty_cache()
-        try:
-            model_import_name = f'esm.pretrained.{esm2}()'
-            model = tuner_ESM(eval(model_import_name), float(0.0001), strategy_not)
-            dataloader = torch.utils.data.DataLoader(data, shuffle = False, batch_size = 1, num_workers=0, collate_fn=model.alphabet.get_batch_converter())
-            pred_writer = CustomWriter(output_dir=".", write_interval="epoch")
-            trainer = pl.Trainer(enable_checkpointing=False, callbacks=[pred_writer], devices=gpu, accelerator='gpu', num_nodes=1, strategy = strategy)
-            len_pls = trainer.predict(model, dataloader)
-            cwd_files = os.listdir()
-            pt_files = [file for file in cwd_files if 'predictions_' in file]
-            pred_embeddings = []
-            for pt in pt_files:
-                preds = torch.load(pt)
-                for pred in preds:
-                    for sublist in pred:
-                        pred_embeddings.append(tuple([sublist[0][0], sublist[0][1]]))
-                embedding_df = pd.DataFrame(pred_embeddings, columns = ['Embeddings', 'Label'])
-                finaldf = embedding_df['Embeddings'].apply(pd.Series)
-                finaldf['Label'] = embedding_df['Label']
-                finaldf.to_csv(f'{esm2}.csv', index = False)
-            for file in pt_files:
-                os.remove(file)
-            # print(f'{esm2} is able to be used on your current GPU!!!')
-            os.remove(f'{esm2}.csv')
-            limits.append((esm2, strategy, model.max_size))
-        except Exception as e:
-            limits.append((esm2, strategy, model.max_size))
-        print((esm2, strategy, model.max_size))
+    with open('tune_esm_inference.out', 'w+') as out:
+        ESM2_list.reverse()
+        for esm2 in ESM2_list:
+            torch.cuda.empty_cache()
+            try:
+                model_import_name = f'esm.pretrained.{esm2}()'
+                model = tuner_ESM(eval(model_import_name), float(0.0001), strategy_not)
+                dataloader = torch.utils.data.DataLoader(data, shuffle = False, batch_size = 1, num_workers=0, collate_fn=model.alphabet.get_batch_converter())
+                pred_writer = CustomWriter(output_dir=".", write_interval="epoch")
+                trainer = pl.Trainer(enable_checkpointing=False, callbacks=[pred_writer], devices=gpu, accelerator='gpu', num_nodes=1, strategy = strategy)
+                len_pls = trainer.predict(model, dataloader)
+                cwd_files = os.listdir()
+                pt_files = [file for file in cwd_files if 'predictions_' in file]
+                pred_embeddings = []
+                for pt in pt_files:
+                    preds = torch.load(pt)
+                    for pred in preds:
+                        for sublist in pred:
+                            pred_embeddings.append(tuple([sublist[0][0], sublist[0][1]]))
+                    embedding_df = pd.DataFrame(pred_embeddings, columns = ['Embeddings', 'Label'])
+                    finaldf = embedding_df['Embeddings'].apply(pd.Series)
+                    finaldf['Label'] = embedding_df['Label']
+                    finaldf.to_csv(f'{esm2}.csv', index = False)
+                for file in pt_files:
+                    os.remove(file)
+                # print(f'{esm2} is able to be used on your current GPU!!!')
+                os.remove(f'{esm2}.csv')
+                limits.append((esm2, strategy, model.max_size))
+                out.write(f'({esm2}, {strategy}, {model.max_size} \n')
+            except Exception as e:
+                model.wipe_memory()
+                # limits.append((esm2, strategy, model.max_size))
+            
     return limits
 
 
@@ -95,28 +97,30 @@ def tune_esm_train(data, gpu, billions, strategy):
     else:
         strat_list = [strategy]
     ESM2_list.reverse()
-    for esm2 in ESM2_list:
-        torch.cuda.empty_cache()
-        for strat in strat_list:
-            try:
-                # dataset = esm.data.FastaBatchedDataset.from_file(data)
-                torch.cuda.empty_cache()
-                model_import_name = f'esm.pretrained.{esm2}()'
-                model = tuner_ESM(eval(model_import_name), float(0.0001), strat)
-                dataloader = torch.utils.data.DataLoader(data, shuffle = False, batch_size = 1, num_workers=0, collate_fn=model.alphabet.get_batch_converter())
-                trainer = pl.Trainer(devices=gpu, accelerator='gpu', strategy = strat, max_epochs=1, num_nodes=1, precision = 16, enable_checkpointing=False, replace_sampler_ddp=False)        
-                # time.sleep(30)
-                trainer.fit(model=model, train_dataloaders=dataloader)
-            except Exception as e:
-                # print(e)
-                limits.append((esm2, strat, model.max_size))
-                model.wipe_memory()
-            # else:
-            #     model.wipe_memory()
-            #     del model, dataloader, dataset
-            # finally:
-            #     model.wipe_memory()
-            #     del model, dataloader, dataset
+    with open('tune_esm_finetune.out', 'w+') as out:
+        for esm2 in ESM2_list:
+            torch.cuda.empty_cache()
+            for strat in strat_list:
+                try:
+                    # dataset = esm.data.FastaBatchedDataset.from_file(data)
+                    torch.cuda.empty_cache()
+                    model_import_name = f'esm.pretrained.{esm2}()'
+                    model = tuner_ESM(eval(model_import_name), float(0.0001), strat)
+                    dataloader = torch.utils.data.DataLoader(data, shuffle = False, batch_size = 1, num_workers=0, collate_fn=model.alphabet.get_batch_converter())
+                    trainer = pl.Trainer(devices=gpu, accelerator='gpu', strategy = strat, max_epochs=1, num_nodes=1, precision = 16, enable_checkpointing=False, replace_sampler_ddp=False)        
+                    trainer.fit(model=model, train_dataloaders=dataloader)
+                    out.write(f'({esm2}, {strat}, {model.max_size} \n')
+                    limits.append((esm2, strat, model.max_size))
+                    model.wipe_memory()
+                except Exception as e:
+                    # print(e)
+                    model.wipe_memory()
+                # else:
+                #     model.wipe_memory()
+                #     del model, dataloader, dataset
+                # finally:
+                #     model.wipe_memory()
+                #     del model, dataloader, dataset
     return(limits)
 
 def tune_protgpt2_train(data, gpu, strategy):
@@ -131,20 +135,22 @@ def tune_protgpt2_train(data, gpu, strategy):
         ]
     else:
         strat_list = [strategy]
-    for strat in strat_list:
-        torch.cuda.empty_cache()
-        try:
-            tokenizer = AutoTokenizer.from_pretrained("nferruz/ProtGPT2")
-            model = ProtGPT2(lr = 0.0001, tokenizer = tokenizer, strat = strat)
-            seq_dict_df = ProtGPT2_wrangle(data, tokenizer)
-            dataloader = torch.utils.data.DataLoader(seq_dict_df, shuffle = False, batch_size = 1, num_workers=0)
-            trainer = pl.Trainer(devices=gpu, accelerator='gpu', max_epochs=1, num_nodes = 1,replace_sampler_ddp=False, precision = 16, strategy = strat)
-            trainer.fit(model=model, train_dataloaders = dataloader)
-
-        except Exception as e:
-            print(e)
-            limits.append(('ProtGPT2', strat, model.max_size))
-            model.wipe_memory()
+    with open('tune_protgpt2_finetune.out', 'w+') as out:
+        for strat in strat_list:
+            torch.cuda.empty_cache()
+            try:
+                tokenizer = AutoTokenizer.from_pretrained("nferruz/ProtGPT2")
+                model = ProtGPT2(lr = 0.0001, tokenizer = tokenizer, strat = strat)
+                seq_dict_df = ProtGPT2_wrangle(data, tokenizer)
+                dataloader = torch.utils.data.DataLoader(seq_dict_df, shuffle = False, batch_size = 1, num_workers=0)
+                trainer = pl.Trainer(devices=gpu, accelerator='gpu', max_epochs=1, num_nodes = 1,replace_sampler_ddp=False, precision = 16, strategy = strat)
+                trainer.fit(model=model, train_dataloaders = dataloader)
+                limits.append(('ProtGPT2', strat, model.max_size))
+                out.write(f'ProtGPT2, {strat}, {model.max_size} \n')
+                model.wipe_memory()
+            except Exception as e:
+                print(e)
+                model.wipe_memory()
     return(limits)
 
 def tune_esmfold(data, gpu, strategy):
@@ -157,18 +163,21 @@ def tune_esmfold(data, gpu, strategy):
         model.trunk.set_chunk_size(int(strategy))
     fold_df = pd.DataFrame(list(data), columns = ["Entry", "Sequence"])
     outputs = []
-    with torch.no_grad():
-        for input_ids in tqdm(fold_df.Sequence.tolist()):
-            tokenized_input = tokenizer([input_ids], return_tensors="pt", add_special_tokens=False)['input_ids']
-            tokenized_input = tokenized_input.clone().detach()
-            prot_len = len(input_ids)
-            try:
-                output = model(tokenized_input)
-                limit = prot_len
-            except RuntimeError as e:
-                if 'out of memory' in str(e):
-                    break
-                else:
-                    print(e)
-                    pass
+    with open('tune_esmfold.out', 'w+') as out:
+        with torch.no_grad():
+            limit = 0
+            for input_ids in tqdm(fold_df.Sequence.tolist()):
+                tokenized_input = tokenizer([input_ids], return_tensors="pt", add_special_tokens=False)['input_ids']
+                tokenized_input = tokenized_input.clone().detach()
+                prot_len = len(input_ids)
+                try:
+                    output = model(tokenized_input)
+                    limit = prot_len
+                except RuntimeError as e:
+                    if 'out of memory' in str(e):
+                        out.write(f'ESMFold Length Limit: {limit}')
+                        break
+                    else:
+                        print(e)
+                        pass
     return limit

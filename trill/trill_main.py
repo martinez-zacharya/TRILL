@@ -490,8 +490,8 @@ def main(args):
         tokenizer = AutoTokenizer.from_pretrained("facebook/esmfold_v1")
         model = EsmForProteinFolding.from_pretrained("facebook/esmfold_v1", device_map="auto")
         model.esm = model.esm.half()
-        if strategy != None:
-            model.trunk.set_chunk_size(int(strategy))
+        if args.strategy != None:
+            model.trunk.set_chunk_size(int(args.strategy))
         fold_df = pd.DataFrame(list(data), columns = ["Entry", "Sequence"])
         outputs = []
         with torch.no_grad():
