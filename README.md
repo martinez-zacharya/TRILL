@@ -5,8 +5,8 @@
                                 |____|    |____|_  /___|_______ \_______ \
                                                  \/            \/       \/
 
-[![pypi version](https://img.shields.io/pypi/v/trill-proteins)](https://pypi.org/project/trill-proteins)
-![downloads](https://img.shields.io/pypi/dm/trill-proteins?logoColor=blueviolet&style=flat-square)]
+[![pypi version](https://img.shields.io/pypi/v/trill-proteins?logoColor=blueviolet&style=flat-square)](https://pypi.org/project/trill-proteins)
+![downloads](https://img.shields.io/pypi/dm/trill-proteins?logoColor=blueviolet&style=flat-square)
 ![status](https://github.com/martinez-zacharya/TRILL/workflows/CI/badge.svg)
 [![Documentation Status](https://readthedocs.org/projects/trill/badge/?version=latest)](https://trill.readthedocs.io/en/latest/?badge=latest)
 # TRILL
