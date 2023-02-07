@@ -32,7 +32,7 @@ def tune_esm_inference(data, gpu, billions, strategy):
             'esm2_t6_8M_UR50D'
         ] 
 
-    if len(ESM_list) > 0:
+    if len(ESM2_list) > 0:
         out = open('tune_esm_finetune.out', 'w+')
         ESM2_list.reverse()
         for esm2 in ESM2_list:
@@ -99,7 +99,7 @@ def tune_esm_train(data, gpu, billions, strategy):
     else:
         strat_list = [strategy]
     ESM2_list.reverse()
-    if len(ESM_list) > 0:
+    if len(ESM2_list) > 0:
         out = open('tune_esm_inference.out', 'w+')
         for esm2 in ESM2_list:
             torch.cuda.empty_cache()
