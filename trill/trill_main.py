@@ -324,7 +324,20 @@ def main(args):
             else:
                 model = weights_update(model = ESM(eval(model_import_name), 0.0001, False), checkpoint = torch.load(args.preTrained_model))
                 trainer.predict(model, dataloader)
-
+                cwd_files = os.listdir()
+                pt_files = [file for file in cwd_files if 'predictions_' in file]
+                pred_embeddings = []
+                for pt in pt_files:
+                    preds = torch.load(pt)
+                    for pred in preds:
+                        for sublist in pred:
+                            pred_embeddings.append(tuple([sublist[0][0], sublist[0][1]]))
+                embedding_df = pd.DataFrame(pred_embeddings, columns = ['Embeddings', 'Label'])
+                finaldf = embedding_df['Embeddings'].apply(pd.Series)
+                finaldf['Label'] = embedding_df['Label']
+                finaldf.to_csv(f'{args.name}_{args.model}.csv', index = False)
+                for file in pt_files:
+                    os.remove(file)
 
     
     elif args.command == 'finetune':
