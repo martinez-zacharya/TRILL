@@ -50,7 +50,6 @@ class ESM(pl.LightningModule):
         #         pass
         labels, seqs, toks = batch
         length = len(seqs[0])
-        print(labels)
         del labels, seqs, batch_idx
         masked_toks = maskInputs(toks)
         try:
@@ -172,6 +171,7 @@ class tuner_ESM(pl.LightningModule):
         except Exception as e:
             self.max_size = size
             self.out.write(self.max_size)
+            print(self.max_size)
             raise Exception(e)
         del masked_toks, toks
         return {"loss": loss}
