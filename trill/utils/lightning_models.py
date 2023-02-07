@@ -143,7 +143,7 @@ class colossal_ESM(pl.LightningModule):
         return reps
 
 class tuner_ESM(pl.LightningModule):
-    def __init__(self, model, lr, strat):
+    def __init__(self, model, lr, strat, out):
         super().__init__()
         self.esm, self.alphabet = model
         self.repr_layers = [(i + self.esm.num_layers + 1) % (self.esm.num_layers + 1) for i in [-1]]
@@ -152,6 +152,7 @@ class tuner_ESM(pl.LightningModule):
         self.sample_seqs = []
         self.max_size = 0
         self.optimizer = None
+        self.out = out
         if "offload" in strat:
             self.offload = True
         else:
@@ -173,6 +174,7 @@ class tuner_ESM(pl.LightningModule):
         #     raise Exception(e)
         del masked_toks, toks
         self.max_size = size
+        self.out.write(self.max_size)
         return {"loss": loss}
     
     def configure_optimizers(self):
