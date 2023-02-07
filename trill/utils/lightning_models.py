@@ -164,17 +164,16 @@ class tuner_ESM(pl.LightningModule):
         size = len(seqs[0])
         del labels, seqs, batch_idx
         masked_toks = maskInputs(toks)
-        # try:
-        output = self.esm(masked_toks, repr_layers = [-1], return_contacts=False)
-        loss = F.cross_entropy(output['logits'].permute(0,2,1), toks)
+        self.max_size = size
+        try:
+            output = self.esm(masked_toks, repr_layers = [-1], return_contacts=False)
+            loss = F.cross_entropy(output['logits'].permute(0,2,1), toks)
         # print(size)
-        self.max_size = size
-        # except Exception as e:
-        #     # self.max_size = len(masked_toks[0])
-        #     raise Exception(e)
+        except Exception as e:
+            self.max_size = size
+            self.out.write(self.max_size)
+            raise Exception(e)
         del masked_toks, toks
-        self.max_size = size
-        self.out.write(self.max_size)
         return {"loss": loss}
     
     def configure_optimizers(self):
