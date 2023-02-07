@@ -199,6 +199,7 @@ class tuner_ESM(pl.LightningModule):
                 reps.append(tuple([rep_numpy[i].mean(0), labels[i]]))
         except Exception as e:
             self.max_size = len(seqs[0])
+            print(self.max_size)
             raise Exception(e)
         # newdf = pd.DataFrame(reps, columns = ['Embeddings', 'Label'])
         # finaldf = newdf['Embeddings'].apply(pd.Series)
