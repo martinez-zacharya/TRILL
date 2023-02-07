@@ -5,6 +5,7 @@ import esm
 import time
 import gc
 import os
+from git import Repo
 import sys
 import torch.nn as nn
 import torch.nn.functional as F
@@ -13,7 +14,6 @@ from pytorch_lightning.loggers import TensorBoardLogger
 from pytorch_lightning.profilers import PyTorchProfiler
 from pytorch_lightning.strategies import DeepSpeedStrategy
 from tqdm import tqdm
-sys.path.insert(0, 'utils')
 from pytorch_lightning.utilities.deepspeed import convert_zero_checkpoint_to_fp32_state_dict
 from trill.utils.lightning_models import ESM, ProtGPT2, CustomWriter
 from trill.utils.update_weights import weights_update
@@ -23,6 +23,7 @@ from pytorch_lightning.callbacks import ModelCheckpoint
 from trill.utils.protgpt2_utils import ProtGPT2_wrangle
 from trill.utils.esm_utils import ESM_IF1_Wrangle, ESM_IF1, convert_outputs_to_pdb
 from trill.utils.visualize import reduce_dims, viz
+
 from pyfiglet import Figlet
 import bokeh
 # os.environ['CUDA_LAUNCH_BLOCKING'] = '1'
@@ -134,8 +135,8 @@ def main(args):
     generate = subparsers.add_parser('generate', help='Generate proteins using either ESM-IF1 or ProtGPT2')
     generate.add_argument(
         "model",
-        help="Choose between Inverse Folding model 'esm_if1_gvp4_t16_142M_UR50' to facilitate fixed backbone sequence design or ProtGPT2.",
-        choices = ['ESM-IF1','ProtGPT2']
+        help="Choose between Inverse Folding model 'esm_if1_gvp4_t16_142M_UR50' to facilitate fixed backbone sequence design, ProteinMPNN or ProtGPT2.",
+        choices = ['ESM-IF1','ProtGPT2', 'ProteinMPNN']
 )
     generate.add_argument(
         "--finetuned_protgpt2",
@@ -145,9 +146,9 @@ def main(args):
 )
     generate.add_argument(
         "--temp",
-        help="Choose sampling temperature for ESM_IF1.",
+        help="Choose sampling temperature for ESM_IF1 or ProteinMPNN.",
         action="store",
-        default = 1.,
+        default = '1',
         dest="temp",
 )
     
@@ -167,8 +168,8 @@ def main(args):
 )
     generate.add_argument(
         "--max_length",
-        help="Max length of proteins generated from ProtGPT2",
-        default=333,
+        help="Max length of proteins generated from ProtGPT2 or ProteinMPNN",
+        default=1000,
         dest="max_length",
 )
     generate.add_argument(
@@ -191,7 +192,7 @@ def main(args):
 )
     generate.add_argument(
         "--num_return_sequences",
-        help="Number of sequences for ProtGPT2 to generate. Default is 5",
+        help="Number of sequences for ProtGPT2 or ProteinMPNN to generate. Default is 5",
         default=5,
         dest="num_return_sequences",
 )
@@ -200,6 +201,33 @@ def main(args):
         help="Input pdb or cif file for inverse folding with ESM_IF1", 
         action="store"
         )
+    
+
+
+
+    generate.add_argument("--mpnn_model", type=str, default="v_48_020", help="ProteinMPNN model name: v_48_002, v_48_010, v_48_020, v_48_030; v_48_010=version with 48 edges 0.10A noise")
+    generate.add_argument("--save_score", type=int, default=0, help="0 for False, 1 for True; save score=-log_prob to npy files")
+    generate.add_argument("--save_probs", type=int, default=0, help="0 for False, 1 for True; save MPNN predicted probabilites per position")
+    generate.add_argument("--score_only", type=int, default=0, help="0 for False, 1 for True; score input backbone-sequence pairs")
+    generate.add_argument("--path_to_fasta", type=str, default="", help="score provided input sequence in a fasta format; e.g. GGGGGG/PPPPS/WWW for chains A, B, C sorted alphabetically and separated by /")
+    generate.add_argument("--conditional_probs_only", type=int, default=0, help="0 for False, 1 for True; output conditional probabilities p(s_i given the rest of the sequence and backbone)")    
+    generate.add_argument("--conditional_probs_only_backbone", type=int, default=0, help="0 for False, 1 for True; if true output conditional probabilities p(s_i given backbone)") 
+    generate.add_argument("--unconditional_probs_only", type=int, default=0, help="0 for False, 1 for True; output unconditional probabilities p(s_i given backbone) in one forward pass")   
+    generate.add_argument("--backbone_noise", type=float, default=0.00, help="Standard deviation of Gaussian noise to add to backbone atoms")
+    generate.add_argument("--batch_size", type=int, default=1, help="Batch size; can set higher for titan, quadro GPUs, reduce this if running out of GPU memory")
+    generate.add_argument("--pdb_path_chains", type=str, default='', help="Define which chains need to be designed for a single PDB ")
+    generate.add_argument("--chain_id_jsonl",type=str, default='', help="Path to a dictionary specifying which chains need to be designed and which ones are fixed, if not specied all chains will be designed.")
+    generate.add_argument("--fixed_positions_jsonl", type=str, default='', help="Path to a dictionary with fixed positions")
+    generate.add_argument("--omit_AAs", type=list, default='X', help="Specify which amino acids should be omitted in the generated sequence, e.g. 'AC' would omit alanine and cystine.")
+    generate.add_argument("--bias_AA_jsonl", type=str, default='', help="Path to a dictionary which specifies AA composion bias if neededi, e.g. {A: -1.1, F: 0.7} would make A less likely and F more likely.")
+    generate.add_argument("--bias_by_res_jsonl", default='', help="Path to dictionary with per position bias.") 
+    generate.add_argument("--omit_AA_jsonl", type=str, default='', help="Path to a dictionary which specifies which amino acids need to be omited from design at specific chain indices")
+    generate.add_argument("--pssm_jsonl", type=str, default='', help="Path to a dictionary with pssm")
+    generate.add_argument("--pssm_multi", type=float, default=0.0, help="A value between [0.0, 1.0], 0.0 means do not use pssm, 1.0 ignore MPNN predictions")
+    generate.add_argument("--pssm_threshold", type=float, default=0.0, help="A value between -inf + inf to restric per position AAs")
+    generate.add_argument("--pssm_log_odds_flag", type=int, default=0, help="0 for False, 1 for True")
+    generate.add_argument("--pssm_bias_flag", type=int, default=0, help="0 for False, 1 for True")
+    generate.add_argument("--tied_positions_jsonl", type=str, default='', help="Path to a dictionary with tied positions")
 ##############################################################################################################
     fold = subparsers.add_parser('fold', help='Predict 3D protein structures using ESMFold')
 
@@ -399,8 +427,16 @@ def main(args):
                 raise Exception('A PDB or CIF file is needed for generating new proteins with ESM-IF1')
             data = ESM_IF1_Wrangle(args.query)
             dataloader = torch.utils.data.DataLoader(data, pin_memory = True, batch_size=1, shuffle=False)
-            sample_df = ESM_IF1(dataloader, genIters=int(args.genIters), temp = args.temp)
+            sample_df = ESM_IF1(dataloader, genIters=int(args.genIters), temp = float(args.temp))
             sample_df.to_csv(f'{args.name}_IF1_gen.csv', index=False, header = ['Generated_Seq', 'Chain'])
+
+        elif args.model == 'ProteinMPNN':
+            if not os.path.exists('ProteinMPNN/'):
+                os.makedirs('ProteinMPNN/')
+                Repo.clone_from('https://github.com/martinez-zacharya/ProteinMPNN', 'ProteinMPNN/')
+            sys.path.insert(0, 'ProteinMPNN')
+            from ProteinMPNN.protein_mpnn_run import run_mpnn
+            run_mpnn(args)
 
     elif args.command == 'fold':
         print(f'Initializing esmfold_v1...')
@@ -489,7 +525,7 @@ def return_parser():
         dest="preTrained_model",
 )
     embed.add_argument(
-         "--model",
+        "--model",
         help="Change model. Default is esm2_t12_35M_UR50D. You can choose from a list of ESM2 models which can be found at https://github.com/facebookresearch/esm",
         action="store",
         default = 'esm2_t12_35M_UR50D',
@@ -549,8 +585,8 @@ def return_parser():
     generate = subparsers.add_parser('generate', help='Generate proteins using either ESM-IF1 or ProtGPT2')
     generate.add_argument(
         "model",
-        help="Choose between Inverse Folding model 'esm_if1_gvp4_t16_142M_UR50' to facilitate fixed backbone sequence design or ProtGPT2.",
-        choices = ['ESM-IF1','ProtGPT2']
+        help="Choose between Inverse Folding model 'esm_if1_gvp4_t16_142M_UR50' to facilitate fixed backbone sequence design, ProteinMPNN or ProtGPT2.",
+        choices = ['ESM-IF1','ProtGPT2', 'ProteinMPNN']
 )
     generate.add_argument(
         "--finetuned_protgpt2",
@@ -560,9 +596,9 @@ def return_parser():
 )
     generate.add_argument(
         "--temp",
-        help="Choose sampling temperature for ESM_IF1.",
+        help="Choose sampling temperature for ESM_IF1 or ProteinMPNN.",
         action="store",
-        default = 1.,
+        default = '1',
         dest="temp",
 )
     
@@ -582,8 +618,8 @@ def return_parser():
 )
     generate.add_argument(
         "--max_length",
-        help="Max length of proteins generated from ProtGPT2",
-        default=333,
+        help="Max length of proteins generated from ProtGPT2 or ProteinMPNN",
+        default=1000,
         dest="max_length",
 )
     generate.add_argument(
@@ -606,7 +642,7 @@ def return_parser():
 )
     generate.add_argument(
         "--num_return_sequences",
-        help="Number of sequences for ProtGPT2 to generate. Default is 5",
+        help="Number of sequences for ProtGPT2 or ProteinMPNN to generate. Default is 5",
         default=5,
         dest="num_return_sequences",
 )
@@ -615,18 +651,47 @@ def return_parser():
         help="Input pdb or cif file for inverse folding with ESM_IF1", 
         action="store"
         )
+    
+
+
+
+    generate.add_argument("--mpnn_model", type=str, default="v_48_020", help="ProteinMPNN model name: v_48_002, v_48_010, v_48_020, v_48_030; v_48_010=version with 48 edges 0.10A noise")
+    generate.add_argument("--save_score", type=int, default=0, help="0 for False, 1 for True; save score=-log_prob to npy files")
+    generate.add_argument("--save_probs", type=int, default=0, help="0 for False, 1 for True; save MPNN predicted probabilites per position")
+    generate.add_argument("--score_only", type=int, default=0, help="0 for False, 1 for True; score input backbone-sequence pairs")
+    generate.add_argument("--path_to_fasta", type=str, default="", help="score provided input sequence in a fasta format; e.g. GGGGGG/PPPPS/WWW for chains A, B, C sorted alphabetically and separated by /")
+    generate.add_argument("--conditional_probs_only", type=int, default=0, help="0 for False, 1 for True; output conditional probabilities p(s_i given the rest of the sequence and backbone)")    
+    generate.add_argument("--conditional_probs_only_backbone", type=int, default=0, help="0 for False, 1 for True; if true output conditional probabilities p(s_i given backbone)") 
+    generate.add_argument("--unconditional_probs_only", type=int, default=0, help="0 for False, 1 for True; output unconditional probabilities p(s_i given backbone) in one forward pass")   
+    generate.add_argument("--backbone_noise", type=float, default=0.00, help="Standard deviation of Gaussian noise to add to backbone atoms")
+    generate.add_argument("--batch_size", type=int, default=1, help="Batch size; can set higher for titan, quadro GPUs, reduce this if running out of GPU memory")
+    generate.add_argument("--pdb_path_chains", type=str, default='', help="Define which chains need to be designed for a single PDB ")
+    generate.add_argument("--chain_id_jsonl",type=str, default='', help="Path to a dictionary specifying which chains need to be designed and which ones are fixed, if not specied all chains will be designed.")
+    generate.add_argument("--fixed_positions_jsonl", type=str, default='', help="Path to a dictionary with fixed positions")
+    generate.add_argument("--omit_AAs", type=list, default='X', help="Specify which amino acids should be omitted in the generated sequence, e.g. 'AC' would omit alanine and cystine.")
+    generate.add_argument("--bias_AA_jsonl", type=str, default='', help="Path to a dictionary which specifies AA composion bias if neededi, e.g. {A: -1.1, F: 0.7} would make A less likely and F more likely.")
+    generate.add_argument("--bias_by_res_jsonl", default='', help="Path to dictionary with per position bias.") 
+    generate.add_argument("--omit_AA_jsonl", type=str, default='', help="Path to a dictionary which specifies which amino acids need to be omited from design at specific chain indices")
+    generate.add_argument("--pssm_jsonl", type=str, default='', help="Path to a dictionary with pssm")
+    generate.add_argument("--pssm_multi", type=float, default=0.0, help="A value between [0.0, 1.0], 0.0 means do not use pssm, 1.0 ignore MPNN predictions")
+    generate.add_argument("--pssm_threshold", type=float, default=0.0, help="A value between -inf + inf to restric per position AAs")
+    generate.add_argument("--pssm_log_odds_flag", type=int, default=0, help="0 for False, 1 for True")
+    generate.add_argument("--pssm_bias_flag", type=int, default=0, help="0 for False, 1 for True")
+    generate.add_argument("--tied_positions_jsonl", type=str, default='', help="Path to a dictionary with tied positions")
 ##############################################################################################################
     fold = subparsers.add_parser('fold', help='Predict 3D protein structures using ESMFold')
+
     fold.add_argument("query", 
         help="Input fasta file", 
         action="store"
         )
 ##############################################################################################################
+
 ##############################################################################################################
     visualize = subparsers.add_parser('visualize', help='Reduce dimensionality of embeddings to 2D')
 
     visualize.add_argument("embeddings", 
-        help="Embeddings in a csv to be visualized with last column as label", 
+        help="Embeddings to be visualized", 
         action="store"
         )
     
@@ -635,14 +700,13 @@ def return_parser():
         action="store",
         default="PCA"
         )
-    
     visualize.add_argument("--group", 
         help="Grouping for color scheme of output scatterplot. Choose this option if the labels in your embedding csv are grouped by the last pattern separated by an underscore. For example, 'Protein1_group1', 'Protein2_group1', 'Protein3_group2'. By default, all points are treated as same group.", 
         action="store_true",
         default=False
         )
-
 ##############################################################################################################
+
 
     parser.add_argument(
         "--nodes",
