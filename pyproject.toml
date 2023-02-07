@@ -7,6 +7,7 @@ readme = "README.md"
 repository = "https://github.com/martinez-zacharya/TRILL"
 keywords = ["NLP", "Natural Language Processing", "Protein Design"]
 packages = [{include = "trill"}]
+license = "MIT"
 
 [tool.poetry.dependencies]
 python = "^3.8"
