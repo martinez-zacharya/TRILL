@@ -64,6 +64,8 @@ def tune_esm_inference(data, gpu, billions, strategy):
                 out.write(f'({esm2}, {strategy}, {model.max_size} \n')
             except Exception as e:
                 model.wipe_memory()
+                out.write(f'({esm2}, {strategy}, {model.max_size} \n')
+
                 # limits.append((esm2, strategy, model.max_size))
             
     out.close()
@@ -117,6 +119,7 @@ def tune_esm_train(data, gpu, billions, strategy):
                     model.wipe_memory()
                 except Exception as e:
                     # print(e)
+                    out.write(f'({esm2}, {strat}, {model.max_size} \n')
                     model.wipe_memory()
                 # else:
                 #     model.wipe_memory()
@@ -124,6 +127,7 @@ def tune_esm_train(data, gpu, billions, strategy):
                 # finally:
                 #     model.wipe_memory()
                 #     del model, dataloader, dataset
+    
     out.close()
     return(limits)
 
@@ -155,6 +159,7 @@ def tune_protgpt2_train(data, gpu, strategy):
                 model.wipe_memory()
             except Exception as e:
                 print(e)
+                out.write(f'ProtGPT2, {strat}, {model.max_size} \n')
                 model.wipe_memory()
     out.close()
     return(limits)
