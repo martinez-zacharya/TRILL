@@ -33,7 +33,7 @@ def tune_esm_inference(data, gpu, billions, strategy):
         ] 
 
     if len(ESM2_list) > 0:
-        out = open('tune_esm_finetune.out', 'w+')
+        out = open('tune_esm_inference.out', 'w+')
         ESM2_list.reverse()
         for esm2 in ESM2_list:
             torch.cuda.empty_cache()
@@ -43,7 +43,7 @@ def tune_esm_inference(data, gpu, billions, strategy):
                 dataloader = torch.utils.data.DataLoader(data, shuffle = False, batch_size = 1, num_workers=0, collate_fn=model.alphabet.get_batch_converter())
                 pred_writer = CustomWriter(output_dir=".", write_interval="epoch")
                 trainer = pl.Trainer(enable_checkpointing=False, callbacks=[pred_writer], devices=gpu, accelerator='gpu', num_nodes=1, strategy = strategy)
-                len_pls = trainer.predict(model, dataloader)
+                len_pls = trainer.predict(model, dataloader, out)
                 cwd_files = os.listdir()
                 pt_files = [file for file in cwd_files if 'predictions_' in file]
                 pred_embeddings = []
@@ -106,7 +106,7 @@ def tune_esm_train(data, gpu, billions, strategy):
         strat_list = [strategy]
     ESM2_list.reverse()
     if len(ESM2_list) > 0:
-        out = open('tune_esm_inference.out', 'w+')
+        out = open('tune_esm_finetune.out', 'w+')
         for esm2 in ESM2_list:
             torch.cuda.empty_cache()
             for strat in strat_list:
@@ -117,13 +117,13 @@ def tune_esm_train(data, gpu, billions, strategy):
                     model = tuner_ESM(eval(model_import_name), float(0.0001), strat)
                     dataloader = torch.utils.data.DataLoader(data, shuffle = False, batch_size = 1, num_workers=0, collate_fn=model.alphabet.get_batch_converter())
                     trainer = pl.Trainer(devices=gpu, accelerator='gpu', strategy = strat, max_epochs=1, num_nodes=1, precision = 16, enable_checkpointing=False, replace_sampler_ddp=False)        
-                    trainer.fit(model=model, train_dataloaders=dataloader)
-                    out.write(f'({esm2}, {strat}, {model.max_size} \n')
+                    trainer.fit(model=model, train_dataloaders=dataloader, out)
+#                     out.write(f'({esm2}, {strat}, {model.max_size} \n')
                     limits.append((esm2, strat, model.max_size))
                     model.wipe_memory()
                 except Exception as e:
                     # print(e)
-                    out.write(f'({esm2}, {strat}, {model.max_size} \n')
+#                     out.write(f'({esm2}, {strat}, {model.max_size} \n')
                     model.wipe_memory()
                 # else:
                 #     model.wipe_memory()
