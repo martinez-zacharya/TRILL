@@ -101,7 +101,7 @@ class colossal_ESM(pl.LightningModule):
     #     self.lr = lr
     #     self.sample_seqs = []
     #     if leggo:
-    #         self.leggo = True
+    #         self.legghttps://doi.org/10.1101/2022.07.20.500902o = True
     #     else:
     #         self.leggo = False
 
@@ -170,7 +170,7 @@ class tuner_ESM(pl.LightningModule):
         # print(size)
         except Exception as e:
             self.max_size = size
-            self.out.write(self.max_size)
+            self.out.write(str(self.max_size))
             print(self.max_size)
             raise Exception(e)
         del masked_toks, toks
