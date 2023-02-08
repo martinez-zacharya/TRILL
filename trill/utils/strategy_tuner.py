@@ -125,6 +125,7 @@ def tune_esm_train(data, gpu, billions, strategy):
                 except Exception as e:
                     # print(e)
                     out.write(f'({esm2}, {strat}, {model.max_size} \n')
+                    out.flush()
                     print(model.max_size)
                     model.wipe_memory()
                 # else:
