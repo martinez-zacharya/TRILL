@@ -19,4 +19,4 @@ TRILL (**TR**aining and **I**nference using the **L**anguage of **L**ife) is a s
 - ProteinMPNN (Generate synthetic proteins from .pdb backbone [doi](https://doi.org/10.1101/2022.06.03.494563))
 
 ## Documentation
-Check out the documentation and examples at https://trill.readthedocs.io/en/latest/home.html
+Check out the documentation and examples at https://trill.readthedocs.io/en/latest/index.html
