@@ -8,6 +8,7 @@ HOME
    viz_example
    
 These are some benchmarks using the free Tesla T4 GPU on Google Colab. All generating models should be able to work on colab, as long as they aren't over 650M parameters. Check back for any updates/improvements!
+
 .. csv-table:: Colab Benchmarks
    :file: colab_tuned.csv
    :widths: 50, 30, 30, 20
