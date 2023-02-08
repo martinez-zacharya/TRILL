@@ -9,5 +9,5 @@ Index
    
 .. csv-table:: Colab Benchmarks
    :file: colab_tuned.csv
-   :widths: 30, 70
+   :widths: 50, 30, 30, 20
    :header-rows: 1
