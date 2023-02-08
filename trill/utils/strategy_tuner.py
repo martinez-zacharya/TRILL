@@ -97,6 +97,7 @@ def tune_esm_train(data, gpu, billions, strategy):
 
     if strategy == None:
         strat_list = [
+            'None',
             'deepspeed_stage_1',
             'deepspeed_stage_2',
             'deepspeed_stage_2_offload',
