@@ -26,12 +26,12 @@ from trill.utils.visualize import reduce_dims, viz
 
 from pyfiglet import Figlet
 import bokeh
-# os.environ['CUDA_LAUNCH_BLOCKING'] = '1'
+os.environ['CUDA_LAUNCH_BLOCKING'] = '1'
 os.environ["TOKENIZERS_PARALLELISM"] = "false"
 
 def main(args):
 
-    torch.set_float32_matmul_precision('medium')
+    # torch.set_float32_matmul_precision('medium')
     f = Figlet(font="graffiti")
     print(f.renderText("TRILL"))
     
@@ -177,6 +177,7 @@ def main(args):
         help="Max length of proteins generated from ProtGPT2 or ProteinMPNN",
         default=1000,
         dest="max_length",
+        type=int
 )
     generate.add_argument(
         "--do_sample",
@@ -189,6 +190,7 @@ def main(args):
         help="The number of highest probability vocabulary tokens to keep for top-k-filtering for ProtGPT2 or ESM2_Gibbs",
         default=950,
         dest="top_k",
+        type=int
 )
     generate.add_argument(
         "--repetition_penalty",
@@ -201,6 +203,7 @@ def main(args):
         help="Number of sequences for ProtGPT2 or ProteinMPNN to generate. Default is 5",
         default=5,
         dest="num_return_sequences",
+        type=int,
 )
 
     generate.add_argument("--query", 
@@ -241,6 +244,11 @@ def main(args):
         help="Input fasta file", 
         action="store"
         )
+    fold.add_argument("--strategy", 
+        help="Choose a specific strategy if you are running out of CUDA memory. You can also pass either 64, or 32 for model.trunk.set_chunk_size(x)", 
+        action="store",
+        default = None,
+        )    
 ##############################################################################################################
 
 ##############################################################################################################
@@ -422,7 +430,7 @@ def main(args):
     elif args.command == 'generate':
         if args.model == 'ProtGPT2':
             model = ProtGPT2(0.0001)
-            if args.finetuned_protgpt2 == True:
+            if args.finetuned == True:
                 model = model.load_from_checkpoint(args.preTrained_model, strict = False, lr = 0.0001)
             tokenizer = AutoTokenizer.from_pretrained("nferruz/ProtGPT2")
             generated_output = model.generate(seed_seq=args.seed_seq, max_length=int(args.max_length), do_sample = args.do_sample, top_k=int(args.top_k), repetition_penalty=float(args.repetition_penalty), num_return_sequences=int(args.num_return_sequences))
@@ -437,10 +445,12 @@ def main(args):
             sample_df.to_csv(f'{args.name}_IF1_gen.csv', index=False, header = ['Generated_Seq', 'Chain'])
         elif args.model == 'ProteinMPNN':
             if not os.path.exists('ProteinMPNN/'):
+                print('Cloning forked ProteinMPNN')
                 os.makedirs('ProteinMPNN/')
                 Repo.clone_from('https://github.com/martinez-zacharya/ProteinMPNN', 'ProteinMPNN/')
             sys.path.insert(0, 'ProteinMPNN')
             from ProteinMPNN.protein_mpnn_run import run_mpnn
+            print('ProteinMPNN generation starting...')
             run_mpnn(args)
         elif args.model == 'ESM2_Gibbs':
             model_import_name = f'esm.pretrained.{args.esm2_arch}()'
@@ -452,13 +462,13 @@ def main(args):
                     fasta.write(f'{model.sample_seqs[i]}\n')
 
     elif args.command == 'fold':
-        print(f'Initializing esmfold_v1...')
         data = esm.data.FastaBatchedDataset.from_file(args.query)
         tokenizer = AutoTokenizer.from_pretrained("facebook/esmfold_v1")
-        if not os.path.exists('ESMFold_Offload'):
-            os.makedirs('ESMFold_Offload')
-        model = EsmForProteinFolding.from_pretrained("facebook/esmfold_v1", device_map="auto", torch_dtype="auto")
-        model.esm = model.esm.half()
+
+        model = EsmForProteinFolding.from_pretrained('facebook/esmfold_v1', low_cpu_mem_usage=True, torch_dtype='auto')
+        # model.esm = model.esm.half()
+        if args.strategy != None:
+            model.trunk.set_chunk_size(int(args.strategy))
         fold_df = pd.DataFrame(list(data), columns = ["Entry", "Sequence"])
         outputs = []
         with torch.no_grad():
@@ -469,11 +479,14 @@ def main(args):
                 try:
                     output = model(tokenized_input)
                     outputs.append({key: val.cpu() for key, val in output.items()})
-                except Exception as e:
-                    torch.cuda.empty_cache()
-                    print(f'Protein too long to fold for current hardware: {prot_len} amino acids long')
-                    print(e)
-                    del tokenized_input
+                except RuntimeError as e:
+                        if 'out of memory' in str(e):
+                            print(f'Protein too long to fold for current hardware: {prot_len} amino acids long)')
+                            print(e)
+                            break
+                        else:
+                            print(e)
+                            pass
 
         pdb_list = [convert_outputs_to_pdb(output) for output in outputs]
         protein_identifiers = fold_df.Entry.tolist()
@@ -706,6 +719,11 @@ def return_parser():
         help="Input fasta file", 
         action="store"
         )
+    fold.add_argument("--strategy", 
+        help="Choose a specific strategy if you are running out of CUDA memory. You can also pass either 64, or 32 for model.trunk.set_chunk_size(x)", 
+        action="store",
+        default = None,
+        )    
 ##############################################################################################################
 
 ##############################################################################################################
