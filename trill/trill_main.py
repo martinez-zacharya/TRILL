@@ -455,7 +455,9 @@ def main(args):
         print(f'Initializing esmfold_v1...')
         data = esm.data.FastaBatchedDataset.from_file(args.query)
         tokenizer = AutoTokenizer.from_pretrained("facebook/esmfold_v1")
-        model = EsmForProteinFolding.from_pretrained("facebook/esmfold_v1", device_map="auto")
+        if not os.path.exists('ESMFold_Offload'):
+            os.makedirs('ESMFold_Offload')
+        model = EsmForProteinFolding.from_pretrained("facebook/esmfold_v1", device_map="auto",offload_folder='ESMFold_Offload' )
         model.esm = model.esm.half()
         fold_df = pd.DataFrame(list(data), columns = ["Entry", "Sequence"])
         outputs = []
