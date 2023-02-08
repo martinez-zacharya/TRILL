@@ -153,7 +153,7 @@ class tuner_ESM(pl.LightningModule):
         self.optimizer = None
         self.strat = strat
         self.out = out
-        if "offload" in strat:
+        if strat != None and "offload" in strat:
             self.offload = True
         else:
             self.offload = False
