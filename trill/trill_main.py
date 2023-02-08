@@ -132,7 +132,7 @@ def main(args):
         dest="strategy",
 )
 ##############################################################################################################
-    generate = subparsers.add_parser('generate', help='Generate proteins using either ESM-IF1 or ProtGPT2')
+    generate = subparsers.add_parser('generate', help='Generate proteins using either ESM-IF1, ProtGPT2, ProteinMPNN or Gibbs sampling with a finetuned ESM2')
     generate.add_argument(
         "model",
         help="Choose between Inverse Folding model 'esm_if1_gvp4_t16_142M_UR50' to facilitate fixed backbone sequence design, ProteinMPNN or ProtGPT2.",
@@ -610,7 +610,7 @@ def return_parser():
         dest="strategy",
 )
 ##############################################################################################################
-    generate = subparsers.add_parser('generate', help='Generate proteins using either ESM-IF1 or ProtGPT2')
+    generate = subparsers.add_parser('generate', help='Generate proteins using either ESM-IF1, ProtGPT2, ProteinMPNN or Gibbs sampling with a finetuned ESM2')
     generate.add_argument(
         "model",
         help="Choose between Inverse Folding model 'esm_if1_gvp4_t16_142M_UR50' to facilitate fixed backbone sequence design, ProteinMPNN or ProtGPT2.",
