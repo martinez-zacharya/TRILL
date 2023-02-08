@@ -599,11 +599,17 @@ def return_parser():
     generate.add_argument(
         "model",
         help="Choose between Inverse Folding model 'esm_if1_gvp4_t16_142M_UR50' to facilitate fixed backbone sequence design, ProteinMPNN or ProtGPT2.",
-        choices = ['ESM-IF1','ProtGPT2', 'ProteinMPNN']
+        choices = ['ESM-IF1','ProtGPT2', 'ProteinMPNN', 'ESM2_Gibbs']
 )
     generate.add_argument(
-        "--finetuned_protgpt2",
-        help="Input path to your own finetuned ProtGPT2 model",
+        "--finetuned",
+        help="Input path to your own finetuned ProtGPT2 or ESM2 model",
+        action="store",
+        default = False,
+)
+    generate.add_argument(
+        "--esm2_arch",
+        help="Choose which ESM2 architecture your finetuned model is",
         action="store",
         default = False,
 )
@@ -643,7 +649,7 @@ def return_parser():
 )
     generate.add_argument(
         "--top_k",
-        help="The number of highest probability vocabulary tokens to keep for top-k-filtering for ProtGPT2",
+        help="The number of highest probability vocabulary tokens to keep for top-k-filtering for ProtGPT2 or ESM2_Gibbs",
         default=950,
         dest="top_k",
 )
