@@ -16,7 +16,7 @@ TRILL (**TR**aining and **I**nference using the **L**anguage of **L**ife) is a s
 - Generate using ESM2 (Generate proteins with Gibbs sampling from finetuned ESM2 [doi](https://doi.org/10.1101/2021.01.26.428322))
 - ESM-IF1 (Generate synthetic proteins using from .pdb backbone [doi](https://doi.org/10.1101/2022.04.10.487779))
 - ESMFold (Predict 3D protein structure [doi](https://doi.org/10.1101/2022.07.20.500902))
-- ProtGPT2 (Generate synthetic proteins from seed sequence [doi](https://doi.org/10.1038/s41467-022-32007-7))
+- ProtGPT2 (Finetune and generate synthetic proteins from seed sequence [doi](https://doi.org/10.1038/s41467-022-32007-7))
 - ProteinMPNN (Generate synthetic proteins from .pdb backbone [doi](https://doi.org/10.1101/2022.06.03.494563))
 
 ## Documentation
