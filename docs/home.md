@@ -89,13 +89,21 @@ $ pip install pyg-lib torch-scatter torch-sparse torch-cluster torch-spline-conv
   ```
   $ trill example_4 1 generate ESM-IF1 --query data/4ih9.pdb --genIters 3
   ```
-  You can also generate synthetic proteins using ProtGPT2. The command below generates 5 proteins with a max length of 100. The default seed sequence is "M", but you can also change this. Check out the command-line arguments for more details.
+  ProtGPT2: The command below generates 5 proteins with a max length of 100. The default seed sequence is "M", but you can also change this. Check out the command-line arguments for more details.
   ```
   $ trill example_4 1 generate ProtGPT2 --max_length 100 --num_return_sequences 5
   ```
   In case you wanted to generate certain "types" of proteins, below is an example of using a fine-tuned ProtGPT2 to generate proteins.
   ```
   $ trill example_4 1 generate ProtGPT2 --finetuned_protgpt2 /path/to/FineTune_ProtGPT2_100.pt
+  ```
+  ProteinMPNN: You can also generate sequences that are likely to fold in a similar manner to an input .pdb file
+  ```
+  $ trill example_4 1 generate ProteinMPNN --query /path/to/4ih9.pdb --max_length 100 --num_return_sequences 5
+  ```
+  ESM2 Gibbs: Using Gibbs sampling, you can generate synthetic proteins from a finetuned ESM2 model
+  ```
+  $ trill example_4 1 generate ESM2_Gibbs --finetuned /path/to/finetuned_model.pt --esm2_arch esm2_t30_150M_UR50D --num_return_sequences 5
   ```
 ### 5. Predicting protein structure using ESMFold
   You can predict 3D protein structures rapidly in bulk using ESMFold. The output will be PDB files.
