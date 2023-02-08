@@ -1,4 +1,4 @@
-Index
+HOME
 ******
 .. toctree::
    :maxdepth: 2
