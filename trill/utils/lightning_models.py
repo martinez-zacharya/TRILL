@@ -151,6 +151,7 @@ class tuner_ESM(pl.LightningModule):
         self.sample_seqs = []
         self.max_size = 0
         self.optimizer = None
+        self.strat = strat
         self.out = out
         if "offload" in strat:
             self.offload = True
@@ -172,6 +173,7 @@ class tuner_ESM(pl.LightningModule):
             self.max_size = size
             self.out.write(str(self.max_size))
             print(self.max_size)
+            print(self.strat)
             raise Exception(e)
         del masked_toks, toks
         return {"loss": loss}
