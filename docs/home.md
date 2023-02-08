@@ -33,28 +33,28 @@ $ pip install pyg-lib torch-scatter torch-sparse torch-cluster torch-spline-conv
 ### 1. Finetune
   The default mode for TRILL is to just fine-tune the base esm2_t12_35M_UR50D model from FAIR with the query input for 20 epochs with a learning rate of 0.0001.
   ```
-  $ trill example_1 1 finetune data/query.fasta
+  $ trill example_1 1 finetune trill/data/query.fasta
   ```
   By specifying --model, you can change the model you want to finetune.
   ```
-  $ trill example_1 1 finetune data/query.fasta --model esm2_t30_150M_UR50D
+  $ trill example_1 1 finetune trill/data/query.fasta --model esm2_t30_150M_UR50D
   ```
   You can also finetune ProtGPT2
   ```
-  $ trill example_1 1 finetune data/query.fasta --model ProtGPT2
+  $ trill example_1 1 finetune trill/data/query.fasta --model ProtGPT2
   ```
 ### 2. Create protein embeddings
   Using the embed command by default uses esm2_t12_35M_UR50D to create high-dimensional representations of your proteins of interest.
   ```
-  $ trill example_2 1 embed data/query.fasta
+  $ trill example_2 1 embed trill/data/query.fasta
   ```  
   If you wanted to use another ESM2 model and change the batch_size, you can specify it with --model and --batch_size respectively
   ```
-  $ trill example_2 1 embed data/query.fasta --model esm2_t33_650M_UR50D --batch_size 5
+  $ trill example_2 1 embed trill/data/query.fasta --model esm2_t33_650M_UR50D --batch_size 2
   ```
   To use a custom finetuned ESM2 model for embeddings, you can pass the path to --preTrained_model. Make sure to include what the base model was for your finetuned model with --model
   ```
-  $ trill example_2 1 data/query.fasta --preTrained_model /path/to/models/finetuned_esm2_t30_150M_UR50D.pt --model esm2_t30_150M_UR50D
+  $ trill example_2 1 embed trill/data/query.fasta --preTrained_model /path/to/models/finetuned_esm2_t30_150M_UR50D.pt --model esm2_t30_150M_UR50D
   ```
 ### 3. Distributed Training/Inference
   In order to scale/speed up your analyses, you can distribute your training/inference across many GPUs with a few extra flags to your command. You can even fit models that do not normally fit on your GPUs with sharding, CPU-offloading etc. Below is an example slurm batch submission file. The list of strategies can be found here (https://pytorch-lightning.readthedocs.io/en/stable/extensions/strategy.html). The example below utilizes 16 GPUs in total (4(GPUs) * 4(--nodes)) with deepspeed_stage_2_offload and the 650M parameter ESM2 model.
@@ -75,7 +75,7 @@ $ pip install pyg-lib torch-scatter torch-sparse torch-cluster torch-spline-conv
   export MASTER_ADDR=$master_addr
   export MASTER_PORT=13579
   
-  srun trill example_3 4 finetune data/query.fasta --nodes 4 --strategy deepspeed_stage_2_offload --model esm2_t33_650M_UR50D
+  srun trill example_3 4 finetune trill/data/query.fasta --nodes 4 --strategy deepspeed_stage_2_offload --model esm2_t33_650M_UR50D
   ```
   You can then submit this job with:
   ```
@@ -86,7 +86,7 @@ $ pip install pyg-lib torch-scatter torch-sparse torch-cluster torch-spline-conv
 ### 4. Generate synthetic proteins
    ESM-IF1: When provided a protein backbone structure (.pdb, .cif), the IF1 model is able to predict a sequence that might be able to fold into the input structure. The example input are the backbone coordinates from DWARF14, a rice hydrolase. For every chain in the structure, 2 in 4ih9.pdb, the following command will generate 3 sequences. In total, 6 sequences will be generated.
   ```
-  $ trill example_4 1 generate ESM-IF1 --query data/4ih9.pdb --genIters 3
+  $ trill example_4 1 generate ESM-IF1 --query trill/data/4ih9.pdb --genIters 3
   ```
   ProtGPT2: The command below generates 5 proteins with a max length of 100. The default seed sequence is "M", but you can also change this. Check out the command-line arguments for more details.
   ```
@@ -98,7 +98,7 @@ $ pip install pyg-lib torch-scatter torch-sparse torch-cluster torch-spline-conv
   ```
   ProteinMPNN: You can also generate sequences that are likely to fold in a similar manner to an input .pdb file
   ```
-  $ trill example_4 1 generate ProteinMPNN --query /path/to/4ih9.pdb --max_length 100 --num_return_sequences 5
+  $ trill example_4 1 generate ProteinMPNN --query trill/data/4ih9.pdb --max_length 1000 --num_return_sequences 5
   ```
   ESM2 Gibbs: Using Gibbs sampling, you can generate synthetic proteins from a finetuned ESM2 model
   ```
@@ -107,7 +107,7 @@ $ pip install pyg-lib torch-scatter torch-sparse torch-cluster torch-spline-conv
 ### 5. Predicting protein structure using ESMFold
   You can predict 3D protein structures rapidly in bulk using ESMFold. The output will be PDB files.
   ```
-  $ trill example_5 1 fold data/query.fasta
+  $ trill example_5 1 fold trill/data/query.fasta
   ```  
   
 ### 6. Visualize your embeddings
