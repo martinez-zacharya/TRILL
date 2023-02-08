@@ -457,7 +457,7 @@ def main(args):
         tokenizer = AutoTokenizer.from_pretrained("facebook/esmfold_v1")
         if not os.path.exists('ESMFold_Offload'):
             os.makedirs('ESMFold_Offload')
-        model = EsmForProteinFolding.from_pretrained("facebook/esmfold_v1", device_map="auto",offload_folder='ESMFold_Offload' )
+        model = EsmForProteinFolding.from_pretrained("facebook/esmfold_v1", device_map="auto",offload_folder='ESMFold_Offload')
         model.esm = model.esm.half()
         fold_df = pd.DataFrame(list(data), columns = ["Entry", "Sequence"])
         outputs = []
