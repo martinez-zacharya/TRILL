@@ -1,4 +1,3 @@
-# colab benchmarks
 Model, ~AA_Limit, strategy, gpu
 ESMFold, 700, 32, Tesla_T4
 embed_esm2_t6_8M_UR50D, >8900, None, Tesla_T4
