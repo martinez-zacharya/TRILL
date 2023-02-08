@@ -15,7 +15,7 @@ from pytorch_lightning.profilers import PyTorchProfiler
 from pytorch_lightning.strategies import DeepSpeedStrategy
 from tqdm import tqdm
 from pytorch_lightning.utilities.deepspeed import convert_zero_checkpoint_to_fp32_state_dict
-from trill.utils.lightning_models import ESM, ProtGPT2, CustomWriter
+from trill.utils.lightning_models import ESM, ProtGPT2, CustomWriter, ESM_Gibbs
 from trill.utils.update_weights import weights_update
 from transformers import AutoTokenizer, EsmForProteinFolding
 from pytorch_lightning.callbacks import ModelCheckpoint
@@ -136,11 +136,17 @@ def main(args):
     generate.add_argument(
         "model",
         help="Choose between Inverse Folding model 'esm_if1_gvp4_t16_142M_UR50' to facilitate fixed backbone sequence design, ProteinMPNN or ProtGPT2.",
-        choices = ['ESM-IF1','ProtGPT2', 'ProteinMPNN']
+        choices = ['ESM-IF1','ProtGPT2', 'ProteinMPNN', 'ESM2_Gibbs']
 )
     generate.add_argument(
-        "--finetuned_protgpt2",
-        help="Input path to your own finetuned ProtGPT2 model",
+        "--finetuned",
+        help="Input path to your own finetuned ProtGPT2 or ESM2 model",
+        action="store",
+        default = False,
+)
+    generate.add_argument(
+        "--esm2_arch",
+        help="Choose which ESM2 architecture your finetuned model is",
         action="store",
         default = False,
 )
@@ -180,7 +186,7 @@ def main(args):
 )
     generate.add_argument(
         "--top_k",
-        help="The number of highest probability vocabulary tokens to keep for top-k-filtering for ProtGPT2",
+        help="The number of highest probability vocabulary tokens to keep for top-k-filtering for ProtGPT2 or ESM2_Gibbs",
         default=950,
         dest="top_k",
 )
@@ -429,7 +435,6 @@ def main(args):
             dataloader = torch.utils.data.DataLoader(data, pin_memory = True, batch_size=1, shuffle=False)
             sample_df = ESM_IF1(dataloader, genIters=int(args.genIters), temp = float(args.temp))
             sample_df.to_csv(f'{args.name}_IF1_gen.csv', index=False, header = ['Generated_Seq', 'Chain'])
-
         elif args.model == 'ProteinMPNN':
             if not os.path.exists('ProteinMPNN/'):
                 os.makedirs('ProteinMPNN/')
@@ -437,6 +442,14 @@ def main(args):
             sys.path.insert(0, 'ProteinMPNN')
             from ProteinMPNN.protein_mpnn_run import run_mpnn
             run_mpnn(args)
+        elif args.model == 'ESM2_Gibbs':
+            model_import_name = f'esm.pretrained.{args.esm2_arch}()'
+            model = weights_update(model = ESM_Gibbs(eval(model_import_name), 0.0001, False, args.seed_seq, int(args.num_return_sequences), max_len=int(args.max_length), temp=float(args.temp), top_k = int(args.top_k)), checkpoint = torch.load(args.finetuned))
+            model.predict()
+            with open(f'{args.name}_{args.finetuned[0:-3]}_Gibbs.fasta', 'w+') as fasta:
+                for i in range(len(model.sample_seqs)):
+                    fasta.write(f'>{args.name}_{args.finetuned[0:-3]}_Gibbs_{i} \n')
+                    fasta.write(f'{model.sample_seqs[i]}\n')
 
     elif args.command == 'fold':
         print(f'Initializing esmfold_v1...')
