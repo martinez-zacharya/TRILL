@@ -5,5 +5,5 @@ embed_esm2_t12_35M_UR50D, >8900, None, Tesla_T4
 embed_esm2_t30_150M_UR50D, >8900, None, Tesla_T4
 embed_esm2_t33_650M_UR50D, 6900, None, Tesla_T4
 finetune_esm2_t6_8M_UR50D, 4100, None, Tesla_T4
-finetune_sm2_t12_35M_UR50D, 2800, None, Tesla_T4
+finetune_esm2_t12_35M_UR50D, 2800, None, Tesla_T4
 finetune_esm2_t30_150M_UR50D, 1600, deepspeed_stage_2_offload, Tesla_T4
