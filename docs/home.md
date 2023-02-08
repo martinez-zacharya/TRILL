@@ -119,3 +119,8 @@ $ pip install pyg-lib torch-scatter torch-sparse torch-cluster torch-spline-conv
 ## Misc. Tips
 
 - Make sure there are no "\*" in the protein sequences
+- After finetuning and trying to save a model, if all the CPU RAM is used the application can crash and not finish saving, leaving you a directory similar to "your_model.pt". You can rescue your model by running this python script
+  ```  python
+  from pytorch_lightning.utilities.deepspeed import convert_zero_checkpoint_to_fp32_state_dict
+  convert_zero_checkpoint_to_fp32_state_dict(“your_model.pt”, “rescued_model.pt”)
+  ```  
