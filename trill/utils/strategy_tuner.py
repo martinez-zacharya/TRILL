@@ -62,6 +62,7 @@ def tune_esm_inference(data, gpu, billions, strategy):
                 os.remove(f'{esm2}.csv')
                 limits.append((esm2, strategy, model.max_size))
                 out.write(f'({esm2}, {strategy}, {model.max_size} \n')
+                out.flush()
                 print(limits)
                 out.write(limits)
             except Exception as e:
