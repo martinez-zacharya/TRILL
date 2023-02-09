@@ -1,3 +1,4 @@
 sphinx-argparse
 myst-parser
 sphinx-rtd-dark-mode
+sphinx-copybutton
