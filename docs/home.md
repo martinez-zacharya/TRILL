@@ -123,3 +123,7 @@ $ pip install pyg-lib torch-scatter torch-sparse torch-cluster torch-spline-conv
   from pytorch_lightning.utilities.deepspeed import convert_zero_checkpoint_to_fp32_state_dict
   convert_zero_checkpoint_to_fp32_state_dict(“your_model.pt”, “rescued_model.pt”)
   ```  
+- If you are using TRILL on Google Colab, you need to start your commands with an "!".
+  ```
+  !trill example_7 1 embed trill/data/query.fasta
+  ```
