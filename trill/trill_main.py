@@ -295,6 +295,12 @@ def main(args):
         default=False,
         dest="profiler",
 )
+    parser.add_argument(
+        "--RNG_seed",
+        help="Input RNG seed. Default is 123",
+        action="store",
+        default = 123
+)
 
 
     
@@ -306,7 +312,7 @@ def main(args):
     # if args.query == None and args.gen == False:
     #     raise ValueError('An input file is needed when not using --gen')
 
-    pl.seed_everything(123)
+    pl.seed_everything(int(args.RNG_seed))
     
     
     torch.backends.cuda.matmul.allow_tf32 = True
@@ -774,6 +780,12 @@ def return_parser():
         action="store_true",
         default=False,
         dest="profiler",
+)
+    parser.add_argument(
+        "--RNG_seed",
+        help="Input RNG seed. Default is 123",
+        action="store",
+        default = 123
 )
 
 
