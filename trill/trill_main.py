@@ -454,11 +454,16 @@ def main(args):
             run_mpnn(args)
         elif args.model == 'ESM2_Gibbs':
             model_import_name = f'esm.pretrained.{args.esm2_arch}()'
-            model = weights_update(model = ESM_Gibbs(eval(model_import_name), 0.0001, False, args.seed_seq, int(args.num_return_sequences), max_len=int(args.max_length), temp=float(args.temp), top_k = int(args.top_k)), checkpoint = torch.load(args.finetuned))
+            if args.finetuned == True:
+                model = weights_update(model = ESM_Gibbs(eval(model_import_name), 0.0001, False, args.seed_seq, int(args.num_return_sequences), max_len=int(args.max_length), temp=float(args.temp), top_k = int(args.top_k)), checkpoint = torch.load(args.finetuned))
+                tuned_name = args.finetuned.split('/')[-1]            
+            else:
+                model = ESM_Gibbs(eval(model_import_name), 0.0001, False, args.seed_seq, int(args.num_return_sequences), max_len=int(args.max_length), temp=float(args.temp), top_k = int(args.top_k))
+                tuned_name = f'{args.esm2_arch}___'
             model.predict()
-            with open(f'{args.name}_{args.finetuned[0:-3]}_Gibbs.fasta', 'w+') as fasta:
+            with open(f'{args.name}_{tuned_name[0:-3]}_Gibbs.fasta', 'w+') as fasta:
                 for i in range(len(model.sample_seqs)):
-                    fasta.write(f'>{args.name}_{args.finetuned[0:-3]}_Gibbs_{i} \n')
+                    fasta.write(f'>{args.name}_{tuned_name[0:-3]}_Gibbs_{i} \n')
                     fasta.write(f'{model.sample_seqs[i]}\n')
 
     elif args.command == 'fold':
