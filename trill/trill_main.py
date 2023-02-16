@@ -456,6 +456,8 @@ def main(args):
             model_import_name = f'esm.pretrained.{args.esm2_arch}()'
             if args.finetuned == True:
                 model = weights_update(model = ESM_Gibbs(eval(model_import_name), 0.0001, False, args.seed_seq, int(args.num_return_sequences), max_len=int(args.max_length), temp=float(args.temp), top_k = int(args.top_k)), checkpoint = torch.load(args.finetuned))
+            else:
+                model = ESM_Gibbs(eval(model_import_name), 0.0001, False, args.seed_seq, int(args.num_return_sequences), max_len=int(args.max_length), temp=float(args.temp), top_k = int(args.top_k))
             model.predict()
             tuned_name = args.finetuned.split('/')[-1]
             with open(f'{args.name}_{tuned_name[0:-3]}_Gibbs.fasta', 'w+') as fasta:
