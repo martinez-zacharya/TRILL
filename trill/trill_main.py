@@ -454,8 +454,10 @@ def main(args):
                 print('Cloning forked ProteinMPNN')
                 os.makedirs('ProteinMPNN/')
                 proteinmpnn = Repo.clone_from('https://github.com/martinez-zacharya/ProteinMPNN', 'ProteinMPNN/')
-            mpnn_git_root = proteinmpnn.git.rev_parse("--show-toplevel")
-            sys.path.insert(0, mpnn_git_root)
+                mpnn_git_root = proteinmpnn.git.rev_parse("--show-toplevel")
+                sys.path.insert(0, mpnn_git_root)
+            else:
+                sys.path.insert(0, 'ProteinMPNN/')
             from ProteinMPNN.protein_mpnn_run import run_mpnn
             print('ProteinMPNN generation starting...')
             run_mpnn(args)
