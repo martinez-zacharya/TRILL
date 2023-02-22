@@ -4,6 +4,7 @@ import argparse
 import esm
 import time
 import gc
+import subprocess
 import os
 from git import Repo
 import sys
@@ -455,10 +456,10 @@ def main(args):
                 os.makedirs('ProteinMPNN/')
                 proteinmpnn = Repo.clone_from('https://github.com/martinez-zacharya/ProteinMPNN', 'ProteinMPNN/')
                 mpnn_git_root = proteinmpnn.git.rev_parse("--show-toplevel")
-                sys.path.insert(0, mpnn_git_root)
+                subprocess.run(['pip', 'install', mpnn_git_root])
             else:
                 sys.path.insert(0, 'ProteinMPNN/')
-            from ProteinMPNN.protein_mpnn_run import run_mpnn
+            from mpnnrun import run_mpnn
             print('ProteinMPNN generation starting...')
             run_mpnn(args)
         elif args.model == 'ESM2_Gibbs':
