@@ -442,7 +442,10 @@ def main(args):
             tokenizer = AutoTokenizer.from_pretrained("nferruz/ProtGPT2")
             generated_output = model.generate(seed_seq=args.seed_seq, max_length=int(args.max_length), do_sample = args.do_sample, top_k=int(args.top_k), repetition_penalty=float(args.repetition_penalty), num_return_sequences=int(args.num_return_sequences))
             gen_seq_df = pd.DataFrame(generated_output, columns=['Generated_Sequence'])
-            gen_seq_df.to_csv(f'{args.name}_generated_sequences.csv', index = False)
+            with open(f'{args.name}_ProtGPT2.fasta', 'w+') as fasta:
+                for i, seq in enumerate(gen_seq_df['Generated_Sequence']):
+                    fasta.write(f'>{args.name}_ProtGPT2_{i} \n')
+                    fasta.write(f'{seq}\n')
         elif args.model == 'ESM-IF1':
             if args.query == None:
                 raise Exception('A PDB or CIF file is needed for generating new proteins with ESM-IF1')
