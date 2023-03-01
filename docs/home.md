@@ -130,7 +130,7 @@ In the examples below the string immediately after `trill` specifies the name of
   ```
   In case you wanted to generate certain "types" of proteins, below is an example of using a fine-tuned ProtGPT2 to generate proteins.
   ```
-  $ trill example_4 1 generate ProtGPT2 --finetuned_protgpt2 /path/to/FineTune_ProtGPT2_100.pt
+  $ trill example_4 1 generate ProtGPT2 --finetuned /path/to/FineTune_ProtGPT2_100.pt
   ```
   ProteinMPNN: You can also generate sequences that are likely to fold in a similar manner to an input .pdb file
   ```
