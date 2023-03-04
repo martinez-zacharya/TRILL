@@ -437,7 +437,7 @@ def main(args):
     elif args.command == 'generate':
         if args.model == 'ProtGPT2':
             model = ProtGPT2(0.0001)
-            if args.finetuned == True:
+            if args.finetuned != False:
                 model = model.load_from_checkpoint(args.preTrained_model, strict = False, lr = 0.0001)
             tokenizer = AutoTokenizer.from_pretrained("nferruz/ProtGPT2")
             generated_output = model.generate(seed_seq=args.seed_seq, max_length=int(args.max_length), do_sample = args.do_sample, top_k=int(args.top_k), repetition_penalty=float(args.repetition_penalty), num_return_sequences=int(args.num_return_sequences))
@@ -467,7 +467,7 @@ def main(args):
             run_mpnn(args)
         elif args.model == 'ESM2_Gibbs':
             model_import_name = f'esm.pretrained.{args.esm2_arch}()'
-            if args.finetuned == True:
+            if args.finetuned != False:
                 model = weights_update(model = ESM_Gibbs(eval(model_import_name), 0.0001, False, args.seed_seq, int(args.num_return_sequences), max_len=int(args.max_length), temp=float(args.temp), top_k = int(args.top_k)), checkpoint = torch.load(args.finetuned))
                 tuned_name = args.finetuned.split('/')[-1]            
             else:
