@@ -21,7 +21,7 @@ def reduce_dims(name, data, method = 'PCA'):
     if method == 'PCA':
         reducer = PCA(n_components=2, random_state=123)
         reduced = reducer.fit_transform(data.values)
-        var_1, var_2 = reducer.explained_variance_ratio
+        var_1, var_2 = reducer.explained_variance_ratio_
         reduced_df = pd.DataFrame(reduced, columns=[f'PCA 1: {var_1}', f'PCA 2: {var_2}'])
         reduced_df['Label'] = labels
         reduced_df.to_csv(f'{name}_{method}_{incsv}.csv', index=False)
