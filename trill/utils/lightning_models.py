@@ -111,7 +111,7 @@ class ESM_Gibbs(pl.LightningModule):
             kth_vals, kth_idx = torch.topk(logits, self.top_k)
             dist = torch.distributions.categorical.Categorical(logits=kth_vals)
             new_idx = kth_idx[dist.sample()]
-            if valid_idx[new_idx] != 32 and valid_idx[new_idx] != 1 and valid_idx[new_idx] != 3 and valid_idx[new_idx] != 0 and valid_idx[new_idx] != 2:
+            if valid_idx[new_idx] != 32 and valid_idx[new_idx] != 1 and valid_idx[new_idx] != 3 and valid_idx[new_idx] != 0 and valid_idx[new_idx] != 2 and valid_idx[new_idx] != 31 and valid_idx[new_idx] != 30 and valid_idx[new_idx] != 29:
                 flag = True
         return torch.tensor(valid_idx[new_idx])
 
