@@ -107,46 +107,18 @@ class ESM_Gibbs(pl.LightningModule):
             logits = logits / self.temp
             valid_idx = list(range(len(logits)))
             if self.top_k <= 0 or self.top_k > len(logits[valid_idx]):
-                self.top_k = len(logits[valid_idx])
-            kth_vals, kth_idx = torch.topk(logits, self.top_k)
+                kth_vals, kth_idx = torch.topk(logits, len(logits[valid_idx]))
+            else:
+                kth_vals, kth_idx = torch.topk(logits, self.top_k)
             dist = torch.distributions.categorical.Categorical(logits=kth_vals)
             new_idx = kth_idx[dist.sample()]
             if valid_idx[new_idx] != 32 and valid_idx[new_idx] != 1 and valid_idx[new_idx] != 3 and valid_idx[new_idx] != 0 and valid_idx[new_idx] != 2 and valid_idx[new_idx] != 31 and valid_idx[new_idx] != 30 and valid_idx[new_idx] != 29:
                 flag = True
         return torch.tensor(valid_idx[new_idx])
 
-    def get_init_seq(self, seed_seq, max_len, batch_converter, batch_size = 1):
-        masked_seqs = []
-        for i in seed_seq:
-            masked_seqs.append((i[0], i[1] + '<mask>' * (max_len - len(i[1]))))
-        labels, seqs, toks = batch_converter(masked_seqs)
-        return toks
-
-    def calculate_indexes(self, indexes, leader_length, max_len):
-        if indexes is None:
-            indexes = range(1, max_len+1)
-            indexes = indexes[leader_length:]
-            last_i = leader_length -1
-            return indexes, last_i
-
     def untokenize(self, batch, alphabet):
         out = [ "".join([alphabet.get_tok(seq[i]) for i in range(0, len(seq))]) for seq in batch]
         return out
-
-    def mask_target_indexes(self, batch, target_indexes):
-        # for batch_index in range(len(target_indexes)):
-        for kk in target_indexes:
-            batch[kk] = 32
-
-    def get_target_index_in_order(self, indexes, next_i, num_positions):
-        sampled = 0
-        target_indexes = []
-        while sampled < num_positions:
-            sampled += 1
-            next_i = (next_i + 1) % len(indexes)
-            target_indexes.append(indexes[next_i])
-        last_i = next_i
-        return last_i, target_indexes
 
     def configure_optimizers(self):
         if self.leggo:
@@ -158,38 +130,26 @@ class ESM_Gibbs(pl.LightningModule):
             return [optimizer], [lr_scheduler]
     
     def predict(self):
-        gen_seqs = []
         batch_converter = self.alphabet.get_batch_converter()
         seed = self.seed
-        test_seq = [("test", seed)]
-        for i in range(self.total):
-            sequence_to_add_to = seed
-            for i in tqdm(range(self.max_len)):
-                indexes, last_i = self.calculate_indexes(None, len(test_seq[0][1]), 400)
-                # for round in range(num_rounds):
-                prev_seq = sequence_to_add_to + "<mask>"
-                new_input = [(test_seq[0][0], prev_seq)]
-                # print(f'prev_seq {prev_seq}')
-                # print(f'new_input {new_input}')
-                label, seq, toks = batch_converter(new_input)
-                # toks = toks.cuda()
-                out = self.esm(toks)['logits'].squeeze(0)
-                toks = toks.cpu().detach()
-                masks = np.where(toks==32)[1]
-                for index in masks:
-                    idx = self.step(out, index)
-                    # print(f'idx {idx}')
-                    toks[0][index] = idx
-                    newseq = self.untokenize(toks, self.alphabet)
-                    # sequences+= newseq
-                    # print(newseq[0][-6])
-                    # print(f'newseq {newseq}')
-                    sequence_to_add_to+=newseq[0][-6]
-                torch.cuda.empty_cache()
-                del label, seq, toks, out
-                gen_seqs.append(sequence_to_add_to)
-            self.sample_seqs.append(sequence_to_add_to)
-        return 
+        sequence_to_add_to = seed
+        for j in range(self.max_len):
+            prev_seq = sequence_to_add_to + "<mask>"
+            new_input = [(seed, prev_seq)]
+
+            label, seq, toks = batch_converter(new_input)
+            self.esm = self.esm.cuda()
+            out = self.esm(toks.cuda())['logits'].squeeze(0)
+            toks = toks.cpu().detach()
+            masks = np.where(toks==32)[1]
+            for index in masks:
+                idx = self.step(out, index)
+                toks[0][index] = idx
+                newseq = self.untokenize(toks, self.alphabet)
+                sequence_to_add_to+=newseq[0][-6]
+            torch.cuda.empty_cache()
+            del label, seq, toks, out
+        return(sequence_to_add_to)
     
     
 class ProtGPT2(pl.LightningModule):

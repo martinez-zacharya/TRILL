@@ -7,6 +7,7 @@ import gc
 import subprocess
 import os
 from git import Repo
+from torch import inf
 import sys
 import torch.nn as nn
 import torch.nn.functional as F
@@ -15,6 +16,10 @@ from pytorch_lightning.loggers import TensorBoardLogger
 from pytorch_lightning.profilers import PyTorchProfiler
 from pytorch_lightning.strategies import DeepSpeedStrategy
 from tqdm import tqdm
+import numpy as np
+from fairscale.nn.data_parallel import FullyShardedDataParallel as FSDP
+from fairscale.nn.wrap import enable_wrap, wrap
+
 from pytorch_lightning.utilities.deepspeed import convert_zero_checkpoint_to_fp32_state_dict
 from trill.utils.lightning_models import ESM, ProtGPT2, CustomWriter, ESM_Gibbs
 from trill.utils.update_weights import weights_update
@@ -468,16 +473,19 @@ def main(args):
         elif args.model == 'ESM2_Gibbs':
             model_import_name = f'esm.pretrained.{args.esm2_arch}()'
             if args.finetuned != False:
-                model = weights_update(model = ESM_Gibbs(eval(model_import_name), 0.0001, False, args.seed_seq, int(args.num_return_sequences), max_len=int(args.max_length), temp=float(args.temp), top_k = int(args.top_k)), checkpoint = torch.load(args.finetuned))
+                model = ESM_Gibbs(eval(model_import_name), 0.0001, False, args.seed_seq, int(args.num_return_sequences), max_len=int(args.max_length), temp=float(args.temp), top_k = int(args.top_k))
+                model = weights_update(model , checkpoint = torch.load(args.finetuned))
                 tuned_name = args.finetuned.split('/')[-1]            
             else:
                 model = ESM_Gibbs(eval(model_import_name), 0.0001, False, args.seed_seq, int(args.num_return_sequences), max_len=int(args.max_length), temp=float(args.temp), top_k = int(args.top_k))
                 tuned_name = f'{args.esm2_arch}___'
-            model.predict()
             with open(f'{args.name}_{tuned_name[0:-3]}_Gibbs.fasta', 'w+') as fasta:
-                for i in range(len(model.sample_seqs)):
+                for i in tqdm(range(int(args.num_return_sequences))):
+                    gen_seq = model.predict()
                     fasta.write(f'>{args.name}_{tuned_name[0:-3]}_Gibbs_{i} \n')
-                    fasta.write(f'{model.sample_seqs[i]}\n')
+                    fasta.write(f'{gen_seq}\n')
+                    fasta.flush()
+
 
     elif args.command == 'fold':
         data = esm.data.FastaBatchedDataset.from_file(args.query)
