@@ -445,12 +445,15 @@ def main(args):
             if args.finetuned != False:
                 model = model.load_from_checkpoint(args.finetuned, strict = False, lr = 0.0001)
             tokenizer = AutoTokenizer.from_pretrained("nferruz/ProtGPT2")
-            generated_output = model.generate(seed_seq=args.seed_seq, max_length=int(args.max_length), do_sample = args.do_sample, top_k=int(args.top_k), repetition_penalty=float(args.repetition_penalty), num_return_sequences=int(args.num_return_sequences))
-            gen_seq_df = pd.DataFrame(generated_output, columns=['Generated_Sequence'])
+            generated_output = []
             with open(f'{args.name}_ProtGPT2.fasta', 'w+') as fasta:
-                for i, seq in enumerate(gen_seq_df['Generated_Sequence']):
+                for i in tqdm(range(int(args.num_return_sequences))):
+                    generated_output = (model.generate(seed_seq=args.seed_seq, max_length=int(args.max_length), do_sample = args.do_sample, top_k=int(args.top_k), repetition_penalty=float(args.repetition_penalty)))
+                # gen_seq_df = pd.DataFrame(generated_output, columns=['Generated_Sequence'])
+                    # for i, seq in enumerate(gen_seq_df['Generated_Sequence']):
                     fasta.write(f'>{args.name}_ProtGPT2_{i} \n')
-                    fasta.write(f'{seq}\n')
+                    fasta.write(f'{generated_output[0]}\n')
+                    fasta.flush()
         elif args.model == 'ESM-IF1':
             if args.query == None:
                 raise Exception('A PDB or CIF file is needed for generating new proteins with ESM-IF1')
