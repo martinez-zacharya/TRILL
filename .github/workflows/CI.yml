@@ -37,7 +37,9 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           pip install flake8 pytest pytest-cov
-          pip install trill-proteins
+          pip install poetry
+          poetry config virtualenvs.create false
+          poetry install
           pip install pyg-lib torch-scatter torch-sparse torch-cluster torch-spline-conv torch-geometric -f https://data.pyg.org/whl/torch-1.13.0+cu117.html
     #- name: Lint with flake8
     #  run: |
