@@ -23,7 +23,7 @@ from fairscale.nn.wrap import enable_wrap, wrap
 from pytorch_lightning.utilities.deepspeed import convert_zero_checkpoint_to_fp32_state_dict
 from trill.utils.lightning_models import ESM, ProtGPT2, CustomWriter, ESM_Gibbs
 from trill.utils.update_weights import weights_update
-from transformers import AutoTokenizer, EsmForProteinFolding
+from transformers import AutoTokenizer, EsmForProteinFolding, set_seed
 from pytorch_lightning.callbacks import ModelCheckpoint
 # from trill.utils.strategy_tuner import tune_esm_inference, tune_esm_train
 from trill.utils.protgpt2_utils import ProtGPT2_wrangle
@@ -319,6 +319,7 @@ def main(args):
     #     raise ValueError('An input file is needed when not using --gen')
 
     pl.seed_everything(int(args.RNG_seed))
+    set_seed(int(args.RNG_seed))
     
     
     torch.backends.cuda.matmul.allow_tf32 = True
@@ -448,7 +449,7 @@ def main(args):
             generated_output = []
             with open(f'{args.name}_ProtGPT2.fasta', 'w+') as fasta:
                 for i in tqdm(range(int(args.num_return_sequences))):
-                    generated_output = (model.generate(seed_seq=args.seed_seq, max_length=int(args.max_length), do_sample = args.do_sample, top_k=int(args.top_k), repetition_penalty=float(args.repetition_penalty)))
+                    generated_output = (model.generate(seed_seq=args.seed_seq, temperature = int(args.RNG_seed), max_length=int(args.max_length), do_sample = args.do_sample, top_k=int(args.top_k), repetition_penalty=float(args.repetition_penalty)))
                 # gen_seq_df = pd.DataFrame(generated_output, columns=['Generated_Sequence'])
                     # for i, seq in enumerate(gen_seq_df['Generated_Sequence']):
                     fasta.write(f'>{args.name}_ProtGPT2_{i} \n')
