@@ -157,18 +157,12 @@ class ESM_Gibbs_old(pl.LightningModule):
     
     
 class ProtGPT2(pl.LightningModule):
-    def __init__(self, lr):
+    def __init__(self, lr, strat):
         super().__init__()
         self.tokenizer = AutoTokenizer.from_pretrained("nferruz/ProtGPT2")
         self.model = AutoModelForCausalLM.from_pretrained("nferruz/ProtGPT2")
         self.lr = lr
-        # if pretrained != None:
-        #     self.model = AutoModelForCausalLM.from_pretrained("nferruz/ProtGPT2")
-        #     # self.model = self.model.load_from_checkpoint(pretrained)
-        #     # self.model = weights_update(self.model, checkpoint=pretrained)
-        # else:
-        #     self.model = AutoModelForCausalLM.from_pretrained("nferruz/ProtGPT2")
-
+        self.strat = str(strat)
     
     def training_step(self, batch, batch_idx):
         self.tokenizer.pad_token = self.tokenizer.eos_token
@@ -186,8 +180,10 @@ class ProtGPT2(pl.LightningModule):
         return(loss)
         
     def configure_optimizers(self):
-        optimizer = DeepSpeedCPUAdam(self.model.parameters(), lr=1e-5)
-        # optimizer = torch.optim.Adam(self.model.parameters(), lr=1e-5)
+        if 'deepspeed' in self.strat:
+            optimizer = DeepSpeedCPUAdam(self.model.parameters(), lr=1e-5)
+        else:
+            optimizer = torch.optim.Adam(self.model.parameters(), lr=1e-5)
         # optimizer = FusedAdam(self.model.parameters(), lr=self.lr)
         return optimizer
     

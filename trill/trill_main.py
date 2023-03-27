@@ -414,18 +414,21 @@ def main(args):
         data = esm.data.FastaBatchedDataset.from_file(args.query)
         len_data = len(data)
         if args.model == 'ProtGPT2':
-            model = ProtGPT2(int(args.lr))
+            model = ProtGPT2(int(args.lr), args.strategy)
             tokenizer = AutoTokenizer.from_pretrained("nferruz/ProtGPT2")
             seq_dict_df = ProtGPT2_wrangle(data, tokenizer)
             dataloader = torch.utils.data.DataLoader(seq_dict_df, shuffle = False, batch_size = int(args.batch_size), num_workers=0)
-            trainer = pl.Trainer(devices=int(args.GPUs), profiler=profiler, accelerator='gpu', max_epochs=int(args.epochs), logger = logger, num_nodes = int(args.nodes), precision = 16, strategy = 'deepspeed_stage_2_offload')
+            trainer = pl.Trainer(devices=int(args.GPUs), profiler=profiler, accelerator='gpu', max_epochs=int(args.epochs), logger = logger, num_nodes = int(args.nodes), precision = 16, strategy = args.strategy)
             trainer.fit(model=model, train_dataloaders = dataloader)
-            save_path = os.path.join(os.getcwd(), f"checkpoints/epoch={int(args.epochs) - 1}-step={len_data*int(args.epochs)}.ckpt")
-            output_path = f"{args.name}_ProtGPT2_{args.epochs}.pt"
-            try:
-                convert_zero_checkpoint_to_fp32_state_dict(save_path, output_path)
-            except Exception as e:
-                print(f'Exception {e} has occured on attempted save of your deepspeed trained model. If this has to do with CPU RAM, please try pytorch_lightning.utilities.deepspeedconvert_zero_checkpoint_to_fp32_state_dict(your_checkpoint.ckpt, full_model.pt')
+            if 'deepspeed' in str(args.strategy):
+                save_path = os.path.join(os.getcwd(), f"checkpoints/epoch={int(args.epochs) - 1}-step={len_data*int(args.epochs)}.ckpt")
+                output_path = f"{args.name}_ProtGPT2_{args.epochs}.pt"
+                try:
+                    convert_zero_checkpoint_to_fp32_state_dict(save_path, output_path)
+                except Exception as e:
+                    print(f'Exception {e} has occured on attempted save of your deepspeed trained model. If this has to do with CPU RAM, please try pytorch_lightning.utilities.deepspeedconvert_zero_checkpoint_to_fp32_state_dict(your_checkpoint.ckpt, full_model.pt')
+            else:
+                trainer.save_checkpoint(f"{args.name}_{args.model}_{args.epochs}.pt")
         else:
             model_import_name = f'esm.pretrained.{args.model}()'
             model = ESM(eval(model_import_name), float(args.lr), args.LEGGO)
