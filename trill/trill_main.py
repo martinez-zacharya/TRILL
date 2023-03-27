@@ -329,7 +329,7 @@ def main(args):
         #data = esm.data.FastaBatchedDataset.from_file(args.query)
         # tune_esm_inference(data)
         # tune_esm_train(data, int(args.GPUs))
-
+    
     else:    
         if args.logger == True:
             logger = TensorBoardLogger("logs")
