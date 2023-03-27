@@ -449,7 +449,7 @@ def main(args):
             generated_output = []
             with open(f'{args.name}_ProtGPT2.fasta', 'w+') as fasta:
                 for i in tqdm(range(int(args.num_return_sequences))):
-                    generated_output = (model.generate(seed_seq=args.seed_seq, temperature = int(args.RNG_seed), max_length=int(args.max_length), do_sample = args.do_sample, top_k=int(args.top_k), repetition_penalty=float(args.repetition_penalty)))
+                    generated_output = (model.generate(seed_seq=args.seed_seq, temperature = float(args.temp), max_length=int(args.max_length), do_sample = args.do_sample, top_k=int(args.top_k), repetition_penalty=float(args.repetition_penalty)))
                 # gen_seq_df = pd.DataFrame(generated_output, columns=['Generated_Sequence'])
                     # for i, seq in enumerate(gen_seq_df['Generated_Sequence']):
                     fasta.write(f'>{args.name}_ProtGPT2_{i} \n')
