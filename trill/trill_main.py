@@ -154,7 +154,7 @@ def main(args):
         "--esm2_arch",
         help="Choose which ESM2 architecture your finetuned model is",
         action="store",
-        default = False,
+        default = 'esm2_t12_35M_UR50D',
 )
     generate.add_argument(
         "--temp",
@@ -206,7 +206,7 @@ def main(args):
 )
     generate.add_argument(
         "--num_return_sequences",
-        help="Number of sequences for ProtGPT2 or ProteinMPNN to generate. Default is 5",
+        help="Number of sequences for ProtGPT, ProteinMPNN or ESM2_Gibbs to generate. Default is 5",
         default=5,
         dest="num_return_sequences",
         type=int,
@@ -215,6 +215,21 @@ def main(args):
     generate.add_argument("--query", 
         help="Input pdb or cif file for inverse folding with ESM_IF1", 
         action="store"
+        )
+    generate.add_argument("--random_fill", 
+        help="Randomly select positions to fill each iteration. If not called then fill the positions in order", 
+        action="store_false",
+        default = True,
+        )
+    generate.add_argument("--num_positions", 
+        help="Generate new AAs for this many positions each iteration. If 0, then generate for all target positions each round.", 
+        action="store",
+        default = 0,
+        )
+    generate.add_argument("--num_iters", 
+        help="How many times to run the forward loop for every batch", 
+        action="store",
+        default = 1,
         )
     
 
@@ -404,7 +419,6 @@ def main(args):
             dataloader = torch.utils.data.DataLoader(seq_dict_df, shuffle = False, batch_size = int(args.batch_size), num_workers=0)
             trainer = pl.Trainer(devices=int(args.GPUs), profiler=profiler, accelerator='gpu', max_epochs=int(args.epochs), logger = logger, num_nodes = int(args.nodes), precision = 16, strategy = 'deepspeed_stage_2_offload')
             trainer.fit(model=model, train_dataloaders = dataloader)
-            print(len_data)
             save_path = os.path.join(os.getcwd(), f"checkpoints/epoch={int(args.epochs) - 1}-step={len_data*int(args.epochs)}.ckpt")
             output_path = f"{args.name}_ProtGPT2_{args.epochs}.pt"
             try:
@@ -449,8 +463,6 @@ def main(args):
             with open(f'{args.name}_ProtGPT2.fasta', 'w+') as fasta:
                 for i in tqdm(range(int(args.num_return_sequences))):
                     generated_output = (model.generate(seed_seq=args.seed_seq, max_length=int(args.max_length), do_sample = args.do_sample, top_k=int(args.top_k), repetition_penalty=float(args.repetition_penalty)))
-                # gen_seq_df = pd.DataFrame(generated_output, columns=['Generated_Sequence'])
-                    # for i, seq in enumerate(gen_seq_df['Generated_Sequence']):
                     fasta.write(f'>{args.name}_ProtGPT2_{i} \n')
                     fasta.write(f'{generated_output[0]}\n')
                     fasta.flush()
@@ -475,19 +487,27 @@ def main(args):
             run_mpnn(args)
         elif args.model == 'ESM2_Gibbs':
             model_import_name = f'esm.pretrained.{args.esm2_arch}()'
-            if args.finetuned != False:
-                model = ESM_Gibbs(eval(model_import_name), 0.0001, False, args.seed_seq, int(args.num_return_sequences), max_len=int(args.max_length), temp=float(args.temp), top_k = int(args.top_k))
-                model = weights_update(model , checkpoint = torch.load(args.finetuned))
-                tuned_name = args.finetuned.split('/')[-1]            
-            else:
-                model = ESM_Gibbs(eval(model_import_name), 0.0001, False, args.seed_seq, int(args.num_return_sequences), max_len=int(args.max_length), temp=float(args.temp), top_k = int(args.top_k))
-                tuned_name = f'{args.esm2_arch}___'
-            with open(f'{args.name}_{tuned_name[0:-3]}_Gibbs.fasta', 'w+') as fasta:
-                for i in tqdm(range(int(args.num_return_sequences))):
-                    gen_seq = model.predict()
-                    fasta.write(f'>{args.name}_{tuned_name[0:-3]}_Gibbs_{i} \n')
-                    fasta.write(f'{gen_seq}\n')
-                    fasta.flush()
+            with open(f'{args.name}_{args.esm2_arch}_Gibbs.fasta', 'w+') as fasta:
+                if args.finetuned != False:
+                    model = ESM_Gibbs(eval(model_import_name))
+                    if args.finetuned != False:
+                        model = weights_update(model = ESM_Gibbs(eval(model_import_name)), checkpoint = torch.load(args.finetuned))
+                        tuned_name = args.finetuned.split('/')[-1] 
+                    for i in range(args.num_return_sequences):
+                        out = model.generate(args.seed_seq, mask=True, num_iters = int(args.num_iters), n_samples = 1, max_len = args.max_length, in_order = args.random_fill, num_positions=int(args.num_positions), temperature=float(args.temp))
+                        out = ''.join(out)
+                        fasta.write(f'>{args.name}_{tuned_name[0:-3]}_Gibbs_{i} \n')
+                        fasta.write(f'{out}\n')
+                        fasta.flush()           
+                else:
+                    model = ESM_Gibbs(eval(model_import_name))
+                    tuned_name = f'{args.esm2_arch}___'
+                    for i in range(args.num_return_sequences):
+                        out = model.generate(args.seed_seq, mask=True, num_iters = int(args.num_iters), n_samples = 1, max_len = args.max_length, in_order = args.random_fill, num_positions=int(args.num_positions), temperature=float(args.temp))
+                        out = ''.join(out)
+                        fasta.write(f'>{args.name}_{tuned_name[0:-3]}_Gibbs_{i} \n')
+                        fasta.write(f'{out}\n')
+                        fasta.flush()    
 
 
     elif args.command == 'fold':
@@ -655,7 +675,7 @@ def return_parser():
         "--esm2_arch",
         help="Choose which ESM2 architecture your finetuned model is",
         action="store",
-        default = False,
+        default = 'esm2_t12_35M_UR50D',
 )
     generate.add_argument(
         "--temp",
@@ -684,6 +704,7 @@ def return_parser():
         help="Max length of proteins generated from ProtGPT2 or ProteinMPNN",
         default=1000,
         dest="max_length",
+        type=int
 )
     generate.add_argument(
         "--do_sample",
@@ -696,6 +717,7 @@ def return_parser():
         help="The number of highest probability vocabulary tokens to keep for top-k-filtering for ProtGPT2 or ESM2_Gibbs",
         default=950,
         dest="top_k",
+        type=int
 )
     generate.add_argument(
         "--repetition_penalty",
@@ -705,14 +727,30 @@ def return_parser():
 )
     generate.add_argument(
         "--num_return_sequences",
-        help="Number of sequences for ProtGPT2 or ProteinMPNN to generate. Default is 5",
+        help="Number of sequences for ProtGPT, ProteinMPNN or ESM2_Gibbs to generate. Default is 5",
         default=5,
         dest="num_return_sequences",
+        type=int,
 )
 
     generate.add_argument("--query", 
         help="Input pdb or cif file for inverse folding with ESM_IF1", 
         action="store"
+        )
+    generate.add_argument("--random_fill", 
+        help="Randomly select positions to fill each iteration. If not called then fill the positions in order", 
+        action="store_false",
+        default = True,
+        )
+    generate.add_argument("--num_positions", 
+        help="Generate new AAs for this many positions each iteration. If 0, then generate for all target positions each round.", 
+        action="store",
+        default = 0,
+        )
+    generate.add_argument("--num_iters", 
+        help="How many times to run the forward loop for every batch", 
+        action="store",
+        default = 1,
         )
     
 
@@ -805,14 +843,3 @@ def return_parser():
         action="store",
         default = 123
 )
-
-
-    
-    return parser
-    
-
-
-
-
-    
-
