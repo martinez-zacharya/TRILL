@@ -14,7 +14,7 @@ from bokeh.models import HoverTool
 
 
 def reduce_dims(name, data, method = 'PCA'):
-    incsv = data.split('.csv')[0]
+    incsv = data.split('.csv')[0].split('/')[-1]
     data = pd.read_csv(data)
     labels = data.iloc[:,-1:]
     data = data.iloc[:,:-1]

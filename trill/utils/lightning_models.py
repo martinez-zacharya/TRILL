@@ -181,9 +181,11 @@ class ProtGPT2(pl.LightningModule):
         
     def configure_optimizers(self):
         if 'deepspeed' in self.strat:
-            optimizer = DeepSpeedCPUAdam(self.model.parameters(), lr=1e-5)
+            optimizer = DeepSpeedCPUAdam(self.model.parameters(), lr=self.lr)
+        elif 'fsdp' in self.strat:
+            optimizer = FusedAdam(self.trainer.model.parameters(), lr=self.lr)
         else:
-            optimizer = torch.optim.Adam(self.model.parameters(), lr=1e-5)
+            optimizer = torch.optim.Adam(self.model.parameters(), lr=self.lr)
         # optimizer = FusedAdam(self.model.parameters(), lr=self.lr)
         return optimizer
     

@@ -382,7 +382,11 @@ def main(args):
                     preds = torch.load(pt)
                     for pred in preds:
                         for sublist in pred:
-                            pred_embeddings.append(tuple([sublist[0][0], sublist[0][1]]))
+                            if len(sublist) == 1:
+                                pred_embeddings.append(tuple([sublist[0][0], sublist[0][1]]))
+                            else:
+                                for sub in sublist:
+                                    pred_embeddings.append(tuple([sub[0], sub[1]]))
                 embedding_df = pd.DataFrame(pred_embeddings, columns = ['Embeddings', 'Label'])
                 finaldf = embedding_df['Embeddings'].apply(pd.Series)
                 finaldf['Label'] = embedding_df['Label']
@@ -459,9 +463,9 @@ def main(args):
 
     elif args.command == 'generate':
         if args.model == 'ProtGPT2':
-            model = ProtGPT2(0.0001)
+            model = ProtGPT2(0.0001, None)
             if args.finetuned != False:
-                model = model.load_from_checkpoint(args.finetuned, strict = False, lr = 0.0001)
+                model = model.load_from_checkpoint(args.finetuned, strict = False, lr = 0.0001, strat = None)
             tokenizer = AutoTokenizer.from_pretrained("nferruz/ProtGPT2")
             generated_output = []
             with open(f'{args.name}_ProtGPT2.fasta', 'w+') as fasta:
