@@ -15,6 +15,7 @@ import pandas as pd
 from pytorch_lightning.loggers import TensorBoardLogger
 from pytorch_lightning.profilers import PyTorchProfiler
 from pytorch_lightning.strategies import DeepSpeedStrategy
+import yaml
 from tqdm import tqdm
 import numpy as np
 from fairscale.nn.data_parallel import FullyShardedDataParallel as FSDP
@@ -142,7 +143,7 @@ def main(args):
     generate.add_argument(
         "model",
         help="Choose between Inverse Folding model 'esm_if1_gvp4_t16_142M_UR50' to facilitate fixed backbone sequence design, ProteinMPNN or ProtGPT2.",
-        choices = ['ESM-IF1','ProtGPT2', 'ProteinMPNN', 'ESM2_Gibbs']
+        choices = ['ESM-IF1','ProtGPT2', 'ProteinMPNN', 'ESM2_Gibbs', 'RFDiffusion']
 )
     generate.add_argument(
         "--finetuned",
@@ -226,11 +227,13 @@ def main(args):
         action="store",
         default = 0,
         )
-    generate.add_argument("--num_iters", 
-        help="How many times to run the forward loop for every batch", 
+    
+    generate.add_argument("--contigs", 
+        help="Generate proteins between these sizes in AAs for RFDiffusion. For example, --contig 100-200, will result in proteins in this range",
         action="store",
-        default = 1,
         )
+
+
     
 
 
@@ -515,8 +518,43 @@ def main(args):
                         out = ''.join(out)
                         fasta.write(f'>{args.name}_{tuned_name[0:-3]}_Gibbs_{i} \n')
                         fasta.write(f'{out}\n')
-                        fasta.flush()    
+                        fasta.flush()  
+        elif args.model == 'RFDiffusion':
+            os.environ['HYDRA_FULL_ERROR'] = '1'
+            os.makedirs("RFDiffusion_weights", exist_ok=True)
+            commands = [
+            'wget -nc http://files.ipd.uw.edu/pub/RFdiffusion/6f5902ac237024bdd0c176cb93063dc4/Base_ckpt.pt', 
+            'wget -nc http://files.ipd.uw.edu/pub/RFdiffusion/e29311f6f1bf1af907f9ef9f44b8328b/Complex_base_ckpt.pt', 
+            'wget -nc http://files.ipd.uw.edu/pub/RFdiffusion/60f09a193fb5e5ccdc4980417708dbab/Complex_Fold_base_ckpt.pt', 
+            'wget -nc http://files.ipd.uw.edu/pub/RFdiffusion/74f51cfb8b440f50d70878e05361d8f0/InpaintSeq_ckpt.pt', 
+            'wget -nc http://files.ipd.uw.edu/pub/RFdiffusion/76d00716416567174cdb7ca96e208296/InpaintSeq_Fold_ckpt.pt', 
+            'wget -nc http://files.ipd.uw.edu/pub/RFdiffusion/5532d2e1f3a4738decd58b19d633b3c3/ActiveSite_ckpt.pt', 
+            'wget -nc http://files.ipd.uw.edu/pub/RFdiffusion/12fc204edeae5b57713c5ad7dcb97d39/Base_epoch8_ckpt.pt'
+            ]
 
+            print('Finding RFDiffusion weights... \n')
+            for command in commands:
+                if not os.path.isfile(f'RFDiffusion_weights/{command.split("/")[-1]}'):
+                    subprocess.run(command.split(' '))
+                    subprocess.run(['mv', command.split("/")[-1], 'RFDiffusion_weights/'])
+            if not os.path.exists('RFDiffusion/'):
+                print('Cloning forked RFDiffusion')
+                os.makedirs('RFDiffusion/')
+                rfdiff = Repo.clone_from('https://github.com/martinez-zacharya/RFDiffusion', 'RFDiffusion/')
+                rfdiff_git_root = rfdiff.git.rev_parse("--show-toplevel")
+                subprocess.run(['pip', 'install', '-e', rfdiff_git_root])
+                command = f'pip install {rfdiff_git_root}/env/SE3Transformer'.split(' ')
+                subprocess.run(command)
+                sys.path.insert(0, 'RFDiffusion/')
+
+            else:
+                sys.path.insert(0, 'RFDiffusion/')
+                git_repo = Repo('RFDiffusion/', search_parent_directories=True)
+                rfdiff_git_root = git_repo.git.rev_parse("--show-toplevel")
+
+            from run_inference import run_rfdiff
+
+            run_rfdiff((f'{rfdiff_git_root}/config/inference/base.yaml'), args)
 
     elif args.command == 'fold':
         data = esm.data.FastaBatchedDataset.from_file(args.query)
