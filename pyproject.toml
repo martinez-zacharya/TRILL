@@ -28,6 +28,10 @@ torch = "^1.12.1"
 pytorch-lightning = "^1.9.0"
 umap-learn = "^0.5.3"
 bokeh = "^3.0.3"
+rdkit = "^2022.9.5"
+e3nn = "^0.5.1"
+biopython = "^1.81"
+spyrmsd = "^0.5.2" 
 
 [tool.poetry.scripts]
 trill = "trill.trill_main:cli"
