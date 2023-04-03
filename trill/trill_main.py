@@ -232,7 +232,24 @@ def main(args):
         help="Generate proteins between these sizes in AAs for RFDiffusion. For example, --contig 100-200, will result in proteins in this range",
         action="store",
         )
-
+    
+    generate.add_argument("--RFDiffusion_Override", 
+        help="Change RFDiffusion model.",
+        action="store",
+        default = False
+        )
+    
+    generate.add_argument("--Inpaint", 
+        help="Residues to inpaint.",
+        action="store",
+        default = None
+        )
+    
+    generate.add_argument("--RFDiffusion_yaml", 
+        help="Specify RFDiffusion params using a yaml file. Easiest option for complicated runs",
+        action="store",
+        default = None
+        )
 
     
 
@@ -554,6 +571,7 @@ def main(args):
 
             from run_inference import run_rfdiff
 
+            
             run_rfdiff((f'{rfdiff_git_root}/config/inference/base.yaml'), args)
 
     elif args.command == 'fold':
