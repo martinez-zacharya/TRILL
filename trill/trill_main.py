@@ -18,6 +18,7 @@ from pytorch_lightning.strategies import DeepSpeedStrategy
 import yaml
 from tqdm import tqdm
 import numpy as np
+from rdkit import Chem
 from fairscale.nn.data_parallel import FullyShardedDataParallel as FSDP
 from fairscale.nn.wrap import enable_wrap, wrap
 
@@ -336,6 +337,52 @@ def main(args):
         action="store_true",
         default=False
         )
+    
+##############################################################################################################
+    dock = subparsers.add_parser('dock', help='Dock protein to protein using DiffDock')
+
+    dock.add_argument("protein", 
+        help="Protein of interest to be docked with ligand", 
+        action="store"
+        )
+    
+    dock.add_argument("ligand", 
+        help="Ligand to dock protein with", 
+        action="store",
+        )
+    dock.add_argument("--save_visualisation", 
+        help="Save a pdb file with all of the steps of the reverse diffusion.", 
+        action="store_true",
+        default=False
+        )
+    
+    dock.add_argument("--samples_per_complex", 
+        help="Number of samples to generate.", 
+        type = int,
+        action="store",
+        default=10
+        )
+    
+    dock.add_argument("--no_final_step_noise", 
+        help="Use no noise in the final step of the reverse diffusion", 
+        action="store_true",
+        default=False
+        )
+    
+    dock.add_argument("--inference_steps", 
+        help="Number of denoising steps", 
+        type=int,
+        action="store",
+        default=20
+        )
+
+    dock.add_argument("--actual_steps", 
+        help="Number of denoising steps that are actually performed", 
+        type=int,
+        action="store",
+        default=None
+        )
+    
 ##############################################################################################################
 
 
@@ -634,6 +681,35 @@ def main(args):
         for identifier, pdb in zip(protein_identifiers, pdb_list):
             with open(f"{identifier}.pdb", "w") as f:
                 f.write("".join(pdb))
+
+    elif args.command == 'dock':
+
+        if args.ligand.endswith(".pdb") or args.ligand.endswith(".PDB"):
+            mol = Chem.MolFromPDBFile(args.ligand)
+            sdf_file = f"{args.ligand.split('.')[0]}.sdf"
+            writer = Chem.SDWriter(sdf_file)
+            writer.write(mol)
+            writer.close()
+            args.ligand = sdf_file
+
+        if not os.path.exists('DiffDock/'):
+            print('Cloning forked DiffDock')
+            os.makedirs('DiffDock/')
+            diffdock = Repo.clone_from('https://github.com/martinez-zacharya/DiffDock', 'DiffDock/')
+            diffdock_root = diffdock.git.rev_parse("--show-toplevel")
+            subprocess.run(['pip', 'install', '-e', diffdock_root])
+            sys.path.insert(0, 'DiffDock/')
+        else:
+            sys.path.insert(0, 'DiffDock/')
+            diffdock = Repo('DiffDock')
+            diffdock_root = diffdock.git.rev_parse("--show-toplevel")
+        from inference import run_diffdock
+        run_diffdock(args, diffdock_root)
+
+
+
+
+        
 
 
 
