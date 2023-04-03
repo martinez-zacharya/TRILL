@@ -1,7 +1,8 @@
 import esm
-from esm.inverse_folding.util import load_structure, extract_coords_from_structure
-from esm.inverse_folding.multichain_util import extract_coords_from_complex, sample_sequence_in_complex
+from esm.inverse_folding.util import load_structure, extract_coords_from_structure, score_sequence
+from esm.inverse_folding.multichain_util import extract_coords_from_complex, sample_sequence_in_complex, score_sequence_in_complex
 import torch
+import numpy as np
 import pandas as pd
 from tqdm import tqdm
 from transformers.models.esm.openfold_utils.protein import to_pdb, Protein as OFProtein
@@ -23,12 +24,15 @@ def ESM_IF1_Wrangle(infile):
     return data
 
 def ESM_IF1(data, genIters, temp):
+    complex_flag = False
     model, alphabet = esm.pretrained.esm_if1_gvp4_t16_142M_UR50()
     model = model.eval()
     sampled_seqs = [()]
     for batch in data:
         coords, native_seq = batch
         chains = list(coords.keys())
+        if len(chains) > 1:
+            complex_flag = True
         loop_chain = tqdm(chains)
         loop_chain.set_description('Chains')
         for coord in coords:
@@ -38,7 +42,20 @@ def ESM_IF1(data, genIters, temp):
             loop_gen_iters.set_description('Generative Iterations')
             for i in loop_gen_iters:
                 sampled_seq = sample_sequence_in_complex(model, coords, chain, temperature=temp)
-                sampled_seqs.append(tuple([sampled_seq, chain]))
+                if complex_flag == False:
+                    ll, _ = score_sequence(
+                    model, alphabet, coords[chain], sampled_seq)
+                else:
+                    try:
+                        coords_4scoring = {}
+                        for k, v in coords.items():
+                            coords_4scoring[k] = v.numpy()
+                        ll, _ = esm.inverse_folding.multichain_util.score_sequence_in_complex(
+                        model, alphabet, coords_4scoring, chain, sampled_seq) 
+                    except ValueError:
+                        print(f'{sampled_seq} could not be scored.')
+                        ll = 'NA'
+                sampled_seqs.append(tuple([sampled_seq, f'{chain}_{ll}']))
     sample_df = pd.DataFrame(sampled_seqs)
     sample_df = sample_df.iloc[1: , :]
     return sample_df
