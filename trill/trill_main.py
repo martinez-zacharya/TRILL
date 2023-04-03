@@ -139,146 +139,174 @@ def main(args):
         dest="strategy",
 )
 ##############################################################################################################
-    generate = subparsers.add_parser('generate', help='Generate proteins using either ESM-IF1, ProtGPT2, ProteinMPNN or Gibbs sampling with a finetuned ESM2')
-    generate.add_argument(
+    inv_fold = subparsers.add_parser('inv_fold_gen', help='Generate proteins using inverse folding')
+    inv_fold.add_argument(
+        "model",
+        help="Choose between ESM-IF1 or ProteinMPNN to generate proteins using inverse folding.",
+        choices = ['ESM-IF1', 'ProteinMPNN']
+    )
+
+    inv_fold.add_argument("query", 
+        help="Input pdb file for inverse folding with ESM_IF1 or ProteinMPNN", 
+        action="store"
+        )
+
+    inv_fold.add_argument(
+        "--temp",
+        help="Choose sampling temperature for ESM_IF1 or ProteinMPNN.",
+        action="store",
+        default = '1'
+        )
+    
+    inv_fold.add_argument(
+        "--num_return_sequences",
+        help="Choose number of proteins for ESM-IF1 or ProteinMPNN to generate.",
+        action="store",
+        default = 1
+        )
+    
+    inv_fold.add_argument(
+        "--max_length",
+        help="Max length of proteins generated from ESM-IF1 or ProteinMPNN",
+        default=500,
+        type=int
+)
+
+    inv_fold.add_argument("--mpnn_model", type=str, default="v_48_020", help="ProteinMPNN model name: v_48_002, v_48_010, v_48_020, v_48_030; v_48_010=version with 48 edges 0.10A noise")
+    inv_fold.add_argument("--save_score", type=int, default=0, help="ProteinMPNN-only argument. 0 for False, 1 for True; save score=-log_prob to npy files")
+    inv_fold.add_argument("--save_probs", type=int, default=0, help="ProteinMPNN-only argument. 0 for False, 1 for True; save MPNN predicted probabilites per position")
+    inv_fold.add_argument("--score_only", type=int, default=0, help="ProteinMPNN-only argument. 0 for False, 1 for True; score input backbone-sequence pairs")
+    inv_fold.add_argument("--path_to_fasta", type=str, default="", help="ProteinMPNN-only argument. score provided input sequence in a fasta format; e.g. GGGGGG/PPPPS/WWW for chains A, B, C sorted alphabetically and separated by /")
+    inv_fold.add_argument("--conditional_probs_only", type=int, default=0, help="ProteinMPNN-only argument. 0 for False, 1 for True; output conditional probabilities p(s_i given the rest of the sequence and backbone)")    
+    inv_fold.add_argument("--conditional_probs_only_backbone", type=int, default=0, help="ProteinMPNN-only argument. 0 for False, 1 for True; if true output conditional probabilities p(s_i given backbone)") 
+    inv_fold.add_argument("--unconditional_probs_only", type=int, default=0, help="ProteinMPNN-only argument. 0 for False, 1 for True; output unconditional probabilities p(s_i given backbone) in one forward pass")   
+    inv_fold.add_argument("--backbone_noise", type=float, default=0.00, help="ProteinMPNN-only argument. Standard deviation of Gaussian noise to add to backbone atoms")
+    inv_fold.add_argument("--batch_size", type=int, default=1, help="ProteinMPNN-only argument. Batch size; can set higher for titan, quadro GPUs, reduce this if running out of GPU memory")
+    inv_fold.add_argument("--pdb_path_chains", type=str, default='', help="ProteinMPNN-only argument. Define which chains need to be designed for a single PDB ")
+    inv_fold.add_argument("--chain_id_jsonl",type=str, default='', help="ProteinMPNN-only argument. Path to a dictionary specifying which chains need to be designed and which ones are fixed, if not specied all chains will be designed.")
+    inv_fold.add_argument("--fixed_positions_jsonl", type=str, default='', help="ProteinMPNN-only argument. Path to a dictionary with fixed positions")
+    inv_fold.add_argument("--omit_AAs", type=list, default='X', help="ProteinMPNN-only argument. Specify which amino acids should be omitted in the generated sequence, e.g. 'AC' would omit alanine and cystine.")
+    inv_fold.add_argument("--bias_AA_jsonl", type=str, default='', help="ProteinMPNN-only argument. Path to a dictionary which specifies AA composion bias if neededi, e.g. {A: -1.1, F: 0.7} would make A less likely and F more likely.")
+    inv_fold.add_argument("--bias_by_res_jsonl", default='', help="ProteinMPNN-only argument. Path to dictionary with per position bias.") 
+    inv_fold.add_argument("--omit_AA_jsonl", type=str, default='', help="ProteinMPNN-only argument. Path to a dictionary which specifies which amino acids need to be omited from design at specific chain indices")
+    inv_fold.add_argument("--pssm_jsonl", type=str, default='', help="ProteinMPNN-only argument. Path to a dictionary with pssm")
+    inv_fold.add_argument("--pssm_multi", type=float, default=0.0, help="ProteinMPNN-only argument. A value between [0.0, 1.0], 0.0 means do not use pssm, 1.0 ignore MPNN predictions")
+    inv_fold.add_argument("--pssm_threshold", type=float, default=0.0, help="ProteinMPNN-only argument. A value between -inf + inf to restric per position AAs")
+    inv_fold.add_argument("--pssm_log_odds_flag", type=int, default=0, help="ProteinMPNN-only argument. 0 for False, 1 for True")
+    inv_fold.add_argument("--pssm_bias_flag", type=int, default=0, help="ProteinMPNN-only argument. 0 for False, 1 for True")
+    inv_fold.add_argument("--tied_positions_jsonl", type=str, default='', help="ProteinMPNN-only argument. Path to a dictionary with tied positions")
+
+##############################################################################################################
+    lang_gen = subparsers.add_parser('lang_gen', help='Generate proteins using large language models including ProtGPT2 and ESM2')
+
+    lang_gen.add_argument(
         "model",
         help="Choose between Inverse Folding model 'esm_if1_gvp4_t16_142M_UR50' to facilitate fixed backbone sequence design, ProteinMPNN or ProtGPT2.",
-        choices = ['ESM-IF1','ProtGPT2', 'ProteinMPNN', 'ESM2_Gibbs', 'RFDiffusion']
+        choices = ['ESM-IF1','ProtGPT2']
 )
-    generate.add_argument(
+    lang_gen.add_argument(
         "--finetuned",
         help="Input path to your own finetuned ProtGPT2 or ESM2 model",
         action="store",
         default = False,
 )
-    generate.add_argument(
+    lang_gen.add_argument(
         "--esm2_arch",
         help="Choose which ESM2 architecture your finetuned model is",
         action="store",
         default = 'esm2_t12_35M_UR50D',
 )
-    generate.add_argument(
+    lang_gen.add_argument(
         "--temp",
         help="Choose sampling temperature for ESM_IF1 or ProteinMPNN.",
         action="store",
         default = '1',
-        dest="temp",
-)
-    
-    generate.add_argument(
-        "--genIters",
-        help="Choose sampling iteration number for ESM_IF1.",
-        action="store",
-        default = 1,
-        dest="genIters",
 )
 
-    generate.add_argument(
+    lang_gen.add_argument(
         "--seed_seq",
-        help="Sequence to seed ProtGPT2 Generation",
+        help="Sequence to seed generation",
         default='M',
-        dest="seed_seq",
 )
-    generate.add_argument(
+    lang_gen.add_argument(
         "--max_length",
-        help="Max length of proteins generated from ProtGPT2 or ProteinMPNN",
-        default=1000,
-        dest="max_length",
+        help="Max length of proteins generated",
+        default=100,
         type=int
 )
-    generate.add_argument(
+    lang_gen.add_argument(
         "--do_sample",
         help="Whether or not to use sampling for ProtGPT2 ; use greedy decoding otherwise",
         default=True,
         dest="do_sample",
 )
-    generate.add_argument(
+    lang_gen.add_argument(
         "--top_k",
         help="The number of highest probability vocabulary tokens to keep for top-k-filtering for ProtGPT2 or ESM2_Gibbs",
         default=950,
         dest="top_k",
         type=int
 )
-    generate.add_argument(
+    lang_gen.add_argument(
         "--repetition_penalty",
         help="The parameter for repetition penalty for ProtGPT2. 1.0 means no penalty",
         default=1.2,
         dest="repetition_penalty",
 )
-    generate.add_argument(
+    lang_gen.add_argument(
         "--num_return_sequences",
-        help="Number of sequences for ProtGPT, ProteinMPNN or ESM2_Gibbs to generate. Default is 5",
+        help="Number of sequences for ProtGPT or ESM2_Gibbs to generate. Default is 5",
         default=5,
         dest="num_return_sequences",
         type=int,
 )
-
-    generate.add_argument("--query", 
-        help="Input pdb or cif file for inverse folding with ESM_IF1", 
-        action="store"
-        )
-    generate.add_argument("--random_fill", 
-        help="Randomly select positions to fill each iteration. If not called then fill the positions in order", 
+    lang_gen.add_argument("--random_fill", 
+        help="Randomly select positions to fill each iteration for Gibbs sampling with ESM2. If not called then fill the positions in order", 
         action="store_false",
         default = True,
         )
-    generate.add_argument("--num_positions", 
-        help="Generate new AAs for this many positions each iteration. If 0, then generate for all target positions each round.", 
+    lang_gen.add_argument("--num_positions", 
+        help="Generate new AAs for this many positions each iteration for Gibbs sampling with ESM2. If 0, then generate for all target positions each round.", 
         action="store",
         default = 0,
         )
     
-    generate.add_argument("--contigs", 
+##############################################################################################################
+    diffuse_gen = subparsers.add_parser('diff_gen', help='Generate proteins using RFDiffusion')
+
+    diffuse_gen.add_argument("--contigs", 
         help="Generate proteins between these sizes in AAs for RFDiffusion. For example, --contig 100-200, will result in proteins in this range",
         action="store",
         )
     
-    generate.add_argument("--RFDiffusion_Override", 
+    diffuse_gen.add_argument("--RFDiffusion_Override", 
         help="Change RFDiffusion model.",
         action="store",
         default = False
         )
     
-    generate.add_argument("--Inpaint", 
+    diffuse_gen.add_argument(
+        "--num_return_sequences",
+        help="Number of sequences for RFDiffusion to generate. Default is 5",
+        default=5,
+        type=int,
+)
+    
+    diffuse_gen.add_argument("--Inpaint", 
         help="Residues to inpaint.",
         action="store",
         default = None
         )
     
-    generate.add_argument("--RFDiffusion_yaml", 
-        help="Specify RFDiffusion params using a yaml file. Easiest option for complicated runs",
-        action="store",
-        default = None
-        )
+    # diffuse_gen.add_argument("--RFDiffusion_yaml", 
+    #     help="Specify RFDiffusion params using a yaml file. Easiest option for complicated runs",
+    #     action="store",
+    #     default = None
+    #     )
 
     
-
-
-
-    generate.add_argument("--mpnn_model", type=str, default="v_48_020", help="ProteinMPNN model name: v_48_002, v_48_010, v_48_020, v_48_030; v_48_010=version with 48 edges 0.10A noise")
-    generate.add_argument("--save_score", type=int, default=0, help="0 for False, 1 for True; save score=-log_prob to npy files")
-    generate.add_argument("--save_probs", type=int, default=0, help="0 for False, 1 for True; save MPNN predicted probabilites per position")
-    generate.add_argument("--score_only", type=int, default=0, help="0 for False, 1 for True; score input backbone-sequence pairs")
-    generate.add_argument("--path_to_fasta", type=str, default="", help="score provided input sequence in a fasta format; e.g. GGGGGG/PPPPS/WWW for chains A, B, C sorted alphabetically and separated by /")
-    generate.add_argument("--conditional_probs_only", type=int, default=0, help="0 for False, 1 for True; output conditional probabilities p(s_i given the rest of the sequence and backbone)")    
-    generate.add_argument("--conditional_probs_only_backbone", type=int, default=0, help="0 for False, 1 for True; if true output conditional probabilities p(s_i given backbone)") 
-    generate.add_argument("--unconditional_probs_only", type=int, default=0, help="0 for False, 1 for True; output unconditional probabilities p(s_i given backbone) in one forward pass")   
-    generate.add_argument("--backbone_noise", type=float, default=0.00, help="Standard deviation of Gaussian noise to add to backbone atoms")
-    generate.add_argument("--batch_size", type=int, default=1, help="Batch size; can set higher for titan, quadro GPUs, reduce this if running out of GPU memory")
-    generate.add_argument("--pdb_path_chains", type=str, default='', help="Define which chains need to be designed for a single PDB ")
-    generate.add_argument("--chain_id_jsonl",type=str, default='', help="Path to a dictionary specifying which chains need to be designed and which ones are fixed, if not specied all chains will be designed.")
-    generate.add_argument("--fixed_positions_jsonl", type=str, default='', help="Path to a dictionary with fixed positions")
-    generate.add_argument("--omit_AAs", type=list, default='X', help="Specify which amino acids should be omitted in the generated sequence, e.g. 'AC' would omit alanine and cystine.")
-    generate.add_argument("--bias_AA_jsonl", type=str, default='', help="Path to a dictionary which specifies AA composion bias if neededi, e.g. {A: -1.1, F: 0.7} would make A less likely and F more likely.")
-    generate.add_argument("--bias_by_res_jsonl", default='', help="Path to dictionary with per position bias.") 
-    generate.add_argument("--omit_AA_jsonl", type=str, default='', help="Path to a dictionary which specifies which amino acids need to be omited from design at specific chain indices")
-    generate.add_argument("--pssm_jsonl", type=str, default='', help="Path to a dictionary with pssm")
-    generate.add_argument("--pssm_multi", type=float, default=0.0, help="A value between [0.0, 1.0], 0.0 means do not use pssm, 1.0 ignore MPNN predictions")
-    generate.add_argument("--pssm_threshold", type=float, default=0.0, help="A value between -inf + inf to restric per position AAs")
-    generate.add_argument("--pssm_log_odds_flag", type=int, default=0, help="0 for False, 1 for True")
-    generate.add_argument("--pssm_bias_flag", type=int, default=0, help="0 for False, 1 for True")
-    generate.add_argument("--tied_positions_jsonl", type=str, default='', help="Path to a dictionary with tied positions")
 ##############################################################################################################
+    
     fold = subparsers.add_parser('fold', help='Predict 3D protein structures using ESMFold')
 
     fold.add_argument("query", 
@@ -290,8 +318,6 @@ def main(args):
         action="store",
         default = None,
         )    
-##############################################################################################################
-
 ##############################################################################################################
     visualize = subparsers.add_parser('visualize', help='Reduce dimensionality of embeddings to 2D')
 
@@ -481,26 +507,14 @@ def main(args):
                 trainer.fit(model=model, train_dataloaders=dataloader)
                 trainer.save_checkpoint(f"{args.name}_{args.model}_{args.epochs}.pt")
 
-    elif args.command == 'generate':
-        if args.model == 'ProtGPT2':
-            model = ProtGPT2(0.0001, None)
-            if args.finetuned != False:
-                model = model.load_from_checkpoint(args.finetuned, strict = False, lr = 0.0001, strat = None)
-            tokenizer = AutoTokenizer.from_pretrained("nferruz/ProtGPT2")
-            generated_output = []
-            with open(f'{args.name}_ProtGPT2.fasta', 'w+') as fasta:
-                for i in tqdm(range(int(args.num_return_sequences))):
-                    generated_output = (model.generate(seed_seq=args.seed_seq, max_length=int(args.max_length), do_sample = args.do_sample, top_k=int(args.top_k), repetition_penalty=float(args.repetition_penalty)))
-                    fasta.write(f'>{args.name}_ProtGPT2_{i} \n')
-                    fasta.write(f'{generated_output[0]}\n')
-                    fasta.flush()
-        elif args.model == 'ESM-IF1':
+    elif args.command == 'inv_fold':
+        if args.model == 'ESM-IF1':
             if args.query == None:
                 raise Exception('A PDB or CIF file is needed for generating new proteins with ESM-IF1')
             data = ESM_IF1_Wrangle(args.query)
             dataloader = torch.utils.data.DataLoader(data, pin_memory = True, batch_size=1, shuffle=False)
-            sample_df = ESM_IF1(dataloader, genIters=int(args.genIters), temp = float(args.temp))
-            sample_df.to_csv(f'{args.name}_IF1_gen.csv', index=False, header = ['Generated_Seq', 'Chain'])
+            sample_df = ESM_IF1(dataloader, genIters=int(args.num_return_sequences), temp = float(args.temp))
+            sample_df.to_csv(f'{args.name}_IF1_gen.csv', index=False, header = ['Generated_Seq', 'Chain_ll'])
         elif args.model == 'ProteinMPNN':
             if not os.path.exists('ProteinMPNN/'):
                 print('Cloning forked ProteinMPNN')
@@ -513,6 +527,20 @@ def main(args):
             from mpnnrun import run_mpnn
             print('ProteinMPNN generation starting...')
             run_mpnn(args)
+        
+    elif args.command == 'lang_gen':
+        if args.model == 'ProtGPT2':
+            model = ProtGPT2(0.0001, None)
+            if args.finetuned != False:
+                model = model.load_from_checkpoint(args.finetuned, strict = False, lr = 0.0001, strat = None)
+            tokenizer = AutoTokenizer.from_pretrained("nferruz/ProtGPT2")
+            generated_output = []
+            with open(f'{args.name}_ProtGPT2.fasta', 'w+') as fasta:
+                for i in tqdm(range(int(args.num_return_sequences))):
+                    generated_output = (model.generate(seed_seq=args.seed_seq, max_length=int(args.max_length), do_sample = args.do_sample, top_k=int(args.top_k), repetition_penalty=float(args.repetition_penalty)))
+                    fasta.write(f'>{args.name}_ProtGPT2_{i} \n')
+                    fasta.write(f'{generated_output[0]}\n')
+                    fasta.flush()
         elif args.model == 'ESM2_Gibbs':
             model_import_name = f'esm.pretrained.{args.esm2_arch}()'
             with open(f'{args.name}_{args.esm2_arch}_Gibbs.fasta', 'w+') as fasta:
@@ -536,43 +564,43 @@ def main(args):
                         fasta.write(f'>{args.name}_{tuned_name[0:-3]}_Gibbs_{i} \n')
                         fasta.write(f'{out}\n')
                         fasta.flush()  
-        elif args.model == 'RFDiffusion':
-            os.environ['HYDRA_FULL_ERROR'] = '1'
-            os.makedirs("RFDiffusion_weights", exist_ok=True)
-            commands = [
-            'wget -nc http://files.ipd.uw.edu/pub/RFdiffusion/6f5902ac237024bdd0c176cb93063dc4/Base_ckpt.pt', 
-            'wget -nc http://files.ipd.uw.edu/pub/RFdiffusion/e29311f6f1bf1af907f9ef9f44b8328b/Complex_base_ckpt.pt', 
-            'wget -nc http://files.ipd.uw.edu/pub/RFdiffusion/60f09a193fb5e5ccdc4980417708dbab/Complex_Fold_base_ckpt.pt', 
-            'wget -nc http://files.ipd.uw.edu/pub/RFdiffusion/74f51cfb8b440f50d70878e05361d8f0/InpaintSeq_ckpt.pt', 
-            'wget -nc http://files.ipd.uw.edu/pub/RFdiffusion/76d00716416567174cdb7ca96e208296/InpaintSeq_Fold_ckpt.pt', 
-            'wget -nc http://files.ipd.uw.edu/pub/RFdiffusion/5532d2e1f3a4738decd58b19d633b3c3/ActiveSite_ckpt.pt', 
-            'wget -nc http://files.ipd.uw.edu/pub/RFdiffusion/12fc204edeae5b57713c5ad7dcb97d39/Base_epoch8_ckpt.pt'
-            ]
+    elif args.command == 'RFDiffusion':
+        os.environ['HYDRA_FULL_ERROR'] = '1'
+        os.makedirs("RFDiffusion_weights", exist_ok=True)
+        commands = [
+        'wget -nc http://files.ipd.uw.edu/pub/RFdiffusion/6f5902ac237024bdd0c176cb93063dc4/Base_ckpt.pt', 
+        'wget -nc http://files.ipd.uw.edu/pub/RFdiffusion/e29311f6f1bf1af907f9ef9f44b8328b/Complex_base_ckpt.pt', 
+        'wget -nc http://files.ipd.uw.edu/pub/RFdiffusion/60f09a193fb5e5ccdc4980417708dbab/Complex_Fold_base_ckpt.pt', 
+        'wget -nc http://files.ipd.uw.edu/pub/RFdiffusion/74f51cfb8b440f50d70878e05361d8f0/InpaintSeq_ckpt.pt', 
+        'wget -nc http://files.ipd.uw.edu/pub/RFdiffusion/76d00716416567174cdb7ca96e208296/InpaintSeq_Fold_ckpt.pt', 
+        'wget -nc http://files.ipd.uw.edu/pub/RFdiffusion/5532d2e1f3a4738decd58b19d633b3c3/ActiveSite_ckpt.pt', 
+        'wget -nc http://files.ipd.uw.edu/pub/RFdiffusion/12fc204edeae5b57713c5ad7dcb97d39/Base_epoch8_ckpt.pt'
+        ]
 
-            print('Finding RFDiffusion weights... \n')
-            for command in commands:
-                if not os.path.isfile(f'RFDiffusion_weights/{command.split("/")[-1]}'):
-                    subprocess.run(command.split(' '))
-                    subprocess.run(['mv', command.split("/")[-1], 'RFDiffusion_weights/'])
-            if not os.path.exists('RFDiffusion/'):
-                print('Cloning forked RFDiffusion')
-                os.makedirs('RFDiffusion/')
-                rfdiff = Repo.clone_from('https://github.com/martinez-zacharya/RFDiffusion', 'RFDiffusion/')
-                rfdiff_git_root = rfdiff.git.rev_parse("--show-toplevel")
-                subprocess.run(['pip', 'install', '-e', rfdiff_git_root])
-                command = f'pip install {rfdiff_git_root}/env/SE3Transformer'.split(' ')
-                subprocess.run(command)
-                sys.path.insert(0, 'RFDiffusion/')
+        print('Finding RFDiffusion weights... \n')
+        for command in commands:
+            if not os.path.isfile(f'RFDiffusion_weights/{command.split("/")[-1]}'):
+                subprocess.run(command.split(' '))
+                subprocess.run(['mv', command.split("/")[-1], 'RFDiffusion_weights/'])
+        if not os.path.exists('RFDiffusion/'):
+            print('Cloning forked RFDiffusion')
+            os.makedirs('RFDiffusion/')
+            rfdiff = Repo.clone_from('https://github.com/martinez-zacharya/RFDiffusion', 'RFDiffusion/')
+            rfdiff_git_root = rfdiff.git.rev_parse("--show-toplevel")
+            subprocess.run(['pip', 'install', '-e', rfdiff_git_root])
+            command = f'pip install {rfdiff_git_root}/env/SE3Transformer'.split(' ')
+            subprocess.run(command)
+            sys.path.insert(0, 'RFDiffusion/')
 
-            else:
-                sys.path.insert(0, 'RFDiffusion/')
-                git_repo = Repo('RFDiffusion/', search_parent_directories=True)
-                rfdiff_git_root = git_repo.git.rev_parse("--show-toplevel")
+        else:
+            sys.path.insert(0, 'RFDiffusion/')
+            git_repo = Repo('RFDiffusion/', search_parent_directories=True)
+            rfdiff_git_root = git_repo.git.rev_parse("--show-toplevel")
 
-            from run_inference import run_rfdiff
+        from run_inference import run_rfdiff
 
-            
-            run_rfdiff((f'{rfdiff_git_root}/config/inference/base.yaml'), args)
+        
+        run_rfdiff((f'{rfdiff_git_root}/config/inference/base.yaml'), args)
 
     elif args.command == 'fold':
         data = esm.data.FastaBatchedDataset.from_file(args.query)
@@ -723,127 +751,174 @@ def return_parser():
         dest="strategy",
 )
 ##############################################################################################################
-    generate = subparsers.add_parser('generate', help='Generate proteins using either ESM-IF1, ProtGPT2, ProteinMPNN or Gibbs sampling with a finetuned ESM2')
-    generate.add_argument(
+    inv_fold = subparsers.add_parser('inv_fold_gen', help='Generate proteins using inverse folding')
+    inv_fold.add_argument(
+        "model",
+        help="Choose between ESM-IF1 or ProteinMPNN to generate proteins using inverse folding.",
+        choices = ['ESM-IF1', 'ProteinMPNN']
+    )
+
+    inv_fold.add_argument("query", 
+        help="Input pdb file for inverse folding with ESM_IF1 or ProteinMPNN", 
+        action="store"
+        )
+
+    inv_fold.add_argument(
+        "--temp",
+        help="Choose sampling temperature for ESM_IF1 or ProteinMPNN.",
+        action="store",
+        default = '1'
+        )
+    
+    inv_fold.add_argument(
+        "--num_return_sequences",
+        help="Choose number of proteins for ESM-IF1 or ProteinMPNN to generate.",
+        action="store",
+        default = 1
+        )
+    
+    inv_fold.add_argument(
+        "--max_length",
+        help="Max length of proteins generated from ESM-IF1 or ProteinMPNN",
+        default=500,
+        type=int
+)
+
+    inv_fold.add_argument("--mpnn_model", type=str, default="v_48_020", help="ProteinMPNN model name: v_48_002, v_48_010, v_48_020, v_48_030; v_48_010=version with 48 edges 0.10A noise")
+    inv_fold.add_argument("--save_score", type=int, default=0, help="ProteinMPNN-only argument. 0 for False, 1 for True; save score=-log_prob to npy files")
+    inv_fold.add_argument("--save_probs", type=int, default=0, help="ProteinMPNN-only argument. 0 for False, 1 for True; save MPNN predicted probabilites per position")
+    inv_fold.add_argument("--score_only", type=int, default=0, help="ProteinMPNN-only argument. 0 for False, 1 for True; score input backbone-sequence pairs")
+    inv_fold.add_argument("--path_to_fasta", type=str, default="", help="ProteinMPNN-only argument. score provided input sequence in a fasta format; e.g. GGGGGG/PPPPS/WWW for chains A, B, C sorted alphabetically and separated by /")
+    inv_fold.add_argument("--conditional_probs_only", type=int, default=0, help="ProteinMPNN-only argument. 0 for False, 1 for True; output conditional probabilities p(s_i given the rest of the sequence and backbone)")    
+    inv_fold.add_argument("--conditional_probs_only_backbone", type=int, default=0, help="ProteinMPNN-only argument. 0 for False, 1 for True; if true output conditional probabilities p(s_i given backbone)") 
+    inv_fold.add_argument("--unconditional_probs_only", type=int, default=0, help="ProteinMPNN-only argument. 0 for False, 1 for True; output unconditional probabilities p(s_i given backbone) in one forward pass")   
+    inv_fold.add_argument("--backbone_noise", type=float, default=0.00, help="ProteinMPNN-only argument. Standard deviation of Gaussian noise to add to backbone atoms")
+    inv_fold.add_argument("--batch_size", type=int, default=1, help="ProteinMPNN-only argument. Batch size; can set higher for titan, quadro GPUs, reduce this if running out of GPU memory")
+    inv_fold.add_argument("--pdb_path_chains", type=str, default='', help="ProteinMPNN-only argument. Define which chains need to be designed for a single PDB ")
+    inv_fold.add_argument("--chain_id_jsonl",type=str, default='', help="ProteinMPNN-only argument. Path to a dictionary specifying which chains need to be designed and which ones are fixed, if not specied all chains will be designed.")
+    inv_fold.add_argument("--fixed_positions_jsonl", type=str, default='', help="ProteinMPNN-only argument. Path to a dictionary with fixed positions")
+    inv_fold.add_argument("--omit_AAs", type=list, default='X', help="ProteinMPNN-only argument. Specify which amino acids should be omitted in the generated sequence, e.g. 'AC' would omit alanine and cystine.")
+    inv_fold.add_argument("--bias_AA_jsonl", type=str, default='', help="ProteinMPNN-only argument. Path to a dictionary which specifies AA composion bias if neededi, e.g. {A: -1.1, F: 0.7} would make A less likely and F more likely.")
+    inv_fold.add_argument("--bias_by_res_jsonl", default='', help="ProteinMPNN-only argument. Path to dictionary with per position bias.") 
+    inv_fold.add_argument("--omit_AA_jsonl", type=str, default='', help="ProteinMPNN-only argument. Path to a dictionary which specifies which amino acids need to be omited from design at specific chain indices")
+    inv_fold.add_argument("--pssm_jsonl", type=str, default='', help="ProteinMPNN-only argument. Path to a dictionary with pssm")
+    inv_fold.add_argument("--pssm_multi", type=float, default=0.0, help="ProteinMPNN-only argument. A value between [0.0, 1.0], 0.0 means do not use pssm, 1.0 ignore MPNN predictions")
+    inv_fold.add_argument("--pssm_threshold", type=float, default=0.0, help="ProteinMPNN-only argument. A value between -inf + inf to restric per position AAs")
+    inv_fold.add_argument("--pssm_log_odds_flag", type=int, default=0, help="ProteinMPNN-only argument. 0 for False, 1 for True")
+    inv_fold.add_argument("--pssm_bias_flag", type=int, default=0, help="ProteinMPNN-only argument. 0 for False, 1 for True")
+    inv_fold.add_argument("--tied_positions_jsonl", type=str, default='', help="ProteinMPNN-only argument. Path to a dictionary with tied positions")
+
+##############################################################################################################
+    lang_gen = subparsers.add_parser('lang_gen', help='Generate proteins using large language models including ProtGPT2 and ESM2')
+
+    lang_gen.add_argument(
         "model",
         help="Choose between Inverse Folding model 'esm_if1_gvp4_t16_142M_UR50' to facilitate fixed backbone sequence design, ProteinMPNN or ProtGPT2.",
-        choices = ['ESM-IF1','ProtGPT2', 'ProteinMPNN', 'ESM2_Gibbs']
+        choices = ['ESM-IF1','ProtGPT2']
 )
-    generate.add_argument(
+    lang_gen.add_argument(
         "--finetuned",
         help="Input path to your own finetuned ProtGPT2 or ESM2 model",
         action="store",
         default = False,
 )
-    generate.add_argument(
+    lang_gen.add_argument(
         "--esm2_arch",
         help="Choose which ESM2 architecture your finetuned model is",
         action="store",
         default = 'esm2_t12_35M_UR50D',
 )
-    generate.add_argument(
+    lang_gen.add_argument(
         "--temp",
         help="Choose sampling temperature for ESM_IF1 or ProteinMPNN.",
         action="store",
         default = '1',
-        dest="temp",
-)
-    
-    generate.add_argument(
-        "--genIters",
-        help="Choose sampling iteration number for ESM_IF1.",
-        action="store",
-        default = 1,
-        dest="genIters",
 )
 
-    generate.add_argument(
+    lang_gen.add_argument(
         "--seed_seq",
-        help="Sequence to seed ProtGPT2 Generation",
+        help="Sequence to seed generation",
         default='M',
-        dest="seed_seq",
 )
-    generate.add_argument(
+    lang_gen.add_argument(
         "--max_length",
-        help="Max length of proteins generated from ProtGPT2 or ProteinMPNN",
-        default=1000,
-        dest="max_length",
+        help="Max length of proteins generated",
+        default=100,
         type=int
 )
-    generate.add_argument(
+    lang_gen.add_argument(
         "--do_sample",
         help="Whether or not to use sampling for ProtGPT2 ; use greedy decoding otherwise",
         default=True,
         dest="do_sample",
 )
-    generate.add_argument(
+    lang_gen.add_argument(
         "--top_k",
         help="The number of highest probability vocabulary tokens to keep for top-k-filtering for ProtGPT2 or ESM2_Gibbs",
         default=950,
         dest="top_k",
         type=int
 )
-    generate.add_argument(
+    lang_gen.add_argument(
         "--repetition_penalty",
         help="The parameter for repetition penalty for ProtGPT2. 1.0 means no penalty",
         default=1.2,
         dest="repetition_penalty",
 )
-    generate.add_argument(
+    lang_gen.add_argument(
         "--num_return_sequences",
-        help="Number of sequences for ProtGPT, ProteinMPNN or ESM2_Gibbs to generate. Default is 5",
+        help="Number of sequences for ProtGPT or ESM2_Gibbs to generate. Default is 5",
         default=5,
         dest="num_return_sequences",
         type=int,
 )
-
-    generate.add_argument("--query", 
-        help="Input pdb or cif file for inverse folding with ESM_IF1", 
-        action="store"
-        )
-    generate.add_argument("--random_fill", 
-        help="Randomly select positions to fill each iteration. If not called then fill the positions in order", 
+    lang_gen.add_argument("--random_fill", 
+        help="Randomly select positions to fill each iteration for Gibbs sampling with ESM2. If not called then fill the positions in order", 
         action="store_false",
         default = True,
         )
-    generate.add_argument("--num_positions", 
-        help="Generate new AAs for this many positions each iteration. If 0, then generate for all target positions each round.", 
+    lang_gen.add_argument("--num_positions", 
+        help="Generate new AAs for this many positions each iteration for Gibbs sampling with ESM2. If 0, then generate for all target positions each round.", 
         action="store",
         default = 0,
         )
-    generate.add_argument("--num_iters", 
-        help="How many times to run the forward loop for every batch", 
+    
+##############################################################################################################
+    diffuse_gen = subparsers.add_parser('diff_gen', help='Generate proteins using RFDiffusion')
+
+    diffuse_gen.add_argument("--contigs", 
+        help="Generate proteins between these sizes in AAs for RFDiffusion. For example, --contig 100-200, will result in proteins in this range",
         action="store",
-        default = 1,
         )
     
+    diffuse_gen.add_argument("--RFDiffusion_Override", 
+        help="Change RFDiffusion model.",
+        action="store",
+        default = False
+        )
+    
+    diffuse_gen.add_argument(
+        "--num_return_sequences",
+        help="Number of sequences for RFDiffusion to generate. Default is 5",
+        default=5,
+        type=int,
+)
+    
+    diffuse_gen.add_argument("--Inpaint", 
+        help="Residues to inpaint.",
+        action="store",
+        default = None
+        )
+    
+    # diffuse_gen.add_argument("--RFDiffusion_yaml", 
+    #     help="Specify RFDiffusion params using a yaml file. Easiest option for complicated runs",
+    #     action="store",
+    #     default = None
+    #     )
 
-
-
-    generate.add_argument("--mpnn_model", type=str, default="v_48_020", help="ProteinMPNN model name: v_48_002, v_48_010, v_48_020, v_48_030; v_48_010=version with 48 edges 0.10A noise")
-    generate.add_argument("--save_score", type=int, default=0, help="0 for False, 1 for True; save score=-log_prob to npy files")
-    generate.add_argument("--save_probs", type=int, default=0, help="0 for False, 1 for True; save MPNN predicted probabilites per position")
-    generate.add_argument("--score_only", type=int, default=0, help="0 for False, 1 for True; score input backbone-sequence pairs")
-    generate.add_argument("--path_to_fasta", type=str, default="", help="score provided input sequence in a fasta format; e.g. GGGGGG/PPPPS/WWW for chains A, B, C sorted alphabetically and separated by /")
-    generate.add_argument("--conditional_probs_only", type=int, default=0, help="0 for False, 1 for True; output conditional probabilities p(s_i given the rest of the sequence and backbone)")    
-    generate.add_argument("--conditional_probs_only_backbone", type=int, default=0, help="0 for False, 1 for True; if true output conditional probabilities p(s_i given backbone)") 
-    generate.add_argument("--unconditional_probs_only", type=int, default=0, help="0 for False, 1 for True; output unconditional probabilities p(s_i given backbone) in one forward pass")   
-    generate.add_argument("--backbone_noise", type=float, default=0.00, help="Standard deviation of Gaussian noise to add to backbone atoms")
-    generate.add_argument("--batch_size", type=int, default=1, help="Batch size; can set higher for titan, quadro GPUs, reduce this if running out of GPU memory")
-    generate.add_argument("--pdb_path_chains", type=str, default='', help="Define which chains need to be designed for a single PDB ")
-    generate.add_argument("--chain_id_jsonl",type=str, default='', help="Path to a dictionary specifying which chains need to be designed and which ones are fixed, if not specied all chains will be designed.")
-    generate.add_argument("--fixed_positions_jsonl", type=str, default='', help="Path to a dictionary with fixed positions")
-    generate.add_argument("--omit_AAs", type=list, default='X', help="Specify which amino acids should be omitted in the generated sequence, e.g. 'AC' would omit alanine and cystine.")
-    generate.add_argument("--bias_AA_jsonl", type=str, default='', help="Path to a dictionary which specifies AA composion bias if neededi, e.g. {A: -1.1, F: 0.7} would make A less likely and F more likely.")
-    generate.add_argument("--bias_by_res_jsonl", default='', help="Path to dictionary with per position bias.") 
-    generate.add_argument("--omit_AA_jsonl", type=str, default='', help="Path to a dictionary which specifies which amino acids need to be omited from design at specific chain indices")
-    generate.add_argument("--pssm_jsonl", type=str, default='', help="Path to a dictionary with pssm")
-    generate.add_argument("--pssm_multi", type=float, default=0.0, help="A value between [0.0, 1.0], 0.0 means do not use pssm, 1.0 ignore MPNN predictions")
-    generate.add_argument("--pssm_threshold", type=float, default=0.0, help="A value between -inf + inf to restric per position AAs")
-    generate.add_argument("--pssm_log_odds_flag", type=int, default=0, help="0 for False, 1 for True")
-    generate.add_argument("--pssm_bias_flag", type=int, default=0, help="0 for False, 1 for True")
-    generate.add_argument("--tied_positions_jsonl", type=str, default='', help="Path to a dictionary with tied positions")
+    
 ##############################################################################################################
+    
     fold = subparsers.add_parser('fold', help='Predict 3D protein structures using ESMFold')
 
     fold.add_argument("query", 
@@ -855,8 +930,6 @@ def return_parser():
         action="store",
         default = None,
         )    
-##############################################################################################################
-
 ##############################################################################################################
     visualize = subparsers.add_parser('visualize', help='Reduce dimensionality of embeddings to 2D')
 
@@ -907,4 +980,5 @@ def return_parser():
         action="store",
         default = 123
 )
+
     return parser
