@@ -38,6 +38,7 @@ torch-geometric = "^2.3.0"
 torch-scatter = {version = "2.1.1", source = 'pyg'}
 torch-sparse = {version = "0.6.17", source = 'pyg'}
 torch-spline-conv = {version = "1.2.2", source = 'pyg'}
+SentencePiece = "^0.1.97"
 
 [tool.poetry.scripts]
 trill = "trill.trill_main:cli"

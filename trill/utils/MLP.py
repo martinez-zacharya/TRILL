@@ -40,7 +40,7 @@ def inference_epoch(model, test_loader, device="cpu"):
     inferences = {}
     for i, data in enumerate(test_loader, 0):
         inputs = data[0][0]
-        targets = data[1][0][0]
+        targets = data[1][0]
         inputs = inputs.to(device)
         outputs = model(inputs.float())
         outputs = outputs.detach().cpu().numpy()

@@ -60,6 +60,39 @@ def main(args):
         default = 1
 )
 
+    parser.add_argument(
+        "--nodes",
+        help="Input total number of nodes. Default is 1",
+        action="store",
+        default = 1
+)
+    
+
+    parser.add_argument(
+        "--logger",
+        help="Enable Tensorboard logger. Default is None",
+        action="store",
+        default = False,
+        dest="logger",
+)
+
+    parser.add_argument(
+        "--profiler",
+        help="Utilize PyTorchProfiler",
+        action="store_true",
+        default=False,
+        dest="profiler",
+)
+    parser.add_argument(
+        "--RNG_seed",
+        help="Input RNG seed. Default is 123",
+        action="store",
+        default = 123
+)
+
+
+##############################################################################################################
+
     subparsers = parser.add_subparsers(dest='command')
 
     embed = subparsers.add_parser('embed', help='Embed proteins of interest')
@@ -85,7 +118,7 @@ def main(args):
 )
     embed.add_argument(
         "--model",
-        help="Change model. Default is esm2_t12_35M_UR50D. You can choose from a list of ESM2 models which can be found at https://github.com/facebookresearch/esm",
+        help="Change model. Default is esm2_t12_35M_UR50D. You can choose from a list of ESM2 models which can be found at https://github.com/facebookresearch/esm or use encoder-only ProtT5-XL-UniRef50 with --model ProtT5-XL",
         action="store",
         default = 'esm2_t12_35M_UR50D',
         dest="model",
@@ -220,7 +253,7 @@ def main(args):
 )
     lang_gen.add_argument(
         "--temp",
-        help="Choose sampling temperature for ESM_IF1 or ProteinMPNN.",
+        help="Choose sampling temperature.",
         action="store",
         default = '1',
 )
@@ -298,6 +331,17 @@ def main(args):
         help="Residues to inpaint.",
         action="store",
         default = None
+        )
+    
+    diffuse_gen.add_argument("--query", 
+        help="Input pdb file for motif scaffolding, partial diffusion etc.",
+        action="store",
+        )
+    
+    diffuse_gen.add_argument("--sym", 
+        help="Use this flag to generate symmetrical oligomers.",
+        action="store_true",
+        default=False
         )
     
     # diffuse_gen.add_argument("--RFDiffusion_yaml", 
@@ -403,36 +447,6 @@ def main(args):
         )
     
 ##############################################################################################################
-    parser.add_argument(
-        "--nodes",
-        help="Input total number of nodes. Default is 1",
-        action="store",
-        default = 1
-)
-    
-
-    parser.add_argument(
-        "--logger",
-        help="Enable Tensorboard logger. Default is None",
-        action="store",
-        default = False,
-        dest="logger",
-)
-
-    parser.add_argument(
-        "--profiler",
-        help="Utilize PyTorchProfiler",
-        action="store_true",
-        default=False,
-        dest="profiler",
-)
-    parser.add_argument(
-        "--RNG_seed",
-        help="Input RNG seed. Default is 123",
-        action="store",
-        default = 123
-)
-
 
     
 
@@ -475,6 +489,34 @@ def main(args):
         if args.query.endswith(('.fasta', '.faa', '.fa')) == False:
             raise Exception(f'Input query file - {args.query} is not a valid file format.\
             File needs to be a protein fasta (.fa, .fasta, .faa)')
+        if args.model == "ProtT5-XL":
+            model = ProtT5()
+            data = esm.data.FastaBatchedDataset.from_file(args.query)
+            dataloader = torch.utils.data.DataLoader(data, shuffle = False, batch_size = int(args.batch_size), num_workers=0)
+            pred_writer = CustomWriter(output_dir=".", write_interval="epoch")
+            trainer = pl.Trainer(enable_checkpointing=False, devices=int(args.GPUs), callbacks = [pred_writer], accelerator='gpu', logger=logger, num_nodes=int(args.nodes))
+            trainer.predict(model, dataloader)
+            cwd_files = os.listdir()
+            pt_files = [file for file in cwd_files if 'predictions_' in file]
+            pred_embeddings = []
+            for pt in pt_files:
+                preds = torch.load(pt)
+                for pred in preds:
+                    for sublist in pred:
+                        if len(sublist) == 2:
+                            pred_embeddings.append(tuple([sublist[0], sublist[1]]))
+                        else:
+                            for sub in sublist:
+                                print(sub[0])
+                                print(sub[1])
+                        #     for sub in sublist:
+                        #         pred_embeddings.append(tuple([sub[0], sub[1]]))
+            embedding_df = pd.DataFrame(pred_embeddings, columns = ['Embeddings', 'Label'])
+            finaldf = embedding_df['Embeddings'].apply(pd.Series)
+            finaldf['Label'] = embedding_df['Label']
+            finaldf.to_csv(f'{args.name}_{args.model}.csv', index = False)
+            for file in pt_files:
+                os.remove(file)
         else:
             model_import_name = f'esm.pretrained.{args.model}()'
             model = ESM(eval(model_import_name), 0.0001, False)
@@ -668,10 +710,11 @@ def main(args):
             rfdiff_git_root = git_repo.git.rev_parse("--show-toplevel")
 
         from run_inference import run_rfdiff
-
-        
-        run_rfdiff((f'{rfdiff_git_root}/config/inference/base.yaml'), args)
-
+        if args.sym:
+            run_rfdiff((f'{rfdiff_git_root}/config/inference/symmetry.yaml'), args)
+        else:    
+            run_rfdiff((f'{rfdiff_git_root}/config/inference/base.yaml'), args)
+            
     elif args.command == 'fold':
         data = esm.data.FastaBatchedDataset.from_file(args.query)
         tokenizer = AutoTokenizer.from_pretrained("facebook/esmfold_v1")
@@ -706,15 +749,6 @@ def main(args):
                 f.write("".join(pdb))
 
     elif args.command == 'dock':
-
-        # if args.ligand.endswith(".pdb") or args.ligand.endswith(".PDB"):
-        #     mol = Chem.MolFromPDBFile(args.ligand)
-        #     sdf_file = f"{args.ligand.split('.')[0]}.sdf"
-        #     writer = Chem.SDWriter(sdf_file)
-        #     writer.write(mol)
-        #     writer.close()
-        #     args.ligand = sdf_file
-
         if not os.path.exists('DiffDock/'):
             print('Cloning forked DiffDock')
             os.makedirs('DiffDock/')
@@ -734,17 +768,17 @@ def main(args):
         model = ProtT5()
         dataloader = torch.utils.data.DataLoader(data, shuffle = False, batch_size = 1, num_workers=0)
         trainer = pl.Trainer(enable_checkpointing=False, devices=int(args.GPUs), accelerator='gpu', logger=logger, num_nodes=int(args.nodes))
-        trainer.predict(model, dataloader)
+        reps = trainer.predict(model, dataloader)
         if args.save_emb:
             emb_4export = []
-            for rep in model.reps:
+            for rep in reps:
                 intermed = []
                 for i in range(len(rep[0])):
                     intermed.append(rep[0][i].cpu().numpy())
-                intermed.append(rep[1][0])
+                intermed.append(rep[1])
                 emb_4export.append(intermed)
             emb_df = pd.DataFrame(emb_4export)
-            emb_df.to_csv(f'{args.name}_prot_t5_xl_half_uniref50-enc_embeddings.csv', index=False)
+            emb_df.to_csv(f'{args.name}_ProtT5-XL_embeddings.csv', index=False)
         if not os.path.exists('TemStaPro_models/'):
             temstapro_models = Repo.clone_from('https://github.com/martinez-zacharya/TemStaPro_models', 'TemStaPro_models/')
             temstapro_models_root = temstapro_models.git.rev_parse("--show-toplevel")
@@ -754,7 +788,7 @@ def main(args):
         dataloader = torch.utils.data.DataLoader(data, shuffle = False, batch_size = 1, num_workers=0)
         THRESHOLDS = ["40", "45", "50", "55", "60", "65"]
         SEEDS = ["41", "42", "43", "44", "45"]
-        emb_loader = torch.utils.data.DataLoader(model.reps, shuffle = False, batch_size = 1, num_workers = 0)
+        emb_loader = torch.utils.data.DataLoader(reps, shuffle = False, batch_size = 1, num_workers = 0)
         inferences = {}
         for thresh in THRESHOLDS:
             threshold_inferences = {}
@@ -819,6 +853,39 @@ def return_parser():
         default = 1
 )
 
+    parser.add_argument(
+        "--nodes",
+        help="Input total number of nodes. Default is 1",
+        action="store",
+        default = 1
+)
+    
+
+    parser.add_argument(
+        "--logger",
+        help="Enable Tensorboard logger. Default is None",
+        action="store",
+        default = False,
+        dest="logger",
+)
+
+    parser.add_argument(
+        "--profiler",
+        help="Utilize PyTorchProfiler",
+        action="store_true",
+        default=False,
+        dest="profiler",
+)
+    parser.add_argument(
+        "--RNG_seed",
+        help="Input RNG seed. Default is 123",
+        action="store",
+        default = 123
+)
+
+
+##############################################################################################################
+
     subparsers = parser.add_subparsers(dest='command')
 
     embed = subparsers.add_parser('embed', help='Embed proteins of interest')
@@ -844,7 +911,7 @@ def return_parser():
 )
     embed.add_argument(
         "--model",
-        help="Change model. Default is esm2_t12_35M_UR50D. You can choose from a list of ESM2 models which can be found at https://github.com/facebookresearch/esm",
+        help="Change model. Default is esm2_t12_35M_UR50D. You can choose from a list of ESM2 models which can be found at https://github.com/facebookresearch/esm or use encoder-only ProtT5-XL-UniRef50 with --model ProtT5-XL",
         action="store",
         default = 'esm2_t12_35M_UR50D',
         dest="model",
@@ -979,7 +1046,7 @@ def return_parser():
 )
     lang_gen.add_argument(
         "--temp",
-        help="Choose sampling temperature for ESM_IF1 or ProteinMPNN.",
+        help="Choose sampling temperature.",
         action="store",
         default = '1',
 )
@@ -1059,6 +1126,17 @@ def return_parser():
         default = None
         )
     
+    diffuse_gen.add_argument("--query", 
+        help="Input pdb file for motif scaffolding, partial diffusion etc.",
+        action="store",
+        )
+    
+    diffuse_gen.add_argument("--sym", 
+        help="Use this flag to generate symmetrical oligomers.",
+        action="store_true",
+        default=False
+        )
+    
     # diffuse_gen.add_argument("--RFDiffusion_yaml", 
     #     help="Specify RFDiffusion params using a yaml file. Easiest option for complicated runs",
     #     action="store",
@@ -1066,7 +1144,7 @@ def return_parser():
     #     )
 
 ##############################################################################################################
-    classify = subparsers.add_parser('classify', help='Generate proteins using large language models including ProtGPT2 and ESM2')
+    classify = subparsers.add_parser('classify', help='Classify proteins based on thermostability predicted through TemStaPro')
 
     classify.add_argument(
         "classifier",
@@ -1160,34 +1238,3 @@ def return_parser():
         action="store",
         default=None
         )
-    
-##############################################################################################################
-    parser.add_argument(
-        "--nodes",
-        help="Input total number of nodes. Default is 1",
-        action="store",
-        default = 1
-)
-    
-
-    parser.add_argument(
-        "--logger",
-        help="Enable Tensorboard logger. Default is None",
-        action="store",
-        default = False,
-        dest="logger",
-)
-
-    parser.add_argument(
-        "--profiler",
-        help="Utilize PyTorchProfiler",
-        action="store_true",
-        default=False,
-        dest="profiler",
-)
-    parser.add_argument(
-        "--RNG_seed",
-        help="Input RNG seed. Default is 123",
-        action="store",
-        default = 123
-)

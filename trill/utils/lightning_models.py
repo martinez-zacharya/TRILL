@@ -556,6 +556,7 @@ class ProtT5(pl.LightningModule):
         self.tokenizer = T5Tokenizer.from_pretrained('Rostlab/prot_t5_xl_half_uniref50-enc', do_lower_case=False)
         self.reps = []
 
+
     def training_step(self, batch, batch_idx):
         loss = 0
         return {"loss": loss}
@@ -579,15 +580,13 @@ class ProtT5(pl.LightningModule):
         embedding_repr = self.model(input_ids.cuda(), attention_mask=attention_mask.cuda())
         emb = embedding_repr.last_hidden_state.squeeze(0)
         protein_emb = emb.mean(dim=0)
-        self.reps.append(tuple((protein_emb, label)))
-        # labels, seqs, toks = batch
-        # pred = self.esm(toks, repr_layers=self.repr_layers, return_contacts=False)
-        # representations = {layer: t.to(device="cpu") for layer, t in pred["representations"].items()}
-        # rep_numpy = representations[self.repr_layers[0]].cpu().detach().numpy()
+        reps = tuple((protein_emb, label[0]))
+        # self.reps.append(tuple((protein_emb, label)))
         # reps = []
         # for i in range(len(rep_numpy)):
-        #     reps.append(tuple([rep_numpy[i].mean(0), labels[i]]))
-        return label
+        #     reps.append(tuple([rep_numpy[i].mean(0), label[i]]))
+
+        return reps
 
 
 from pytorch_lightning.callbacks import BasePredictionWriter
