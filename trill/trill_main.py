@@ -307,7 +307,7 @@ def main(args):
     #     )
 
 ##############################################################################################################
-    classify = subparsers.add_parser('classify', help='Generate proteins using large language models including ProtGPT2 and ESM2')
+    classify = subparsers.add_parser('classify', help='Classify proteins based on thermostability predicted through TemStaPro')
 
     classify.add_argument(
         "classifier",
