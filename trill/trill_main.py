@@ -403,8 +403,6 @@ def main(args):
         )
     
 ##############################################################################################################
-
-
     parser.add_argument(
         "--nodes",
         help="Input total number of nodes. Default is 1",
@@ -638,7 +636,6 @@ def main(args):
                         fasta.write(f'{out}\n')
                         fasta.flush()  
     elif args.command == 'diff_gen':
-        os.environ['HYDRA_FULL_ERROR'] = '1'
         os.makedirs("RFDiffusion_weights", exist_ok=True)
         commands = [
         'wget -nc http://files.ipd.uw.edu/pub/RFdiffusion/6f5902ac237024bdd0c176cb93063dc4/Base_ckpt.pt', 
@@ -660,7 +657,7 @@ def main(args):
             os.makedirs('RFDiffusion/')
             rfdiff = Repo.clone_from('https://github.com/martinez-zacharya/RFDiffusion', 'RFDiffusion/')
             rfdiff_git_root = rfdiff.git.rev_parse("--show-toplevel")
-            subprocess.run(['pip', 'install', '-e', rfdiff_git_root])
+            subprocess.run(['pip', 'install', rfdiff_git_root])
             command = f'pip install {rfdiff_git_root}/env/SE3Transformer'.split(' ')
             subprocess.run(command)
             sys.path.insert(0, 'RFDiffusion/')
@@ -966,7 +963,7 @@ def return_parser():
     lang_gen.add_argument(
         "model",
         help="Choose between Inverse Folding model 'esm_if1_gvp4_t16_142M_UR50' to facilitate fixed backbone sequence design, ProteinMPNN or ProtGPT2.",
-        choices = ['ESM-IF1','ProtGPT2']
+        choices = ['ESM2','ProtGPT2']
 )
     lang_gen.add_argument(
         "--finetuned",
@@ -1068,7 +1065,25 @@ def return_parser():
     #     default = None
     #     )
 
-    
+##############################################################################################################
+    classify = subparsers.add_parser('classify', help='Generate proteins using large language models including ProtGPT2 and ESM2')
+
+    classify.add_argument(
+        "classifier",
+        help="Predict thermostability using TemStaPro",
+        choices = ['TemStaPro']
+)
+    classify.add_argument(
+        "query",
+        help="Fasta file of sequences to score with TemStaPro",
+        action="store"
+)
+    classify.add_argument(
+        "--save_emb",
+        help="Save csv of ProtT5 embeddings",
+        action="store_true",
+        default=False
+)
 ##############################################################################################################
     
     fold = subparsers.add_parser('fold', help='Predict 3D protein structures using ESMFold')
@@ -1100,9 +1115,53 @@ def return_parser():
         action="store_true",
         default=False
         )
+    
 ##############################################################################################################
+    dock = subparsers.add_parser('dock', help='Dock protein to protein using DiffDock')
 
+    dock.add_argument("protein", 
+        help="Protein of interest to be docked with ligand", 
+        action="store"
+        )
+    
+    dock.add_argument("ligand", 
+        help="Ligand to dock protein with", 
+        action="store",
+        )
+    dock.add_argument("--save_visualisation", 
+        help="Save a pdb file with all of the steps of the reverse diffusion.", 
+        action="store_true",
+        default=False
+        )
+    
+    dock.add_argument("--samples_per_complex", 
+        help="Number of samples to generate.", 
+        type = int,
+        action="store",
+        default=10
+        )
+    
+    dock.add_argument("--no_final_step_noise", 
+        help="Use no noise in the final step of the reverse diffusion", 
+        action="store_true",
+        default=False
+        )
+    
+    dock.add_argument("--inference_steps", 
+        help="Number of denoising steps", 
+        type=int,
+        action="store",
+        default=20
+        )
 
+    dock.add_argument("--actual_steps", 
+        help="Number of denoising steps that are actually performed", 
+        type=int,
+        action="store",
+        default=None
+        )
+    
+##############################################################################################################
     parser.add_argument(
         "--nodes",
         help="Input total number of nodes. Default is 1",
@@ -1132,5 +1191,3 @@ def return_parser():
         action="store",
         default = 123
 )
-
-    return parser
