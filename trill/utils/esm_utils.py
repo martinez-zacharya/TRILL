@@ -28,6 +28,7 @@ def ESM_IF1(data, genIters, temp):
     model, alphabet = esm.pretrained.esm_if1_gvp4_t16_142M_UR50()
     model = model.eval()
     sampled_seqs = [()]
+    native_seq_scores = [()]
     for batch in data:
         coords, native_seq = batch
         chains = list(coords.keys())
@@ -40,25 +41,39 @@ def ESM_IF1(data, genIters, temp):
         for chain in loop_chain:
             loop_gen_iters = tqdm(range(int(genIters)))
             loop_gen_iters.set_description('Generative Iterations')
+            if complex_flag == False:
+                n_ll, _ = score_sequence(
+                    model, alphabet, coords[chain], native_seq[chain])
+            else:
+                coords_4scoring = {}
+                for k, v in coords.items():
+                    coords_4scoring[k] = v.numpy()
+                n_ll, _ = esm.inverse_folding.multichain_util.score_sequence_in_complex(
+                        model, alphabet, coords_4scoring, chain, native_seq[chain][0]) 
+                
+            native_seq_scores.append(tuple([native_seq[chain], f'{chain}_{n_ll}']))
             for i in loop_gen_iters:
                 sampled_seq = sample_sequence_in_complex(model, coords, chain, temperature=temp)
                 if complex_flag == False:
                     ll, _ = score_sequence(
                     model, alphabet, coords[chain], sampled_seq)
+
                 else:
                     try:
                         coords_4scoring = {}
                         for k, v in coords.items():
                             coords_4scoring[k] = v.numpy()
                         ll, _ = esm.inverse_folding.multichain_util.score_sequence_in_complex(
-                        model, alphabet, coords_4scoring, chain, sampled_seq) 
+                        model, alphabet, coords_4scoring, chain, sampled_seq)
+
                     except ValueError:
                         print(f'{sampled_seq} could not be scored.')
                         ll = 'NA'
                 sampled_seqs.append(tuple([sampled_seq, f'{chain}_{ll}']))
     sample_df = pd.DataFrame(sampled_seqs)
     sample_df = sample_df.iloc[1: , :]
-    return sample_df
+    native_seq_scores = pd.DataFrame(native_seq_scores).iloc[1: , :]
+    return sample_df, native_seq_scores
 
 def clean_embeddings(model_reps):
     newdf = pd.DataFrame(model_reps, columns = ['Embeddings', 'Label'])

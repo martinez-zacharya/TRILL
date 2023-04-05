@@ -186,7 +186,6 @@ class ProtGPT2(pl.LightningModule):
             optimizer = FusedAdam(self.trainer.model.parameters(), lr=self.lr)
         else:
             optimizer = torch.optim.Adam(self.model.parameters(), lr=self.lr)
-        # optimizer = FusedAdam(self.model.parameters(), lr=self.lr)
         return optimizer
     
     def generate(self, seed_seq = "M", max_length = 100, do_sample = True, temperature = 1.0, top_k = 950, repetition_penalty = 1.2, num_return_sequences = 1, eos_token_id=0):

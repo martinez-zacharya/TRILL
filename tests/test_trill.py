@@ -138,7 +138,7 @@ def test_embed_finetuned(get_git_root):
 ###########################################################################################
 @pytest.mark.skipif(torch.cuda.is_available() == False, reason = "GPU is not available")
 def test_if1(get_git_root):
-    command = 'trill if1 1 generate ESM-IF1 --query trill/data/4ih9.pdb --genIters 3'
+    command = 'trill if1 1 inv_fold_gen ESM-IF1 --query trill/data/4ih9.pdb --genIters 3'
     command = command.split(" ")
     subprocess.run(command)
     assert filecmp.cmp('if1_IF1_gen.csv', os.path.join(get_git_root, 'trill/data/if1_target.csv'))
@@ -146,7 +146,7 @@ def test_if1(get_git_root):
 
 @pytest.mark.skipif(torch.cuda.is_available() == False, reason = "GPU is not available")
 def test_protgpt2_gen_base(get_git_root):
-    command = 'trill gen_base 1 generate ProtGPT2 --max_length 100 --num_return_sequences 5'
+    command = 'trill gen_base 1 lang_gen ProtGPT2 --max_length 100 --num_return_sequences 5'
     command = command.split(" ")
     subprocess.run(command)
     seqkit_seq = 'seqkit seq -s gen_base_ProtGPT2.fasta'
@@ -160,7 +160,7 @@ def test_protgpt2_gen_base(get_git_root):
 
 @pytest.mark.skipif(torch.cuda.is_available() == False, reason = "GPU is not available")
 def test_protgpt2_gen_finetuned(get_git_root):
-    command = 'trill gen_tuned 1 generate ProtGPT2 --finetuned trill/data/I-D_ProtGPT2_10.pt --num_return_sequences 5 --max_length 100'
+    command = 'trill gen_tuned 1 lang_gen ProtGPT2 --finetuned trill/data/I-D_ProtGPT2_10.pt --num_return_sequences 5 --max_length 100'
     command = command.split(" ")
     subprocess.run(command)
     seqkit_seq = 'seqkit seq -s gen_tuned_ProtGPT2.fasta'
@@ -174,7 +174,7 @@ def test_protgpt2_gen_finetuned(get_git_root):
 
 @pytest.mark.skipif(torch.cuda.is_available() == False, reason = "GPU is not available")
 def test_mpnn(get_git_root):
-    command = 'trill test 1 generate ProteinMPNN --query trill/data/4ih9.pdb --max_length 600 --num_return_sequences 3'
+    command = 'trill test 1 inv_fold_gen ProteinMPNN --query trill/data/4ih9.pdb --max_length 600 --num_return_sequences 3'
     command = command.split(" ")
     subprocess.run(command)
     seqkit_seq = 'seqkit seq -s ProteinMPNN_output/seqs/4ih9.fa'.split(" ")
@@ -187,7 +187,7 @@ def test_mpnn(get_git_root):
 
 @pytest.mark.skipif(torch.cuda.is_available() == False, reason = "GPU is not available")
 def test_gibbs_base(get_git_root):
-    command = 'trill test 1 generate ESM2_Gibbs --esm2_arch esm2_t30_150M_UR50D --num_return_sequences 3'.split(" ")
+    command = 'trill test 1 lang_gen ESM2_Gibbs --esm2_arch esm2_t30_150M_UR50D --num_return_sequences 3'.split(" ")
     subprocess.run(command)
     seqkit_seq = 'seqkit seq -s test_esm2_t30_150M_UR50D_Gibbs.fasta'.split(" ")
     seqkit_seq_out = subprocess.run(seqkit_seq, stdout=subprocess.PIPE).stdout.decode('ascii')
@@ -198,7 +198,7 @@ def test_gibbs_base(get_git_root):
 
 @pytest.mark.skipif(torch.cuda.is_available() == False, reason = "GPU is not available")
 def test_gibbs_tuned():
-    command = 'trill test_tuned 1 generate ESM2_Gibbs --esm2_arch esm2_t30_150M_UR50D --finetuned trill/data/target_esm2_t12_35M_UR50D_2.pt --num_return_sequences 3'.split(' ')
+    command = 'trill test_tuned 1 lang_gen ESM2_Gibbs --esm2_arch esm2_t30_150M_UR50D --finetuned trill/data/target_esm2_t12_35M_UR50D_2.pt --num_return_sequences 3'.split(' ')
     subprocess.run(command)
     seqkit_seq = 'seqkit seq -s test_tuned_esm2_t30_150M_UR50D_Gibbs.fasta'.split(" ")
     seqkit_seq_out = subprocess.run(seqkit_seq, stdout=subprocess.PIPE).stdout.decode('ascii')
@@ -209,7 +209,7 @@ def test_gibbs_tuned():
 
 @pytest.mark.skipif(torch.cuda.is_available() == False, reason = "GPU is not available")
 def test_gibbs_t5():
-    command = 'trill test_t5 1 generate ESM2_Gibbs --esm2_arch esm2_t30_150M_UR50D --temp 5 --num_return_sequences 3'.split(" ")
+    command = 'trill test_t5 1 lang_gen ESM2_Gibbs --esm2_arch esm2_t30_150M_UR50D --temp 5 --num_return_sequences 3'.split(" ")
     subprocess.run(command)
     seqkit_seq = 'seqkit seq -s test_t5_esm2_t30_150M_UR50D_Gibbs.fasta'.split(" ")
     seqkit_seq_out = subprocess.run(seqkit_seq, stdout=subprocess.PIPE).stdout.decode('ascii')
@@ -231,6 +231,7 @@ def test_esmfold():
     os.remove('pos_518.pdb')
 
 # Visualize
+###########################################################################################
 def test_viz():
     pca = 'trill viz 1 visualize trill/data/target_esm2_t12_35M_UR50D.csv'.split(' ')
     subprocess.run(pca)
@@ -252,3 +253,5 @@ def test_viz():
     os.remove('viz_tSNE_target_esm2_t12_35M_UR50D.html')
     os.remove('viz_UMAP_target_esm2_t12_35M_UR50D.csv')
     os.remove('viz_UMAP_target_esm2_t12_35M_UR50D.html')
+
+# Diffusion

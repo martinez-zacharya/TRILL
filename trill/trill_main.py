@@ -203,7 +203,7 @@ def main(args):
     lang_gen.add_argument(
         "model",
         help="Choose between Inverse Folding model 'esm_if1_gvp4_t16_142M_UR50' to facilitate fixed backbone sequence design, ProteinMPNN or ProtGPT2.",
-        choices = ['ESM-IF1','ProtGPT2']
+        choices = ['ESM2','ProtGPT2']
 )
     lang_gen.add_argument(
         "--finetuned",
@@ -554,14 +554,21 @@ def main(args):
                 trainer.fit(model=model, train_dataloaders=dataloader)
                 trainer.save_checkpoint(f"{args.name}_{args.model}_{args.epochs}.pt")
 
-    elif args.command == 'inv_fold':
+    elif args.command == 'inv_fold_gen':
         if args.model == 'ESM-IF1':
             if args.query == None:
                 raise Exception('A PDB or CIF file is needed for generating new proteins with ESM-IF1')
             data = ESM_IF1_Wrangle(args.query)
             dataloader = torch.utils.data.DataLoader(data, pin_memory = True, batch_size=1, shuffle=False)
-            sample_df = ESM_IF1(dataloader, genIters=int(args.num_return_sequences), temp = float(args.temp))
-            sample_df.to_csv(f'{args.name}_IF1_gen.csv', index=False, header = ['Generated_Seq', 'Chain_ll'])
+            sample_df, native_seq_df = ESM_IF1(dataloader, genIters=int(args.num_return_sequences), temp = float(args.temp))
+            pdb_name = args.query.split('.')[-2].split('/')[-1]
+            with open(f'{args.name}_ESM-IF1_gen.fasta', 'w+') as fasta:
+                for ix, row in native_seq_df.iterrows():
+                    fasta.write(f'>{pdb_name}_chain-{row[1]} \n')
+                    fasta.write(f'{row[0][0]}\n')
+                for ix, row in sample_df.iterrows():
+                    fasta.write(f'>{args.name}_ESM-IF1_chain-{row[1]} \n')
+                    fasta.write(f'{row[0]}\n')
         elif args.model == 'ProteinMPNN':
             if not os.path.exists('ProteinMPNN/'):
                 print('Cloning forked ProteinMPNN')
@@ -588,7 +595,7 @@ def main(args):
                     fasta.write(f'>{args.name}_ProtGPT2_{i} \n')
                     fasta.write(f'{generated_output[0]}\n')
                     fasta.flush()
-        elif args.model == 'ESM2_Gibbs':
+        elif args.model == 'ESM2':
             model_import_name = f'esm.pretrained.{args.esm2_arch}()'
             with open(f'{args.name}_{args.esm2_arch}_Gibbs.fasta', 'w+') as fasta:
                 if args.finetuned != False:
@@ -597,7 +604,7 @@ def main(args):
                         model = weights_update(model = ESM_Gibbs(eval(model_import_name)), checkpoint = torch.load(args.finetuned))
                         tuned_name = args.finetuned.split('/')[-1] 
                     for i in range(args.num_return_sequences):
-                        out = model.generate(args.seed_seq, mask=True, num_iters = int(args.num_iters), n_samples = 1, max_len = args.max_length, in_order = args.random_fill, num_positions=int(args.num_positions), temperature=float(args.temp))
+                        out = model.generate(args.seed_seq, mask=True, n_samples = 1, max_len = args.max_length, in_order = args.random_fill, num_positions=int(args.num_positions), temperature=float(args.temp))
                         out = ''.join(out)
                         fasta.write(f'>{args.name}_{tuned_name[0:-3]}_Gibbs_{i} \n')
                         fasta.write(f'{out}\n')
@@ -606,12 +613,12 @@ def main(args):
                     model = ESM_Gibbs(eval(model_import_name))
                     tuned_name = f'{args.esm2_arch}___'
                     for i in range(args.num_return_sequences):
-                        out = model.generate(args.seed_seq, mask=True, num_iters = int(args.num_iters), n_samples = 1, max_len = args.max_length, in_order = args.random_fill, num_positions=int(args.num_positions), temperature=float(args.temp))
+                        out = model.generate(args.seed_seq, mask=True, n_samples = 1, max_len = args.max_length, in_order = args.random_fill, num_positions=int(args.num_positions), temperature=float(args.temp))
                         out = ''.join(out)
                         fasta.write(f'>{args.name}_{tuned_name[0:-3]}_Gibbs_{i} \n')
                         fasta.write(f'{out}\n')
                         fasta.flush()  
-    elif args.command == 'RFDiffusion':
+    elif args.command == 'diff_gen':
         os.environ['HYDRA_FULL_ERROR'] = '1'
         os.makedirs("RFDiffusion_weights", exist_ok=True)
         commands = [
@@ -684,13 +691,13 @@ def main(args):
 
     elif args.command == 'dock':
 
-        if args.ligand.endswith(".pdb") or args.ligand.endswith(".PDB"):
-            mol = Chem.MolFromPDBFile(args.ligand)
-            sdf_file = f"{args.ligand.split('.')[0]}.sdf"
-            writer = Chem.SDWriter(sdf_file)
-            writer.write(mol)
-            writer.close()
-            args.ligand = sdf_file
+        # if args.ligand.endswith(".pdb") or args.ligand.endswith(".PDB"):
+        #     mol = Chem.MolFromPDBFile(args.ligand)
+        #     sdf_file = f"{args.ligand.split('.')[0]}.sdf"
+        #     writer = Chem.SDWriter(sdf_file)
+        #     writer.write(mol)
+        #     writer.close()
+        #     args.ligand = sdf_file
 
         if not os.path.exists('DiffDock/'):
             print('Cloning forked DiffDock')
