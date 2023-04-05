@@ -23,7 +23,7 @@ from fairscale.nn.data_parallel import FullyShardedDataParallel as FSDP
 from fairscale.nn.wrap import enable_wrap, wrap
 
 from pytorch_lightning.utilities.deepspeed import convert_zero_checkpoint_to_fp32_state_dict
-from trill.utils.lightning_models import ESM, ProtGPT2, CustomWriter, ESM_Gibbs
+from trill.utils.lightning_models import ESM, ProtGPT2, CustomWriter, ESM_Gibbs, ProtT5
 from trill.utils.update_weights import weights_update
 from transformers import AutoTokenizer, EsmForProteinFolding, set_seed
 from pytorch_lightning.callbacks import ModelCheckpoint
@@ -31,6 +31,7 @@ from pytorch_lightning.callbacks import ModelCheckpoint
 from trill.utils.protgpt2_utils import ProtGPT2_wrangle
 from trill.utils.esm_utils import ESM_IF1_Wrangle, ESM_IF1, convert_outputs_to_pdb
 from trill.utils.visualize import reduce_dims, viz
+from trill.utils.MLP import MLP_C2H2, inference_epoch
 
 from pyfiglet import Figlet
 import bokeh
@@ -305,7 +306,25 @@ def main(args):
     #     default = None
     #     )
 
-    
+##############################################################################################################
+    classify = subparsers.add_parser('classify', help='Generate proteins using large language models including ProtGPT2 and ESM2')
+
+    classify.add_argument(
+        "classifier",
+        help="Predict thermostability using TemStaPro",
+        choices = ['TemStaPro']
+)
+    classify.add_argument(
+        "query",
+        help="Fasta file of sequences to score with TemStaPro",
+        action="store"
+)
+    classify.add_argument(
+        "--save_emb",
+        help="Save csv of ProtT5 embeddings",
+        action="store_true",
+        default=False
+)
 ##############################################################################################################
     
     fold = subparsers.add_parser('fold', help='Predict 3D protein structures using ESMFold')
@@ -554,7 +573,7 @@ def main(args):
                 trainer.fit(model=model, train_dataloaders=dataloader)
                 trainer.save_checkpoint(f"{args.name}_{args.model}_{args.epochs}.pt")
 
-    elif args.command == 'inv_fold':
+    elif args.command == 'inv_fold_gen':
         if args.model == 'ESM-IF1':
             if args.query == None:
                 raise Exception('A PDB or CIF file is needed for generating new proteins with ESM-IF1')
@@ -705,6 +724,56 @@ def main(args):
             diffdock_root = diffdock.git.rev_parse("--show-toplevel")
         from inference import run_diffdock
         run_diffdock(args, diffdock_root)
+
+    elif args.command == 'classify':
+        data = esm.data.FastaBatchedDataset.from_file(args.query)
+        model = ProtT5()
+        dataloader = torch.utils.data.DataLoader(data, shuffle = False, batch_size = 1, num_workers=0)
+        trainer = pl.Trainer(enable_checkpointing=False, devices=int(args.GPUs), accelerator='gpu', logger=logger, num_nodes=int(args.nodes))
+        trainer.predict(model, dataloader)
+        if args.save_emb:
+            emb_4export = []
+            for rep in model.reps:
+                intermed = []
+                for i in range(len(rep[0])):
+                    intermed.append(rep[0][i].cpu().numpy())
+                intermed.append(rep[1][0])
+                emb_4export.append(intermed)
+            emb_df = pd.DataFrame(emb_4export)
+            emb_df.to_csv(f'{args.name}_prot_t5_xl_half_uniref50-enc_embeddings.csv', index=False)
+        if not os.path.exists('TemStaPro_models/'):
+            temstapro_models = Repo.clone_from('https://github.com/martinez-zacharya/TemStaPro_models', 'TemStaPro_models/')
+            temstapro_models_root = temstapro_models.git.rev_parse("--show-toplevel")
+        else:
+            temstapro_models = Repo('TemStaPro_models')
+            temstapro_models_root = temstapro_models.git.rev_parse("--show-toplevel")
+        dataloader = torch.utils.data.DataLoader(data, shuffle = False, batch_size = 1, num_workers=0)
+        THRESHOLDS = ["40", "45", "50", "55", "60", "65"]
+        SEEDS = ["41", "42", "43", "44", "45"]
+        emb_loader = torch.utils.data.DataLoader(model.reps, shuffle = False, batch_size = 1, num_workers = 0)
+        inferences = {}
+        for thresh in THRESHOLDS:
+            threshold_inferences = {}
+            for seed in SEEDS:
+                clf = MLP_C2H2(1024, 512, 256)
+                clf.load_state_dict(torch.load(f'{temstapro_models_root}/mean_major_imbal-{thresh}_s{seed}.pt'))
+                clf.eval()
+                clf.to('cuda')
+                threshold_inferences[seed] = inference_epoch(clf, emb_loader, device='cuda')
+            for seq in threshold_inferences["41"].keys():
+                mean_prediction = 0
+                for seed in SEEDS:
+                     mean_prediction += threshold_inferences[seed][seq]
+                mean_prediction /= len(SEEDS)
+                binary_pred = round(mean_prediction)
+                inferences[f'{seq}$%#{thresh}'] = (mean_prediction, binary_pred)
+        inference_df = pd.DataFrame.from_dict(inferences, orient='index', columns=['Mean_Pred', 'Binary_Pred'])
+        inference_df = inference_df.reset_index(names='RawLab')
+        inference_df['Protein'] = inference_df['RawLab'].apply(lambda x: x.split('$%#')[0])
+        inference_df['Threshold'] = inference_df['RawLab'].apply(lambda x: x.split('$%#')[-1])
+        inference_df = inference_df.drop(columns='RawLab')
+        inference_df = inference_df[['Protein', 'Threshold', 'Mean_Pred', 'Binary_Pred']]
+        inference_df.to_csv(f'{args.name}_TemStaPro_preds.csv', index = False)        
 
 
 
