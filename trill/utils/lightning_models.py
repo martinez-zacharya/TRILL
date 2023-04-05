@@ -19,7 +19,7 @@ from utils.update_weights import weights_update
 from pytorch_lightning.loggers import TensorBoardLogger
 from pytorch_lightning.profilers import PyTorchProfiler
 from deepspeed.ops.adam import DeepSpeedCPUAdam
-from transformers import pipeline, AutoTokenizer, AutoModelForCausalLM, DataCollatorForLanguageModeling
+from transformers import pipeline, AutoTokenizer, AutoModelForCausalLM, DataCollatorForLanguageModeling, T5EncoderModel, T5Tokenizer
 from esm.inverse_folding.multichain_util import sample_sequence_in_complex
 # from colossalai.nn.optimizer import HybridAdam, CPUAdam
 from deepspeed.ops.adam import FusedAdam
@@ -548,7 +548,48 @@ class ESM_Gibbs(pl.LightningModule):
                     yield (float(log_likelihood_sum / len(seq_list[batch_idx])), log_likelihood_list)
 
     
+
+class ProtT5(pl.LightningModule):
+    def __init__(self):
+        super().__init__()
+        self.model = T5EncoderModel.from_pretrained('Rostlab/prot_t5_xl_half_uniref50-enc')
+        self.tokenizer = T5Tokenizer.from_pretrained('Rostlab/prot_t5_xl_half_uniref50-enc', do_lower_case=False)
+        self.reps = []
+
+    def training_step(self, batch, batch_idx):
+        loss = 0
+        return {"loss": loss}
     
+    def configure_optimizers(self):
+        optimizer = torch.optim.Adam(self.esm.parameters(), lr=self.lr)
+        lr_scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=1)
+        return [optimizer], [lr_scheduler]
+    
+    def predict_step(self, batch, batch_idx):
+        label, seqs = batch
+        modded_seqs = ''
+        for seq in seqs[0]:
+            modded_seqs += seq
+            modded_seqs += ' '
+        modded_seqs = (modded_seqs[:-1],)
+        token_encoding = self.tokenizer.batch_encode_plus(modded_seqs, 
+                add_special_tokens=True, padding='longest')
+        input_ids = torch.tensor(token_encoding['input_ids'])
+        attention_mask = torch.tensor(token_encoding['attention_mask'])
+        embedding_repr = self.model(input_ids.cuda(), attention_mask=attention_mask.cuda())
+        emb = embedding_repr.last_hidden_state.squeeze(0)
+        protein_emb = emb.mean(dim=0)
+        self.reps.append(tuple((protein_emb, label)))
+        # labels, seqs, toks = batch
+        # pred = self.esm(toks, repr_layers=self.repr_layers, return_contacts=False)
+        # representations = {layer: t.to(device="cpu") for layer, t in pred["representations"].items()}
+        # rep_numpy = representations[self.repr_layers[0]].cpu().detach().numpy()
+        # reps = []
+        # for i in range(len(rep_numpy)):
+        #     reps.append(tuple([rep_numpy[i].mean(0), labels[i]]))
+        return label
+
+
 from pytorch_lightning.callbacks import BasePredictionWriter
 
 class CustomWriter(BasePredictionWriter):
