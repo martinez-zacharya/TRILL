@@ -315,7 +315,7 @@ def main(args):
         )
     
     diffuse_gen.add_argument("--RFDiffusion_Override", 
-        help="Change RFDiffusion model.",
+        help="Change RFDiffusion model. For example, --RFDiffusion_Override ActiveSite will use ActiveSite_ckpt.pt for holding small motifs in place. ",
         action="store",
         default = False
         )
@@ -343,6 +343,25 @@ def main(args):
         action="store_true",
         default=False
         )
+    
+    diffuse_gen.add_argument("--partial_T", 
+        help="Adjust partial diffusion sampling value.",
+        action="store",
+        default=None
+        )
+    
+    diffuse_gen.add_argument("--partial_diff_fix", 
+        help="Pass the residues that you want to keep fixed for your input pdb during partial diffusion. Note that the residues should be 0-indexed.",
+        action="store",
+        default=None
+        )  
+    
+    diffuse_gen.add_argument("--hotspots", 
+        help="Define resiudes that binder must interact with. For example, --hotspots A30,A33,A34 , where A is the chain and the numbers are the residue indices.",
+        action="store",
+        default=None
+        ) 
+
     
     # diffuse_gen.add_argument("--RFDiffusion_yaml", 
     #     help="Specify RFDiffusion params using a yaml file. Easiest option for complicated runs",
