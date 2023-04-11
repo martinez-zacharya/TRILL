@@ -338,11 +338,17 @@ def main(args):
         action="store",
         )
     
-    diffuse_gen.add_argument("--sym", 
-        help="Use this flag to generate symmetrical oligomers.",
-        action="store_true",
-        default=False
-        )
+    # diffuse_gen.add_argument("--sym", 
+    #     help="Use this flag to generate symmetrical oligomers.",
+    #     action="store_true",
+    #     default=False
+    #     )
+    
+    # diffuse_gen.add_argument("--sym_type", 
+    #     help="Define resiudes that binder must interact with. For example, --hotspots A30,A33,A34 , where A is the chain and the numbers are the residue indices.",
+    #     action="store",
+    #     default=None
+    #     ) 
     
     diffuse_gen.add_argument("--partial_T", 
         help="Adjust partial diffusion sampling value.",
@@ -729,10 +735,11 @@ def main(args):
             rfdiff_git_root = git_repo.git.rev_parse("--show-toplevel")
 
         from run_inference import run_rfdiff
-        if args.sym:
-            run_rfdiff((f'{rfdiff_git_root}/config/inference/symmetry.yaml'), args)
-        else:    
-            run_rfdiff((f'{rfdiff_git_root}/config/inference/base.yaml'), args)
+        # if args.sym:
+        #     run_rfdiff((f'{rfdiff_git_root}/config/inference/symmetry.yaml'), args)
+        # else:    
+        #     run_rfdiff((f'{rfdiff_git_root}/config/inference/base.yaml'), args)
+        run_rfdiff((f'{rfdiff_git_root}/config/inference/base.yaml'), args)
             
     elif args.command == 'fold':
         data = esm.data.FastaBatchedDataset.from_file(args.query)
@@ -740,8 +747,12 @@ def main(args):
 
         model = EsmForProteinFolding.from_pretrained('facebook/esmfold_v1', low_cpu_mem_usage=True, torch_dtype='auto')
         # model.esm = model.esm.half()
+        # model = EsmForProteinFolding.from_pretrained('facebook/esmfold_v1',torch_dtype=torch.half, esmfold_config = **model_args)
+        # model = model.cuda()
+        # model.esm = model.esm.eval()
         if args.strategy != None:
             model.trunk.set_chunk_size(int(args.strategy))
+        model = model.cuda()
         fold_df = pd.DataFrame(list(data), columns = ["Entry", "Sequence"])
         outputs = []
         with torch.no_grad():
