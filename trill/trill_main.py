@@ -703,6 +703,8 @@ def main(args):
                         fasta.write(f'{out}\n')
                         fasta.flush()  
     elif args.command == 'diff_gen':
+        command = "conda install -c dglteam dgl-cuda11.7 -y -S -q".split(' ')
+        subprocess.run(command, check = True)
         os.makedirs("RFDiffusion_weights", exist_ok=True)
         commands = [
         'wget -nc http://files.ipd.uw.edu/pub/RFdiffusion/6f5902ac237024bdd0c176cb93063dc4/Base_ckpt.pt', 
@@ -745,14 +747,14 @@ def main(args):
         data = esm.data.FastaBatchedDataset.from_file(args.query)
         tokenizer = AutoTokenizer.from_pretrained("facebook/esmfold_v1")
 
-        model = EsmForProteinFolding.from_pretrained('facebook/esmfold_v1', low_cpu_mem_usage=True, torch_dtype='auto')
-        # model.esm = model.esm.half()
-        # model = EsmForProteinFolding.from_pretrained('facebook/esmfold_v1',torch_dtype=torch.half, esmfold_config = **model_args)
-        # model = model.cuda()
-        # model.esm = model.esm.eval()
+        if int(args.GPUs) == 0:
+            model = EsmForProteinFolding.from_pretrained('facebook/esmfold_v1', low_cpu_mem_usage=True, torch_dtype='auto')
+        else:
+            model = EsmForProteinFolding.from_pretrained('facebook/esmfold_v1', low_cpu_mem_usage=True, torch_dtype='auto')
+            model.esm = model.esm.half()
+            model = model.cuda()
         if args.strategy != None:
             model.trunk.set_chunk_size(int(args.strategy))
-        model = model.cuda()
         fold_df = pd.DataFrame(list(data), columns = ["Entry", "Sequence"])
         outputs = []
         with torch.no_grad():
@@ -1138,7 +1140,7 @@ def return_parser():
         )
     
     diffuse_gen.add_argument("--RFDiffusion_Override", 
-        help="Change RFDiffusion model.",
+        help="Change RFDiffusion model. For example, --RFDiffusion_Override ActiveSite will use ActiveSite_ckpt.pt for holding small motifs in place. ",
         action="store",
         default = False
         )
@@ -1161,11 +1163,36 @@ def return_parser():
         action="store",
         )
     
-    diffuse_gen.add_argument("--sym", 
-        help="Use this flag to generate symmetrical oligomers.",
-        action="store_true",
-        default=False
+    # diffuse_gen.add_argument("--sym", 
+    #     help="Use this flag to generate symmetrical oligomers.",
+    #     action="store_true",
+    #     default=False
+    #     )
+    
+    # diffuse_gen.add_argument("--sym_type", 
+    #     help="Define resiudes that binder must interact with. For example, --hotspots A30,A33,A34 , where A is the chain and the numbers are the residue indices.",
+    #     action="store",
+    #     default=None
+    #     ) 
+    
+    diffuse_gen.add_argument("--partial_T", 
+        help="Adjust partial diffusion sampling value.",
+        action="store",
+        default=None
         )
+    
+    diffuse_gen.add_argument("--partial_diff_fix", 
+        help="Pass the residues that you want to keep fixed for your input pdb during partial diffusion. Note that the residues should be 0-indexed.",
+        action="store",
+        default=None
+        )  
+    
+    diffuse_gen.add_argument("--hotspots", 
+        help="Define resiudes that binder must interact with. For example, --hotspots A30,A33,A34 , where A is the chain and the numbers are the residue indices.",
+        action="store",
+        default=None
+        ) 
+
     
     # diffuse_gen.add_argument("--RFDiffusion_yaml", 
     #     help="Specify RFDiffusion params using a yaml file. Easiest option for complicated runs",
