@@ -3,3 +3,5 @@
 tests/__pycache__/
 trill/__pycache__/
 trill/utils/__pycache__/
+*.so
+*.pyc
