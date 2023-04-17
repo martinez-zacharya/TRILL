@@ -41,6 +41,7 @@ os.environ["TOKENIZERS_PARALLELISM"] = "false"
 def main(args):
 
     # torch.set_float32_matmul_precision('medium')
+    start = time.time()
     f = Figlet(font="graffiti")
     print(f.renderText("TRILL"))
     
@@ -97,6 +98,13 @@ def main(args):
 
     embed = subparsers.add_parser('embed', help='Embed proteins of interest')
 
+    embed.add_argument(
+        "model",
+        help="You can choose from either 'esm2_t6_8M', 'esm2_t12_35M', 'esm2_t30_150M', 'esm2_t33_650M', 'esm2_t36_3B','esm2_t48_15B', or 'ProtT5-XL'",
+        action="store",
+        # default = 'esm2_t12_35M_UR50D',
+)
+
     embed.add_argument("query", 
         help="Input fasta file", 
         action="store"
@@ -111,21 +119,20 @@ def main(args):
 
     embed.add_argument(
         "--finetuned",
-        help="Input path to your own pre-trained ESM model",
+        help="Input path to your own finetuned ESM model",
         action="store",
         default = False,
         dest="finetuned",
 )
-    embed.add_argument(
-        "--model",
-        help="Change model. Default is esm2_t12_35M_UR50D. You can choose from a list of ESM2 models which can be found at https://github.com/facebookresearch/esm or use encoder-only ProtT5-XL-UniRef50 with --model ProtT5-XL",
-        action="store",
-        default = 'esm2_t12_35M_UR50D',
-        dest="model",
-)
 ##############################################################################################################
 
-    finetune = subparsers.add_parser('finetune', help='Fine-tune models')
+    finetune = subparsers.add_parser('finetune', help='Finetune protein language models')
+
+    finetune.add_argument(
+        "model",
+        help="You can choose to finetune either 'esm2_t6_8M', 'esm2_t12_35M', 'esm2_t30_150M', 'esm2_t33_650M', 'esm2_t36_3B','esm2_t48_15B', or 'ProtGPT2'",
+        action="store",
+)
 
     finetune.add_argument("query", 
         help="Input fasta file", 
@@ -144,13 +151,7 @@ def main(args):
         default=0.0001,
         dest="lr",
 )
-    finetune.add_argument(
-        "--model",
-        help="Change model. Default is esm2_t12_35M_UR50D. You can choose either ProtGPT2 or various ESM2. List of ESM2 models can be found at https://github.com/facebookresearch/esm",
-        action="store",
-        default = 'esm2_t12_35M_UR50D',
-        dest="model",
-)
+
     finetune.add_argument(
         "--LEGGO",
         help="deepspeed_stage_3_offload.",
@@ -478,9 +479,6 @@ def main(args):
     
 
     args = parser.parse_args()
-    start = time.time()
-    # if args.query == None and args.gen == False:
-    #     raise ValueError('An input file is needed when not using --gen')
 
     pl.seed_everything(int(args.RNG_seed))
     set_seed(int(args.RNG_seed))
@@ -548,7 +546,7 @@ def main(args):
             for file in pt_files:
                 os.remove(file)
         else:
-            model_import_name = f'esm.pretrained.{args.model}()'
+            model_import_name = f'esm.pretrained.{args.model}_UR50D()'
             model = ESM(eval(model_import_name), 0.0001, False)
             data = esm.data.FastaBatchedDataset.from_file(args.query)
             dataloader = torch.utils.data.DataLoader(data, shuffle = False, batch_size = int(args.batch_size), num_workers=0, collate_fn=model.alphabet.get_batch_converter())
@@ -625,7 +623,7 @@ def main(args):
                 # print(model)
                 trainer.save_checkpoint(f"{args.name}_{args.model}_{args.epochs}.pt")
         else:
-            model_import_name = f'esm.pretrained.{args.model}()'
+            model_import_name = f'esm.pretrained.{args.model}_UR50D()'
             model = ESM(eval(model_import_name), float(args.lr), args.LEGGO)
             dataloader = torch.utils.data.DataLoader(data, shuffle = False, batch_size = int(args.batch_size), num_workers=0, collate_fn=model.alphabet.get_batch_converter())
             if args.LEGGO:
@@ -660,7 +658,7 @@ def main(args):
             if args.query == None:
                 raise Exception('A PDB or CIF file is needed for generating new proteins with ESM-IF1')
             data = ESM_IF1_Wrangle(args.query)
-            dataloader = torch.utils.data.DataLoader(data, pin_memory = True, batch_size=1, shuffle=False)
+            dataloader = torch.utils.data.DataLoader(data, batch_size=1, shuffle=False)
             sample_df, native_seq_df = ESM_IF1(dataloader, genIters=int(args.num_return_sequences), temp = float(args.temp), GPUs = int(args.GPUs))
             pdb_name = args.query.split('.')[-2].split('/')[-1]
             with open(f'{args.name}_ESM-IF1_gen.fasta', 'w+') as fasta:
@@ -688,7 +686,7 @@ def main(args):
         if args.model == 'ProtGPT2':
             model = ProtGPT2(args)
             if args.finetuned != False:
-                model = model.load_from_checkpoint(args.finetuned, strict = False, lr = 0.0001, strat = None)
+                model = model.load_from_checkpoint(args.finetuned, args = args)
             tokenizer = AutoTokenizer.from_pretrained("nferruz/ProtGPT2")
             generated_output = []
             with open(f'{args.name}_ProtGPT2.fasta', 'w+') as fasta:
@@ -706,7 +704,7 @@ def main(args):
                         model = weights_update(model = ESM_Gibbs(eval(model_import_name), args), checkpoint = torch.load(args.finetuned))
                         tuned_name = args.finetuned.split('/')[-1] 
                     if int(args.GPUs) > 0:
-                        model = model.cuda()
+                        model.model = model.model.cuda()
                     for i in range(args.num_return_sequences):
                         out = model.generate(args.seed_seq, mask=True, n_samples = 1, max_len = args.max_length, in_order = args.random_fill, num_positions=int(args.num_positions), temperature=float(args.temp))
                         out = ''.join(out)
@@ -717,7 +715,7 @@ def main(args):
                     model = ESM_Gibbs(eval(model_import_name), args)
                     tuned_name = f'{args.esm2_arch}___'
                     if int(args.GPUs) > 0:
-                        model = model.cuda()
+                        model.model = model.model.cuda()
                     for i in range(args.num_return_sequences):
                         out = model.generate(args.seed_seq, mask=True, n_samples = 1, max_len = args.max_length, in_order = args.random_fill, num_positions=int(args.num_positions), temperature=float(args.temp))
                         out = ''.join(out)

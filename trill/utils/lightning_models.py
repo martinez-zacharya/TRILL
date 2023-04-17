@@ -229,6 +229,7 @@ class ESM_Gibbs(pl.LightningModule):
 
         self.valid_aa_idx = sorted([self.alphabet.get_idx(tok) for tok in ESM_ALLOWED_AMINO_ACIDS])
 
+
     
     def generate_step(self, out, gen_idx, temperature=None, top_k=0, valid_idx=None):
         """ Generate a word from from out[gen_idx]

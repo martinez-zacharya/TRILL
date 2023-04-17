@@ -204,9 +204,10 @@ def load_model_and_alphabet_core(model_name, model_data, regression_data=None):
                 )
             )
         if expected_missing - found_keys:
-            warnings.warn(
-                "Regression weights not found, predicting contacts will not produce correct results."
-            )
+            pass
+            # warnings.warn(
+            #     "Regression weights not found, predicting contacts will not produce correct results."
+            # )
 
     model.load_state_dict(model_state, strict=regression_data is not None)
 
