@@ -110,11 +110,11 @@ def main(args):
 )
 
     embed.add_argument(
-        "--preTrained_model",
+        "--finetuned",
         help="Input path to your own pre-trained ESM model",
         action="store",
         default = False,
-        dest="preTrained_model",
+        dest="finetuned",
 )
     embed.add_argument(
         "--model",
@@ -134,7 +134,7 @@ def main(args):
     finetune.add_argument("--epochs", 
         help="Number of epochs for fine-tuning. Default is 20", 
         action="store",
-        default=20,
+        default=10,
         dest="epochs",
         )
     finetune.add_argument(
@@ -487,6 +487,8 @@ def main(args):
     
     
     torch.backends.cuda.matmul.allow_tf32 = True
+    if int(args.GPUs) == 0:
+        os.environ['CUDA_VISIBLE_DEVICES'] = ''
     if int(args.nodes) <= 0:
             raise Exception(f'There needs to be at least one cpu node to use TRILL')
     #if args.tune == True:
@@ -515,11 +517,14 @@ def main(args):
             raise Exception(f'Input query file - {args.query} is not a valid file format.\
             File needs to be a protein fasta (.fa, .fasta, .faa)')
         if args.model == "ProtT5-XL":
-            model = ProtT5()
+            model = ProtT5(args)
             data = esm.data.FastaBatchedDataset.from_file(args.query)
             dataloader = torch.utils.data.DataLoader(data, shuffle = False, batch_size = int(args.batch_size), num_workers=0)
             pred_writer = CustomWriter(output_dir=".", write_interval="epoch")
-            trainer = pl.Trainer(enable_checkpointing=False, devices=int(args.GPUs), callbacks = [pred_writer], accelerator='gpu', logger=logger, num_nodes=int(args.nodes))
+            if int(args.GPUs) == 0:
+                trainer = pl.Trainer(enable_checkpointing=False, callbacks = [pred_writer], logger=logger, num_nodes=int(args.nodes))
+            else:
+                trainer = pl.Trainer(enable_checkpointing=False, devices=int(args.GPUs), callbacks = [pred_writer], accelerator='gpu', logger=logger, num_nodes=int(args.nodes))
             trainer.predict(model, dataloader)
             cwd_files = os.listdir()
             pt_files = [file for file in cwd_files if 'predictions_' in file]
@@ -548,9 +553,11 @@ def main(args):
             data = esm.data.FastaBatchedDataset.from_file(args.query)
             dataloader = torch.utils.data.DataLoader(data, shuffle = False, batch_size = int(args.batch_size), num_workers=0, collate_fn=model.alphabet.get_batch_converter())
             pred_writer = CustomWriter(output_dir=".", write_interval="epoch")
-            trainer = pl.Trainer(enable_checkpointing=False, callbacks=[pred_writer], devices=int(args.GPUs), accelerator='gpu', logger=logger, num_nodes=int(args.nodes))
-
-            if args.preTrained_model == False:
+            if int(args.GPUs) == 0:
+                trainer = pl.Trainer(enable_checkpointing=False, callbacks = [pred_writer], logger=logger, num_nodes=int(args.nodes))
+            else:
+                trainer = pl.Trainer(enable_checkpointing=False, devices=int(args.GPUs), callbacks = [pred_writer], accelerator='gpu', logger=logger, num_nodes=int(args.nodes))
+            if args.finetuned == False:
                 trainer.predict(model, dataloader)
                 cwd_files = os.listdir()
                 pt_files = [file for file in cwd_files if 'predictions_' in file]
@@ -573,7 +580,7 @@ def main(args):
 
 
             else:
-                model = weights_update(model = ESM(eval(model_import_name), 0.0001, False), checkpoint = torch.load(args.preTrained_model))
+                model = weights_update(model = ESM(eval(model_import_name), 0.0001, False), checkpoint = torch.load(args.finetuned))
                 trainer.predict(model, dataloader)
                 cwd_files = os.listdir()
                 pt_files = [file for file in cwd_files if 'predictions_' in file]
@@ -595,11 +602,14 @@ def main(args):
         data = esm.data.FastaBatchedDataset.from_file(args.query)
         len_data = len(data)
         if args.model == 'ProtGPT2':
-            model = ProtGPT2(int(args.lr), args.strategy)
+            model = ProtGPT2(args)
             tokenizer = AutoTokenizer.from_pretrained("nferruz/ProtGPT2")
             seq_dict_df = ProtGPT2_wrangle(data, tokenizer)
             dataloader = torch.utils.data.DataLoader(seq_dict_df, shuffle = False, batch_size = int(args.batch_size), num_workers=0)
-            trainer = pl.Trainer(devices=int(args.GPUs), profiler=profiler, accelerator='gpu', max_epochs=int(args.epochs), logger = logger, num_nodes = int(args.nodes), precision = 16, strategy = args.strategy)
+            if int(args.GPUs) == 0:
+                trainer = pl.Trainer(profiler=profiler, max_epochs=int(args.epochs), logger = logger, num_nodes = int(args.nodes))
+            else:
+                trainer = pl.Trainer(devices=int(args.GPUs), profiler=profiler, accelerator='gpu', max_epochs=int(args.epochs), logger = logger, num_nodes = int(args.nodes), precision = 16, strategy = args.strategy)
             trainer.fit(model=model, train_dataloaders = dataloader)
             if 'deepspeed' in str(args.strategy):
                 save_path = os.path.join(os.getcwd(), f"checkpoints/epoch={int(args.epochs) - 1}-step={len_data*int(args.epochs)}.ckpt")
@@ -608,7 +618,11 @@ def main(args):
                     convert_zero_checkpoint_to_fp32_state_dict(save_path, output_path)
                 except Exception as e:
                     print(f'Exception {e} has occured on attempted save of your deepspeed trained model. If this has to do with CPU RAM, please try pytorch_lightning.utilities.deepspeedconvert_zero_checkpoint_to_fp32_state_dict(your_checkpoint.ckpt, full_model.pt')
+            elif str(args.strategy) in ['fsdp', 'FSDP', 'FullyShardedDataParallel']:
+                pass
+
             else:
+                # print(model)
                 trainer.save_checkpoint(f"{args.name}_{args.model}_{args.epochs}.pt")
         else:
             model_import_name = f'esm.pretrained.{args.model}()'
@@ -634,7 +648,10 @@ def main(args):
                 except Exception as e:
                     print(f'Exception {e} has occured on attempted save of your deepspeed trained model. If this has to do with CPU RAM, please try pytorch_lightning.utilities.deepspeedconvert_zero_checkpoint_to_fp32_state_dict(your_checkpoint.ckpt, full_model.pt')       
             else:
-                trainer = pl.Trainer(devices=int(args.GPUs), profiler = profiler, accelerator='gpu', strategy = args.strategy, max_epochs=int(args.epochs), logger=logger, num_nodes=int(args.nodes), precision = 16, amp_backend='native', enable_checkpointing=False)        
+                if int(args.GPUs) == 0:
+                    trainer = pl.Trainer(profiler = profiler, max_epochs=int(args.epochs), logger=logger, num_nodes=int(args.nodes), enable_checkpointing=False) 
+                else:
+                    trainer = pl.Trainer(devices=int(args.GPUs), profiler = profiler, accelerator='gpu', strategy = args.strategy, max_epochs=int(args.epochs), logger=logger, num_nodes=int(args.nodes), precision = 16, amp_backend='native', enable_checkpointing=False)        
                 trainer.fit(model=model, train_dataloaders=dataloader)
                 trainer.save_checkpoint(f"{args.name}_{args.model}_{args.epochs}.pt")
 
@@ -644,7 +661,7 @@ def main(args):
                 raise Exception('A PDB or CIF file is needed for generating new proteins with ESM-IF1')
             data = ESM_IF1_Wrangle(args.query)
             dataloader = torch.utils.data.DataLoader(data, pin_memory = True, batch_size=1, shuffle=False)
-            sample_df, native_seq_df = ESM_IF1(dataloader, genIters=int(args.num_return_sequences), temp = float(args.temp))
+            sample_df, native_seq_df = ESM_IF1(dataloader, genIters=int(args.num_return_sequences), temp = float(args.temp), GPUs = int(args.GPUs))
             pdb_name = args.query.split('.')[-2].split('/')[-1]
             with open(f'{args.name}_ESM-IF1_gen.fasta', 'w+') as fasta:
                 for ix, row in native_seq_df.iterrows():
@@ -659,7 +676,8 @@ def main(args):
                 os.makedirs('ProteinMPNN/')
                 proteinmpnn = Repo.clone_from('https://github.com/martinez-zacharya/ProteinMPNN', 'ProteinMPNN/')
                 mpnn_git_root = proteinmpnn.git.rev_parse("--show-toplevel")
-                subprocess.run(['pip', 'install', mpnn_git_root])
+                subprocess.run(['pip', 'install', '-e', mpnn_git_root])
+                sys.path.insert(0, 'ProteinMPNN/')
             else:
                 sys.path.insert(0, 'ProteinMPNN/')
             from mpnnrun import run_mpnn
@@ -668,7 +686,7 @@ def main(args):
         
     elif args.command == 'lang_gen':
         if args.model == 'ProtGPT2':
-            model = ProtGPT2(0.0001, None)
+            model = ProtGPT2(args)
             if args.finetuned != False:
                 model = model.load_from_checkpoint(args.finetuned, strict = False, lr = 0.0001, strat = None)
             tokenizer = AutoTokenizer.from_pretrained("nferruz/ProtGPT2")
@@ -683,10 +701,12 @@ def main(args):
             model_import_name = f'esm.pretrained.{args.esm2_arch}()'
             with open(f'{args.name}_{args.esm2_arch}_Gibbs.fasta', 'w+') as fasta:
                 if args.finetuned != False:
-                    model = ESM_Gibbs(eval(model_import_name))
+                    model = ESM_Gibbs(eval(model_import_name), args)
                     if args.finetuned != False:
-                        model = weights_update(model = ESM_Gibbs(eval(model_import_name)), checkpoint = torch.load(args.finetuned))
+                        model = weights_update(model = ESM_Gibbs(eval(model_import_name), args), checkpoint = torch.load(args.finetuned))
                         tuned_name = args.finetuned.split('/')[-1] 
+                    if int(args.GPUs) > 0:
+                        model = model.cuda()
                     for i in range(args.num_return_sequences):
                         out = model.generate(args.seed_seq, mask=True, n_samples = 1, max_len = args.max_length, in_order = args.random_fill, num_positions=int(args.num_positions), temperature=float(args.temp))
                         out = ''.join(out)
@@ -694,8 +714,10 @@ def main(args):
                         fasta.write(f'{out}\n')
                         fasta.flush()           
                 else:
-                    model = ESM_Gibbs(eval(model_import_name))
+                    model = ESM_Gibbs(eval(model_import_name), args)
                     tuned_name = f'{args.esm2_arch}___'
+                    if int(args.GPUs) > 0:
+                        model = model.cuda()
                     for i in range(args.num_return_sequences):
                         out = model.generate(args.seed_seq, mask=True, n_samples = 1, max_len = args.max_length, in_order = args.random_fill, num_positions=int(args.num_positions), temperature=float(args.temp))
                         out = ''.join(out)
@@ -726,7 +748,7 @@ def main(args):
             os.makedirs('RFDiffusion/')
             rfdiff = Repo.clone_from('https://github.com/martinez-zacharya/RFDiffusion', 'RFDiffusion/')
             rfdiff_git_root = rfdiff.git.rev_parse("--show-toplevel")
-            subprocess.run(['pip', 'install', rfdiff_git_root])
+            subprocess.run(['pip', 'install', '-e', rfdiff_git_root])
             command = f'pip install {rfdiff_git_root}/env/SE3Transformer'.split(' ')
             subprocess.run(command)
             sys.path.insert(0, 'RFDiffusion/')
@@ -797,9 +819,12 @@ def main(args):
 
     elif args.command == 'classify':
         data = esm.data.FastaBatchedDataset.from_file(args.query)
-        model = ProtT5()
+        model = ProtT5(args)
         dataloader = torch.utils.data.DataLoader(data, shuffle = False, batch_size = 1, num_workers=0)
-        trainer = pl.Trainer(enable_checkpointing=False, devices=int(args.GPUs), accelerator='gpu', logger=logger, num_nodes=int(args.nodes))
+        if int(args.GPUs) > 0:
+            trainer = pl.Trainer(enable_checkpointing=False, devices=int(args.GPUs), accelerator='gpu', logger=logger, num_nodes=int(args.nodes))
+        else:
+            trainer = pl.Trainer(enable_checkpointing=False, logger=logger, num_nodes=int(args.nodes))
         reps = trainer.predict(model, dataloader)
         if args.save_emb:
             emb_4export = []
@@ -828,8 +853,11 @@ def main(args):
                 clf = MLP_C2H2(1024, 512, 256)
                 clf.load_state_dict(torch.load(f'{temstapro_models_root}/mean_major_imbal-{thresh}_s{seed}.pt'))
                 clf.eval()
-                clf.to('cuda')
-                threshold_inferences[seed] = inference_epoch(clf, emb_loader, device='cuda')
+                if int(args.GPUs) > 0:
+                    clf.to('cuda')
+                    threshold_inferences[seed] = inference_epoch(clf, emb_loader, device='cuda')
+                else:
+                    threshold_inferences[seed] = inference_epoch(clf, emb_loader, device='cpu')
             for seq in threshold_inferences["41"].keys():
                 mean_prediction = 0
                 for seed in SEEDS:
@@ -935,11 +963,11 @@ def return_parser():
 )
 
     embed.add_argument(
-        "--preTrained_model",
+        "--finetuned",
         help="Input path to your own pre-trained ESM model",
         action="store",
         default = False,
-        dest="preTrained_model",
+        dest="finetuned",
 )
     embed.add_argument(
         "--model",

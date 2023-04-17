@@ -44,7 +44,7 @@ class ESM(pl.LightningModule):
         torch.cuda.empty_cache()
         labels, seqs, toks = batch
         del labels, seqs, batch_idx
-        masked_toks = maskInputs(toks)
+        masked_toks = maskInputs(toks, self.esm)
         output = self.esm(masked_toks, repr_layers = [-1], return_contacts=False)
         loss = F.cross_entropy(output['logits'].permute(0,2,1), toks)
         self.log("loss", loss)
@@ -157,12 +157,20 @@ class ESM_Gibbs_old(pl.LightningModule):
     
     
 class ProtGPT2(pl.LightningModule):
-    def __init__(self, lr, strat):
+    def __init__(self, args):
         super().__init__()
+        if int(args.GPUs) == 1:
+            device_map = {'transformer.wte': 0, 'lm_head': 0, 'transformer.wpe': 0, 'transformer.drop': 0, 'transformer.h.0': 0, 'transformer.h.1': 0, 'transformer.h.2': 0, 'transformer.h.3': 0, 'transformer.h.4': 0, 'transformer.h.5': 0, 'transformer.h.6': 0, 'transformer.h.7': 0, 'transformer.h.8': 0, 'transformer.h.9': 0, 'transformer.h.10': 0, 'transformer.h.11': 0, 'transformer.h.12': 0, 'transformer.h.13': 0, 'transformer.h.14': 0, 'transformer.h.15': 0, 'transformer.h.16': 0, 'transformer.h.17': 0, 'transformer.h.18': 0, 'transformer.h.19': 0, 'transformer.h.20': 0, 'transformer.h.21': 0, 'transformer.h.22': 0, 'transformer.h.23': 0, 'transformer.h.24': 0, 'transformer.h.25': 0, 'transformer.h.26': 0, 'transformer.h.27': 0, 'transformer.h.28': 0, 'transformer.h.29': 0, 'transformer.h.30': 0, 'transformer.h.31': 0, 'transformer.h.32': 0, 'transformer.h.33': 0, 'transformer.h.34': 0, 'transformer.h.35': 0, 'transformer.ln_f': 0}
+            self.model = AutoModelForCausalLM.from_pretrained("nferruz/ProtGPT2", device_map=device_map)
+        elif int(args.GPUs) > 1 and args.command == 'lang_gen':
+            self.model = AutoModelForCausalLM.from_pretrained("nferruz/ProtGPT2", device_map="auto")
+        else:
+            self.model = AutoModelForCausalLM.from_pretrained("nferruz/ProtGPT2", low_cpu_mem_usage=True)
+
         self.tokenizer = AutoTokenizer.from_pretrained("nferruz/ProtGPT2")
-        self.model = AutoModelForCausalLM.from_pretrained("nferruz/ProtGPT2")
-        self.lr = lr
-        self.strat = str(strat)
+        if 'lr' in args:
+            self.lr = float(args.lr)
+            self.strat = str(args.strategy)
     
     def training_step(self, batch, batch_idx):
         self.tokenizer.pad_token = self.tokenizer.eos_token
@@ -171,26 +179,37 @@ class ProtGPT2(pl.LightningModule):
         padding=True,
         return_special_tokens_mask=True
     )
-        att = torch.LongTensor(tokenized['attention_mask']).cuda()
+        if next(self.model.parameters()).is_cuda:
+            att = torch.LongTensor(tokenized['attention_mask']).cuda()
+        else:
+            att = torch.LongTensor(tokenized['attention_mask'])
         data_collator = DataCollatorForLanguageModeling(tokenizer = self.tokenizer, mlm=False)
         collated = data_collator([tokenized['input_ids']])
-        outputs = self.model(collated['input_ids'].cuda(), labels = collated['labels'].cuda(), attention_mask = att, return_dict = True)
+        if next(self.model.parameters()).is_cuda:
+            outputs = self.model(collated['input_ids'].cuda(), labels = collated['labels'].cuda(), attention_mask = att, return_dict = True)
+        else:
+            outputs = self.model(collated['input_ids'], labels = collated['labels'], attention_mask = att, return_dict = True)
         loss = outputs[0]
         self.log("loss", loss)
         return(loss)
         
     def configure_optimizers(self):
-        if 'deepspeed' in self.strat:
-            optimizer = DeepSpeedCPUAdam(self.model.parameters(), lr=self.lr)
+        if 'offload' in self.strat:
+            print("*** CPU offloading can't currently be used with TRILL and ProtGPT2 ***")
+            raise RuntimeError
+            # optimizer = DeepSpeedCPUAdam(self.model.parameters(), lr=self.lr)
         elif 'fsdp' in self.strat:
-            optimizer = FusedAdam(self.trainer.model.parameters(), lr=self.lr)
+            print("*** FSDP can't currently be used with TRILL and ProtGPT2 ***")
+            raise RuntimeError
+            return
+            # optimizer = torch.optim.Adam(self.trainer.model.parameters(), lr=self.lr)
         else:
             optimizer = torch.optim.Adam(self.model.parameters(), lr=self.lr)
         return optimizer
     
     def generate(self, seed_seq = "M", max_length = 100, do_sample = True, temperature = 1.0, top_k = 950, repetition_penalty = 1.2, num_return_sequences = 1, eos_token_id=0):
-        generator = pipeline('text-generation', model = self.model, tokenizer=self.tokenizer)
-        outseqs = generator(seed_seq, max_length=max_length, temperature = temperature, do_sample =do_sample, top_k=top_k, repetition_penalty=repetition_penalty, num_return_sequences=num_return_sequences, eos_token_id=eos_token_id)
+        generator = pipeline('text-generation', model = self.model, tokenizer=self.tokenizer, device_map='auto')
+        outseqs = generator(seed_seq, max_length=max_length, temperature = temperature, do_sample =do_sample, top_k=top_k, repetition_penalty=repetition_penalty, num_return_sequences=num_return_sequences, pad_token_id=eos_token_id, eos_token_id=eos_token_id)
         outseqs = [samp['generated_text'].replace('\n','') for samp in outseqs]
         return outseqs
 
@@ -198,7 +217,7 @@ class ESM_Gibbs(pl.LightningModule):
     """adapted from bert-gen bert-babble.ipynb"""
 
 
-    def __init__(self, model, device="cpu"):
+    def __init__(self, model, args, device="cpu"):
         """
             model should be an object with parameters model, alphabet, and batch_converter
         """
@@ -206,6 +225,7 @@ class ESM_Gibbs(pl.LightningModule):
 
         self.model, self.alphabet = model
         self.batch_converter = self.alphabet.get_batch_converter()
+        self.GPUs = int(args.GPUs)
 
         self.valid_aa_idx = sorted([self.alphabet.get_idx(tok) for tok in ESM_ALLOWED_AMINO_ACIDS])
 
@@ -389,7 +409,8 @@ class ESM_Gibbs(pl.LightningModule):
 
                     if mask:
                         self.mask_target_indexes(batch, target_indexes)
-
+                    if self.GPUs != 0:
+                        batch = batch.cuda()
                     out = self.model(batch)["logits"]
 
                     for batch_index in range(batch_size):
@@ -550,9 +571,13 @@ class ESM_Gibbs(pl.LightningModule):
     
 
 class ProtT5(pl.LightningModule):
-    def __init__(self):
+    def __init__(self, args):
         super().__init__()
-        self.model = T5EncoderModel.from_pretrained('Rostlab/prot_t5_xl_half_uniref50-enc')
+        device_map = {'shared': 'cpu', 'encoder.embed_tokens': 'cpu', 'encoder.block.0': 'cpu', 'encoder.block.1': 'cpu', 'encoder.block.2': 'cpu', 'encoder.block.3': 'cpu', 'encoder.block.4': 'cpu', 'encoder.block.5': 'cpu', 'encoder.block.6': 'cpu', 'encoder.block.7': 'cpu', 'encoder.block.8': 'cpu', 'encoder.block.9': 'cpu', 'encoder.block.10': 'cpu', 'encoder.block.11': 'cpu', 'encoder.block.12': 'cpu', 'encoder.block.13': 'cpu', 'encoder.block.14': 'cpu', 'encoder.block.15': 'cpu', 'encoder.block.16': 'cpu', 'encoder.block.17': 'cpu', 'encoder.block.18': 'cpu', 'encoder.block.19': 'cpu', 'encoder.block.20': 'cpu', 'encoder.block.21': 'cpu', 'encoder.block.22': 'cpu', 'encoder.block.23': 'cpu', 'encoder.final_layer_norm': 'cpu', 'encoder.dropout': 'cpu'}
+        if int(args.GPUs) > 0:
+            self.model = T5EncoderModel.from_pretrained('Rostlab/prot_t5_xl_half_uniref50-enc')
+        else:
+            self.model = T5EncoderModel.from_pretrained('Rostlab/prot_t5_xl_half_uniref50-enc', device_map=device_map)
         self.tokenizer = T5Tokenizer.from_pretrained('Rostlab/prot_t5_xl_half_uniref50-enc', do_lower_case=False)
         self.reps = []
 
@@ -577,7 +602,10 @@ class ProtT5(pl.LightningModule):
                 add_special_tokens=True, padding='longest')
         input_ids = torch.tensor(token_encoding['input_ids'])
         attention_mask = torch.tensor(token_encoding['attention_mask'])
-        embedding_repr = self.model(input_ids.cuda(), attention_mask=attention_mask.cuda())
+        if next(self.model.parameters()).is_cuda:
+            embedding_repr = self.model(input_ids.cuda(), attention_mask=attention_mask.cuda())
+        else:
+            embedding_repr = self.model(input_ids, attention_mask=attention_mask)
         emb = embedding_repr.last_hidden_state.squeeze(0)
         protein_emb = emb.mean(dim=0)
         reps = tuple((protein_emb, label[0]))
