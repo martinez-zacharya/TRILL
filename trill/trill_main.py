@@ -547,7 +547,7 @@ def main(args):
                 os.remove(file)
         else:
             model_import_name = f'esm.pretrained.{args.model}_UR50D()'
-            model = ESM(eval(model_import_name), 0.0001, False)
+            model = ESM(eval(model_import_name), 0.0001, args, False)
             data = esm.data.FastaBatchedDataset.from_file(args.query)
             dataloader = torch.utils.data.DataLoader(data, shuffle = False, batch_size = int(args.batch_size), num_workers=0, collate_fn=model.alphabet.get_batch_converter())
             pred_writer = CustomWriter(output_dir=".", write_interval="epoch")
@@ -578,7 +578,7 @@ def main(args):
 
 
             else:
-                model = weights_update(model = ESM(eval(model_import_name), 0.0001, False), checkpoint = torch.load(args.finetuned))
+                model = weights_update(model = ESM(eval(model_import_name), 0.0001, args, False), checkpoint = torch.load(args.finetuned))
                 trainer.predict(model, dataloader)
                 cwd_files = os.listdir()
                 pt_files = [file for file in cwd_files if 'predictions_' in file]
@@ -624,7 +624,7 @@ def main(args):
                 trainer.save_checkpoint(f"{args.name}_{args.model}_{args.epochs}.pt")
         else:
             model_import_name = f'esm.pretrained.{args.model}_UR50D()'
-            model = ESM(eval(model_import_name), float(args.lr), args.LEGGO)
+            model = ESM(eval(model_import_name), float(args.lr), args, args.LEGGO)
             dataloader = torch.utils.data.DataLoader(data, shuffle = False, batch_size = int(args.batch_size), num_workers=0, collate_fn=model.alphabet.get_batch_converter())
             if args.LEGGO:
                 trainer = pl.Trainer(devices=int(args.GPUs), profiler = profiler,accelerator='gpu',max_epochs=int(args.epochs),logger=logger, num_nodes=int(args.nodes), precision = 16, strategy=DeepSpeedStrategy(stage=3, offload_optimizer=True, offload_parameters=True))
@@ -770,7 +770,7 @@ def main(args):
         if int(args.GPUs) == 0:
             model = EsmForProteinFolding.from_pretrained('facebook/esmfold_v1', low_cpu_mem_usage=True, torch_dtype='auto')
         else:
-            model = EsmForProteinFolding.from_pretrained('facebook/esmfold_v1', low_cpu_mem_usage=True, torch_dtype='auto')
+            model = EsmForProteinFolding.from_pretrained('facebook/esmfold_v1', low_cpu_mem_usage=True,torch_dtype='auto')
             model.esm = model.esm.half()
             model = model.cuda()
         if args.strategy != None:

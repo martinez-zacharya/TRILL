@@ -28,12 +28,13 @@ from tqdm import tqdm
 ESM_ALLOWED_AMINO_ACIDS = "ACDEFGHIKLMNPQRSTVWY"
 
 class ESM(pl.LightningModule):
-    def __init__(self, model, lr, leggo = False):
+    def __init__(self, model, lr, args, leggo = False):
         super().__init__()
         self.esm, self.alphabet = model
         self.repr_layers = [(i + self.esm.num_layers + 1) % (self.esm.num_layers + 1) for i in [-1]]
         self.reps = []
         self.lr = lr
+        self.strat = args.strategy
         self.sample_seqs = []
         if leggo:
             self.leggo = True
@@ -52,7 +53,7 @@ class ESM(pl.LightningModule):
         return {"loss": loss}
     
     def configure_optimizers(self):
-        if self.leggo:
+        if 'offload' in self.strat:
             optimizer = DeepSpeedCPUAdam(self.esm.parameters(), lr=self.lr)
             return optimizer
         else:
@@ -74,87 +75,6 @@ class ESM(pl.LightningModule):
         # finaldf['Label'] = newdf['Label']
         # return finaldf
         return reps
-    
-class ESM_Gibbs_old(pl.LightningModule):
-    def __init__(self, model, lr, leggo = False, seed='M', total=1, max_len=100, temp = 1, top_k = 950):
-        super().__init__()
-        self.esm, self.alphabet = model
-        self.repr_layers = [(i + self.esm.num_layers + 1) % (self.esm.num_layers + 1) for i in [-1]]
-        self.reps = []
-        self.lr = lr
-        self.sample_seqs = []
-        self.seed = seed
-        self.total = total
-        self.max_len = max_len
-        self.temp = temp
-        self.top_k = top_k
-        if leggo:
-            self.leggo = True
-        else:
-            self.leggo = False
-
-    def training_step(self, batch, batch_idx):
-        torch.cuda.empty_cache()
-        labels, seqs, toks = batch
-        del labels, seqs, batch_idx
-        masked_toks = maskInputs(toks)
-        output = self.esm(masked_toks, repr_layers = [-1], return_contacts=False)
-        loss = F.cross_entropy(output['logits'].permute(0,2,1), toks)
-        self.log("loss", loss)
-        del masked_toks, toks
-        return {"loss": loss}
-    
-    def step(self, out, idx):
-        flag = False
-        while flag == False:
-            logits = out[idx]
-            logits = logits / self.temp
-            valid_idx = list(range(len(logits)))
-            if self.top_k <= 0 or self.top_k > len(logits[valid_idx]):
-                kth_vals, kth_idx = torch.topk(logits, len(logits[valid_idx]))
-            else:
-                kth_vals, kth_idx = torch.topk(logits, self.top_k)
-            dist = torch.distributions.categorical.Categorical(logits=kth_vals)
-            new_idx = kth_idx[dist.sample()]
-            if valid_idx[new_idx] != 32 and valid_idx[new_idx] != 1 and valid_idx[new_idx] != 3 and valid_idx[new_idx] != 0 and valid_idx[new_idx] != 2 and valid_idx[new_idx] != 31 and valid_idx[new_idx] != 30 and valid_idx[new_idx] != 29:
-                flag = True
-        return torch.tensor(valid_idx[new_idx])
-
-    def untokenize(self, batch, alphabet):
-        out = [ "".join([alphabet.get_tok(seq[i]) for i in range(0, len(seq))]) for seq in batch]
-        return out
-
-    def configure_optimizers(self):
-        if self.leggo:
-            optimizer = DeepSpeedCPUAdam(self.esm.parameters(), lr=self.lr)
-            return optimizer
-        else:
-            optimizer = torch.optim.Adam(self.esm.parameters(), lr=self.lr)
-            lr_scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=1)
-            return [optimizer], [lr_scheduler]
-    
-    def predict(self):
-        batch_converter = self.alphabet.get_batch_converter()
-        seed = self.seed
-        sequence_to_add_to = seed
-        for j in range(self.max_len):
-            prev_seq = sequence_to_add_to + "<mask>"
-            new_input = [(seed, prev_seq)]
-
-            label, seq, toks = batch_converter(new_input)
-            self.esm = self.esm.cuda()
-            out = self.esm(toks.cuda())['logits'].squeeze(0)
-            toks = toks.cpu().detach()
-            masks = np.where(toks==32)[1]
-            for index in masks:
-                idx = self.step(out, index)
-                toks[0][index] = idx
-                newseq = self.untokenize(toks, self.alphabet)
-                sequence_to_add_to+=newseq[0][-6]
-            torch.cuda.empty_cache()
-            del label, seq, toks, out
-        return(sequence_to_add_to)
-    
     
 class ProtGPT2(pl.LightningModule):
     def __init__(self, args):
@@ -195,13 +115,12 @@ class ProtGPT2(pl.LightningModule):
         
     def configure_optimizers(self):
         if 'offload' in self.strat:
-            print("*** CPU offloading can't currently be used with TRILL and ProtGPT2 ***")
-            raise RuntimeError
-            # optimizer = DeepSpeedCPUAdam(self.model.parameters(), lr=self.lr)
+            # print("*** CPU offloading can't currently be used with TRILL and ProtGPT2 ***")
+            # raise RuntimeError
+            optimizer = DeepSpeedCPUAdam(self.model.parameters(), lr=self.lr)
         elif 'fsdp' in self.strat:
             print("*** FSDP can't currently be used with TRILL and ProtGPT2 ***")
             raise RuntimeError
-            return
             # optimizer = torch.optim.Adam(self.trainer.model.parameters(), lr=self.lr)
         else:
             optimizer = torch.optim.Adam(self.model.parameters(), lr=self.lr)
