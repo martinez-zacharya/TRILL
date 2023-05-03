@@ -538,6 +538,13 @@ class ProtT5(pl.LightningModule):
         #     reps.append(tuple([rep_numpy[i].mean(0), label[i]]))
 
         return reps
+    
+
+class Pafnucy(pl.LightningModule):
+    def __init__(self, args):
+        super().__init__()
+        pass
+
 
 
 from pytorch_lightning.callbacks import BasePredictionWriter

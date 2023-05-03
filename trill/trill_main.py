@@ -500,7 +500,7 @@ def main(args):
         action="store",
         default=None
         )
-    
+
 ##############################################################################################################
 
     
@@ -538,6 +538,7 @@ def main(args):
         fig = viz(reduced_df, args.name, args.group)
         bokeh.io.output_file(filename=f'{args.name}_{args.method}_{incsv}.html', title=args.name) 
         bokeh.io.save(fig, filename=f'{args.name}_{args.method}_{incsv}.html', title = args.name)
+    
 
     elif args.command == 'embed':
         if args.query.endswith(('.fasta', '.faa', '.fa')) == False:
