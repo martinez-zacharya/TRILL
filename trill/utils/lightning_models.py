@@ -34,7 +34,8 @@ class ESM(pl.LightningModule):
         self.repr_layers = [(i + self.esm.num_layers + 1) % (self.esm.num_layers + 1) for i in [-1]]
         self.reps = []
         self.lr = lr
-        self.strat = args.strategy
+        if args.command == 'finetune':
+            self.strat = args.strategy
         self.sample_seqs = []
         if leggo:
             self.leggo = True
@@ -535,6 +536,13 @@ class ProtT5(pl.LightningModule):
         #     reps.append(tuple([rep_numpy[i].mean(0), label[i]]))
 
         return reps
+    
+
+class Pafnucy(pl.LightningModule):
+    def __init__(self, args):
+        super().__init__()
+        pass
+
 
 
 from pytorch_lightning.callbacks import BasePredictionWriter
