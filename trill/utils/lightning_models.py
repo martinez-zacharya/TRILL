@@ -34,7 +34,10 @@ class ESM(pl.LightningModule):
         self.repr_layers = [(i + self.esm.num_layers + 1) % (self.esm.num_layers + 1) for i in [-1]]
         self.reps = []
         self.lr = lr
-        self.strat = args.strategy
+        if args.command == 'finetune':
+            self.strat = args.strategy
+        else:
+            self.strat = None
         self.sample_seqs = []
         if leggo:
             self.leggo = True

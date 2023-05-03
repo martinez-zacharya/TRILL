@@ -9,6 +9,8 @@ import os
 from git import Repo
 from torch import inf
 import sys
+import xgboost as xgb
+from sklearn.model_selection import train_test_split
 import torch.nn as nn
 import torch.nn.functional as F
 import pandas as pd
@@ -16,6 +18,7 @@ from pytorch_lightning.loggers import TensorBoardLogger
 from pytorch_lightning.profilers import PyTorchProfiler
 from pytorch_lightning.strategies import DeepSpeedStrategy
 import yaml
+from sklearn.metrics import precision_recall_fscore_support
 from tqdm import tqdm
 import numpy as np
 from rdkit import Chem
@@ -143,6 +146,11 @@ def main(args):
         action="store",
         default=10,
         dest="epochs",
+        )
+    finetune.add_argument("--save_on_epoch", 
+        help="Saves a checkpoint on every successful epoch completed. WARNING, this could lead to rapid storage consumption", 
+        action="store_true",
+        default=False,
         )
     finetune.add_argument(
         "--lr",
@@ -381,12 +389,17 @@ def main(args):
 
     classify.add_argument(
         "classifier",
-        help="Predict thermostability using TemStaPro",
-        choices = ['TemStaPro']
+        help="Predict thermostability using TemStaPro or choose custom to train/use your own XGBoost based binary classifier. Note for training a custom_binary, you need to submit roughly equal amounts of both binary classes as part of your query.",
+        choices = ['TemStaPro', 'custom_binary']
 )
     classify.add_argument(
         "query",
-        help="Fasta file of sequences to score with TemStaPro",
+        help="Fasta file of sequences to score",
+        action="store"
+)
+    classify.add_argument(
+        "--key",
+        help="String that allows for the unique identification of your binary classes from the input fasta headers. For example, --key positive_hits would group all sequences that have 'positive_hits' in the fasta header as one class and the rest as the other class",
         action="store"
 )
     classify.add_argument(
@@ -394,6 +407,22 @@ def main(args):
         help="Save csv of ProtT5 embeddings",
         action="store_true",
         default=False
+)
+    classify.add_argument(
+        "--emb_model",
+        help="Select between 'esm2_t6_8M', 'esm2_t12_35M', 'esm2_t30_150M', 'esm2_t33_650M', 'esm2_t36_3B','esm2_t48_15B', or 'ProtT5-XL' for embedding your query proteins to then train your custom classifier",
+        default = 'esm2_t12_35M',
+        action="store"
+)
+    classify.add_argument(
+        "--train_split",
+        help="Choose your train-test percentage split for training and evaluating your custom classifier. For example, --train 60 would split your input sequences into two groups, one with 60%% of the sequences to train and the other with 40%% for evaluating",
+        action="store",
+)
+    classify.add_argument(
+        "--preTrained",
+        help="Enter the path to your pre-trained XGBoost binary classifier that you've trained with TRILL.",
+        action="store",
 )
 ##############################################################################################################
     
@@ -604,13 +633,20 @@ def main(args):
             tokenizer = AutoTokenizer.from_pretrained("nferruz/ProtGPT2")
             seq_dict_df = ProtGPT2_wrangle(data, tokenizer)
             dataloader = torch.utils.data.DataLoader(seq_dict_df, shuffle = False, batch_size = int(args.batch_size), num_workers=0)
-            if int(args.GPUs) == 0:
-                trainer = pl.Trainer(profiler=profiler, max_epochs=int(args.epochs), logger = logger, num_nodes = int(args.nodes))
+            if args.save_on_epoch:
+                checkpoint_callback = ModelCheckpoint(every_n_epochs=1, save_top_k = -1)
+                if int(args.GPUs) == 0:
+                    trainer = pl.Trainer(profiler=profiler, max_epochs=int(args.epochs), logger = logger, num_nodes = int(args.nodes), callbacks=[checkpoint_callback], default_root_dir=f'{os.path.join(os.getcwd(), args.name)}_ckpt')
+                else:
+                    trainer = pl.Trainer(devices=int(args.GPUs), profiler=profiler, accelerator='gpu', max_epochs=int(args.epochs), logger = logger, num_nodes = int(args.nodes), precision = 16, strategy = args.strategy, callbacks=[checkpoint_callback], default_root_dir=f'{os.path.join(os.getcwd(), args.name)}_ckpt')
             else:
-                trainer = pl.Trainer(devices=int(args.GPUs), profiler=profiler, accelerator='gpu', max_epochs=int(args.epochs), logger = logger, num_nodes = int(args.nodes), precision = 16, strategy = args.strategy)
+                if int(args.GPUs) == 0:
+                    trainer = pl.Trainer(profiler=profiler, max_epochs=int(args.epochs), logger = logger, num_nodes = int(args.nodes), enable_checkpointing=False)
+                else:
+                    trainer = pl.Trainer(devices=int(args.GPUs), profiler=profiler, accelerator='gpu', max_epochs=int(args.epochs), logger = logger, num_nodes = int(args.nodes), precision = 16, strategy = args.strategy, enable_checkpointing=False)
             trainer.fit(model=model, train_dataloaders = dataloader)
             if 'deepspeed' in str(args.strategy):
-                save_path = os.path.join(os.getcwd(), f"checkpoints/epoch={int(args.epochs) - 1}-step={len_data*int(args.epochs)}.ckpt")
+                save_path = os.path.join(os.getcwd(), f"{os.path.join(os.getcwd(), args.name)}_ckpt/checkpoints/epoch={int(args.epochs) - 1}-step={len_data*int(args.epochs)}.ckpt")
                 output_path = f"{args.name}_ProtGPT2_{args.epochs}.pt"
                 try:
                     convert_zero_checkpoint_to_fp32_state_dict(save_path, output_path)
@@ -620,21 +656,21 @@ def main(args):
                 pass
 
             else:
-                # print(model)
                 trainer.save_checkpoint(f"{args.name}_{args.model}_{args.epochs}.pt")
         else:
             model_import_name = f'esm.pretrained.{args.model}_UR50D()'
             model = ESM(eval(model_import_name), float(args.lr), args, args.LEGGO)
             dataloader = torch.utils.data.DataLoader(data, shuffle = False, batch_size = int(args.batch_size), num_workers=0, collate_fn=model.alphabet.get_batch_converter())
             if args.LEGGO:
-                trainer = pl.Trainer(devices=int(args.GPUs), profiler = profiler,accelerator='gpu',max_epochs=int(args.epochs),logger=logger, num_nodes=int(args.nodes), precision = 16, strategy=DeepSpeedStrategy(stage=3, offload_optimizer=True, offload_parameters=True))
-                trainer.fit(model=model, train_dataloaders=dataloader)
-                save_path = os.path.join(os.getcwd(), f"checkpoints/epoch={int(args.epochs) - 1}-step={len_data*int(args.epochs)}.ckpt")
-                output_path = f"{args.name}_esm2_{args.epochs}.pt"
-                try:
-                    convert_zero_checkpoint_to_fp32_state_dict(save_path, output_path)
-                except Exception as e:
-                    print(f'Exception {e} has occured on attempted save of your deepspeed trained model. If this has to do with CPU RAM, please try pytorch_lightning.utilities.deepspeedconvert_zero_checkpoint_to_fp32_state_dict(your_checkpoint.ckpt, full_model.pt')       
+                raise RuntimeError('LEGGO is no longer a valid option. Sorry for the confusion')
+            #     trainer = pl.Trainer(devices=int(args.GPUs), profiler = profiler,accelerator='gpu',max_epochs=int(args.epochs),logger=logger, num_nodes=int(args.nodes), precision = 16, strategy=DeepSpeedStrategy(stage=3, offload_optimizer=True, offload_parameters=True))
+            #     trainer.fit(model=model, train_dataloaders=dataloader)
+            #     save_path = os.path.join(os.getcwd(), f"checkpoints/epoch={int(args.epochs) - 1}-step={len_data*int(args.epochs)}.ckpt")
+            #     output_path = f"{args.name}_esm2_{args.epochs}.pt"
+            #     try:
+            #         convert_zero_checkpoint_to_fp32_state_dict(save_path, output_path)
+            #     except Exception as e:
+            #         print(f'Exception {e} has occured on attempted save of your deepspeed trained model. If this has to do with CPU RAM, please try pytorch_lightning.utilities.deepspeedconvert_zero_checkpoint_to_fp32_state_dict(your_checkpoint.ckpt, full_model.pt')       
             elif args.strategy == 'deepspeed_stage_3' or args.strategy == 'deepspeed_stage_3_offload' or args.strategy == 'deepspeed_stage_2' or args.strategy == 'deepspeed_stage_2_offload':
                 save_path = os.path.join(os.getcwd(), f"checkpoints/epoch={int(args.epochs) - 1}-step={len_data*int(args.epochs)}.ckpt")
                 output_path = f"{args.name}_esm2_{args.epochs}.pt"
@@ -816,60 +852,93 @@ def main(args):
         run_diffdock(args, diffdock_root)
 
     elif args.command == 'classify':
-        data = esm.data.FastaBatchedDataset.from_file(args.query)
-        model = ProtT5(args)
-        dataloader = torch.utils.data.DataLoader(data, shuffle = False, batch_size = 1, num_workers=0)
-        if int(args.GPUs) > 0:
-            trainer = pl.Trainer(enable_checkpointing=False, devices=int(args.GPUs), accelerator='gpu', logger=logger, num_nodes=int(args.nodes))
-        else:
-            trainer = pl.Trainer(enable_checkpointing=False, logger=logger, num_nodes=int(args.nodes))
-        reps = trainer.predict(model, dataloader)
-        if args.save_emb:
-            emb_4export = []
-            for rep in reps:
-                intermed = []
-                for i in range(len(rep[0])):
-                    intermed.append(rep[0][i].cpu().numpy())
-                intermed.append(rep[1])
-                emb_4export.append(intermed)
-            emb_df = pd.DataFrame(emb_4export)
-            emb_df.to_csv(f'{args.name}_ProtT5-XL_embeddings.csv', index=False)
-        if not os.path.exists('TemStaPro_models/'):
-            temstapro_models = Repo.clone_from('https://github.com/martinez-zacharya/TemStaPro_models', 'TemStaPro_models/')
-            temstapro_models_root = temstapro_models.git.rev_parse("--show-toplevel")
-        else:
-            temstapro_models = Repo('TemStaPro_models')
-            temstapro_models_root = temstapro_models.git.rev_parse("--show-toplevel")
-        dataloader = torch.utils.data.DataLoader(data, shuffle = False, batch_size = 1, num_workers=0)
-        THRESHOLDS = ["40", "45", "50", "55", "60", "65"]
-        SEEDS = ["41", "42", "43", "44", "45"]
-        emb_loader = torch.utils.data.DataLoader(reps, shuffle = False, batch_size = 1, num_workers = 0)
-        inferences = {}
-        for thresh in THRESHOLDS:
-            threshold_inferences = {}
-            for seed in SEEDS:
-                clf = MLP_C2H2(1024, 512, 256)
-                clf.load_state_dict(torch.load(f'{temstapro_models_root}/mean_major_imbal-{thresh}_s{seed}.pt'))
-                clf.eval()
-                if int(args.GPUs) > 0:
-                    clf.to('cuda')
-                    threshold_inferences[seed] = inference_epoch(clf, emb_loader, device='cuda')
-                else:
-                    threshold_inferences[seed] = inference_epoch(clf, emb_loader, device='cpu')
-            for seq in threshold_inferences["41"].keys():
-                mean_prediction = 0
+        if args.classifier == 'TemStaPro':
+            data = esm.data.FastaBatchedDataset.from_file(args.query)
+            model = ProtT5(args)
+            dataloader = torch.utils.data.DataLoader(data, shuffle = False, batch_size = 1, num_workers=0)
+            if int(args.GPUs) > 0:
+                trainer = pl.Trainer(enable_checkpointing=False, devices=int(args.GPUs), accelerator='gpu', logger=logger, num_nodes=int(args.nodes))
+            else:
+                trainer = pl.Trainer(enable_checkpointing=False, logger=logger, num_nodes=int(args.nodes))
+            reps = trainer.predict(model, dataloader)
+            if args.save_emb:
+                emb_4export = []
+                for rep in reps:
+                    intermed = []
+                    for i in range(len(rep[0])):
+                        intermed.append(rep[0][i].cpu().numpy())
+                    intermed.append(rep[1])
+                    emb_4export.append(intermed)
+                emb_df = pd.DataFrame(emb_4export)
+                emb_df.to_csv(f'{args.name}_ProtT5-XL_embeddings.csv', index=False)
+            if not os.path.exists('TemStaPro_models/'):
+                temstapro_models = Repo.clone_from('https://github.com/martinez-zacharya/TemStaPro_models', 'TemStaPro_models/')
+                temstapro_models_root = temstapro_models.git.rev_parse("--show-toplevel")
+            else:
+                temstapro_models = Repo('TemStaPro_models')
+                temstapro_models_root = temstapro_models.git.rev_parse("--show-toplevel")
+            dataloader = torch.utils.data.DataLoader(data, shuffle = False, batch_size = 1, num_workers=0)
+            THRESHOLDS = ["40", "45", "50", "55", "60", "65"]
+            SEEDS = ["41", "42", "43", "44", "45"]
+            emb_loader = torch.utils.data.DataLoader(reps, shuffle = False, batch_size = 1, num_workers = 0)
+            inferences = {}
+            for thresh in THRESHOLDS:
+                threshold_inferences = {}
                 for seed in SEEDS:
-                     mean_prediction += threshold_inferences[seed][seq]
-                mean_prediction /= len(SEEDS)
-                binary_pred = round(mean_prediction)
-                inferences[f'{seq}$%#{thresh}'] = (mean_prediction, binary_pred)
-        inference_df = pd.DataFrame.from_dict(inferences, orient='index', columns=['Mean_Pred', 'Binary_Pred'])
-        inference_df = inference_df.reset_index(names='RawLab')
-        inference_df['Protein'] = inference_df['RawLab'].apply(lambda x: x.split('$%#')[0])
-        inference_df['Threshold'] = inference_df['RawLab'].apply(lambda x: x.split('$%#')[-1])
-        inference_df = inference_df.drop(columns='RawLab')
-        inference_df = inference_df[['Protein', 'Threshold', 'Mean_Pred', 'Binary_Pred']]
-        inference_df.to_csv(f'{args.name}_TemStaPro_preds.csv', index = False)        
+                    clf = MLP_C2H2(1024, 512, 256)
+                    clf.load_state_dict(torch.load(f'{temstapro_models_root}/mean_major_imbal-{thresh}_s{seed}.pt'))
+                    clf.eval()
+                    if int(args.GPUs) > 0:
+                        clf.to('cuda')
+                        threshold_inferences[seed] = inference_epoch(clf, emb_loader, device='cuda')
+                    else:
+                        threshold_inferences[seed] = inference_epoch(clf, emb_loader, device='cpu')
+                for seq in threshold_inferences["41"].keys():
+                    mean_prediction = 0
+                    for seed in SEEDS:
+                        mean_prediction += threshold_inferences[seed][seq]
+                    mean_prediction /= len(SEEDS)
+                    binary_pred = round(mean_prediction)
+                    inferences[f'{seq}$%#{thresh}'] = (mean_prediction, binary_pred)
+            inference_df = pd.DataFrame.from_dict(inferences, orient='index', columns=['Mean_Pred', 'Binary_Pred'])
+            inference_df = inference_df.reset_index(names='RawLab')
+            inference_df['Protein'] = inference_df['RawLab'].apply(lambda x: x.split('$%#')[0])
+            inference_df['Threshold'] = inference_df['RawLab'].apply(lambda x: x.split('$%#')[-1])
+            inference_df = inference_df.drop(columns='RawLab')
+            inference_df = inference_df[['Protein', 'Threshold', 'Mean_Pred', 'Binary_Pred']]
+            inference_df.to_csv(f'{args.name}_TemStaPro_preds.csv', index = False)
+        elif args.classifier == 'custom_binary':
+            embed_command = f"trill {args.name} {args.GPUs} embed {args.emb_model} {args.query}".split(' ')
+            subprocess.run(embed_command, check=True)
+            df = pd.read_csv(f'{args.name}_{args.emb_model}.csv')
+            if args.train_split is not None:
+                df['NewLab'] = np.where(df['Label'].str.contains(args.key) == 1, 1, 0)
+                df = df.sample(frac = 1)
+                train_df, test_df = train_test_split(df, test_size = 100-int(args.train_split), stratify = df['NewLab'])
+                model = xgb.XGBClassifier(gamma= 0.4, learning_rate = 0.2,  max_depth = 8, n_estimators = 115, reg_alpha = 0.8, reg_lambda = 0.1)
+                model.fit(train_df.iloc[:,:-2], train_df['NewLab'])
+                test_preds = model.predict(test_df.iloc[:,:-2])
+                precision, recall, fscore, support = precision_recall_fscore_support(test_df['NewLab'], test_preds, average = 'binary')
+                print(f'{precision=}')
+                print(f'{recall=}')
+                print(f'{fscore=}')
+
+                if not args.save_emb:
+                    os.remove(f'{args.name}_{args.emb_model}.csv')
+                model.save_model(f'{args.name}_XGBoost_binary_{len(test_df.columns)-2}.json')
+            else:
+                model = xgb.Booster()
+                model.load_model(args.preTrained)
+                data = xgb.DMatrix(df.iloc[:,:-1])
+                test_preds = model.predict(data)
+                binary_scores = test_preds.round()
+                df['Predicted_Class'] = binary_scores.astype(int)
+                out_df = df[['Label', 'Predicted_Class']]
+                out_df.to_csv(f'{args.name}_predictions.csv', index = False)
+                if not args.save_emb:
+                    os.remove(f'{args.name}_{args.emb_model}.csv')
+
+
 
 
 
