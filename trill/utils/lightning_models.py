@@ -36,6 +36,8 @@ class ESM(pl.LightningModule):
         self.lr = lr
         if args.command == 'finetune':
             self.strat = args.strategy
+        else:
+            self.strat = None
         self.sample_seqs = []
         if leggo:
             self.leggo = True
