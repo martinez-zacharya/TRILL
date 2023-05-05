@@ -416,7 +416,7 @@ def main(args):
 )
     classify.add_argument(
         "--train_split",
-        help="Choose your train-test percentage split for training and evaluating your custom classifier. For example, --train 60 would split your input sequences into two groups, one with 60%% of the sequences to train and the other with 40%% for evaluating",
+        help="Choose your train-test percentage split for training and evaluating your custom classifier. For example, --train .6 would split your input sequences into two groups, one with 60%% of the sequences to train and the other with 40%% for evaluating",
         action="store",
 )
     classify.add_argument(
@@ -644,7 +644,7 @@ def main(args):
                 if int(args.GPUs) == 0:
                     trainer = pl.Trainer(profiler=profiler, max_epochs=int(args.epochs), logger = logger, num_nodes = int(args.nodes), enable_checkpointing=False)
                 else:
-                    trainer = pl.Trainer(devices=int(args.GPUs), profiler=profiler, accelerator='gpu', max_epochs=int(args.epochs), logger = logger, num_nodes = int(args.nodes), precision = 16, strategy = args.strategy, enable_checkpointing=False)
+                    trainer = pl.Trainer(devices=int(args.GPUs), profiler=profiler, accelerator='gpu', default_root_dir=f'{os.path.join(os.getcwd(), args.name)}_ckpt', max_epochs=int(args.epochs), logger = logger, num_nodes = int(args.nodes), precision = 16, strategy = args.strategy)
             trainer.fit(model=model, train_dataloaders = dataloader)
             if 'deepspeed' in str(args.strategy):
                 save_path = os.path.join(os.getcwd(), f"{os.path.join(os.getcwd(), args.name)}_ckpt/checkpoints/epoch={int(args.epochs) - 1}-step={len_data*int(args.epochs)}.ckpt")
@@ -675,7 +675,11 @@ def main(args):
             elif args.strategy == 'deepspeed_stage_3' or args.strategy == 'deepspeed_stage_3_offload' or args.strategy == 'deepspeed_stage_2' or args.strategy == 'deepspeed_stage_2_offload':
                 save_path = os.path.join(os.getcwd(), f"checkpoints/epoch={int(args.epochs) - 1}-step={len_data*int(args.epochs)}.ckpt")
                 output_path = f"{args.name}_esm2_{args.epochs}.pt"
-                trainer = pl.Trainer(devices=int(args.GPUs), profiler = profiler, accelerator='gpu', strategy = args.strategy, max_epochs=int(args.epochs), logger=logger, num_nodes=int(args.nodes), precision = 16,  enable_checkpointing=False)        
+                if args.save_on_epoch:
+                    checkpoint_callback = ModelCheckpoint(every_n_epochs=1, save_top_k = -1)
+                    trainer = pl.Trainer(devices=int(args.GPUs), profiler = profiler, callbacks=[checkpoint_callback], default_root_dir=f'{os.path.join(os.getcwd(), args.name)}_ckpt', accelerator='gpu', strategy = args.strategy, max_epochs=int(args.epochs), logger=logger, num_nodes=int(args.nodes), precision = 16)        
+                else:
+                    trainer = pl.Trainer(devices=int(args.GPUs), profiler = profiler, callbacks=[checkpoint_callback], default_root_dir=f'{os.path.join(os.getcwd(), args.name)}_ckpt', accelerator='gpu', strategy = args.strategy, max_epochs=int(args.epochs), logger=logger, num_nodes=int(args.nodes), precision = 16)        
                 trainer.fit(model=model, train_dataloaders=dataloader)
                 trainer.save_checkpoint(f"{args.name}_{args.model}_{args.epochs}.pt")
                 try:
@@ -683,10 +687,17 @@ def main(args):
                 except Exception as e:
                     print(f'Exception {e} has occured on attempted save of your deepspeed trained model. If this has to do with CPU RAM, please try pytorch_lightning.utilities.deepspeedconvert_zero_checkpoint_to_fp32_state_dict(your_checkpoint.ckpt, full_model.pt')       
             else:
-                if int(args.GPUs) == 0:
-                    trainer = pl.Trainer(profiler = profiler, max_epochs=int(args.epochs), logger=logger, num_nodes=int(args.nodes), enable_checkpointing=False) 
+                if args.save_on_epoch:
+                    checkpoint_callback = ModelCheckpoint(every_n_epochs=1, save_top_k = -1)
+                    if int(args.GPUs) == 0:
+                        trainer = pl.Trainer(profiler = profiler, max_epochs=int(args.epochs), callbacks=[checkpoint_callback], default_root_dir=f'{os.path.join(os.getcwd(), args.name)}_ckpt', logger=logger, num_nodes=int(args.nodes)) 
+                    else:
+                        trainer = pl.Trainer(devices=int(args.GPUs), profiler = profiler, accelerator='gpu', callbacks=[checkpoint_callback], default_root_dir=f'{os.path.join(os.getcwd(), args.name)}_ckpt',strategy = args.strategy, max_epochs=int(args.epochs), logger=logger, num_nodes=int(args.nodes), precision = 16, amp_backend='native')        
                 else:
-                    trainer = pl.Trainer(devices=int(args.GPUs), profiler = profiler, accelerator='gpu', strategy = args.strategy, max_epochs=int(args.epochs), logger=logger, num_nodes=int(args.nodes), precision = 16, amp_backend='native', enable_checkpointing=False)        
+                    if int(args.GPUs) == 0:
+                        trainer = pl.Trainer(profiler = profiler, max_epochs=int(args.epochs), logger=logger, num_nodes=int(args.nodes), enable_checkpointing=False) 
+                    else:
+                        trainer = pl.Trainer(devices=int(args.GPUs), profiler = profiler, accelerator='gpu', strategy = args.strategy, max_epochs=int(args.epochs), logger=logger, num_nodes=int(args.nodes), precision = 16, amp_backend='native', enable_checkpointing=False)     
                 trainer.fit(model=model, train_dataloaders=dataloader)
                 trainer.save_checkpoint(f"{args.name}_{args.model}_{args.epochs}.pt")
 
@@ -807,9 +818,10 @@ def main(args):
         if int(args.GPUs) == 0:
             model = EsmForProteinFolding.from_pretrained('facebook/esmfold_v1', low_cpu_mem_usage=True, torch_dtype='auto')
         else:
-            model = EsmForProteinFolding.from_pretrained('facebook/esmfold_v1', low_cpu_mem_usage=True,torch_dtype='auto')
+            model = EsmForProteinFolding.from_pretrained('facebook/esmfold_v1', device_map='auto', torch_dtype='auto')
             model.esm = model.esm.half()
-            model = model.cuda()
+            # device = torch.device("cuda")
+            # model = model.to(device)
         if args.strategy != None:
             model.trunk.set_chunk_size(int(args.strategy))
         fold_df = pd.DataFrame(list(data), columns = ["Entry", "Sequence"])
@@ -819,17 +831,17 @@ def main(args):
                 tokenized_input = tokenizer([input_ids], return_tensors="pt", add_special_tokens=False)['input_ids']
                 tokenized_input = tokenized_input.clone().detach()
                 prot_len = len(input_ids)
-                try:
-                    output = model(tokenized_input)
-                    outputs.append({key: val.cpu() for key, val in output.items()})
-                except RuntimeError as e:
-                        if 'out of memory' in str(e):
-                            print(f'Protein too long to fold for current hardware: {prot_len} amino acids long)')
-                            print(e)
-                            break
-                        else:
-                            print(e)
-                            pass
+                # try:
+                output = model(tokenized_input)
+                outputs.append({key: val.cpu() for key, val in output.items()})
+                # except RuntimeError as e:
+                #         if 'out of memory' in str(e):
+                #             print(f'Protein too long to fold for current hardware: {prot_len} amino acids long)')
+                #             print(e)
+                #             break
+                #         else:
+                #             print(e)
+                #             pass
 
         pdb_list = [convert_outputs_to_pdb(output) for output in outputs]
         protein_identifiers = fold_df.Entry.tolist()
@@ -915,7 +927,7 @@ def main(args):
             if args.train_split is not None:
                 df['NewLab'] = np.where(df['Label'].str.contains(args.key) == 1, 1, 0)
                 df = df.sample(frac = 1)
-                train_df, test_df = train_test_split(df, test_size = 100-int(args.train_split), stratify = df['NewLab'])
+                train_df, test_df = train_test_split(df, test_size = float(args.train_split), stratify = df['NewLab'])
                 model = xgb.XGBClassifier(gamma= 0.4, learning_rate = 0.2,  max_depth = 8, n_estimators = 115, reg_alpha = 0.8, reg_lambda = 0.1)
                 model.fit(train_df.iloc[:,:-2], train_df['NewLab'])
                 test_preds = model.predict(test_df.iloc[:,:-2])

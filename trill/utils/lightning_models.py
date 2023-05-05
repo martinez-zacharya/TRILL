@@ -56,7 +56,7 @@ class ESM(pl.LightningModule):
         return {"loss": loss}
     
     def configure_optimizers(self):
-        if 'offload' in self.strat:
+        if 'offload' in str(self.strat):
             optimizer = DeepSpeedCPUAdam(self.esm.parameters(), lr=self.lr)
             return optimizer
         else:

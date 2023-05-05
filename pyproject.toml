@@ -12,6 +12,7 @@ documentation = "https://trill.readthedocs.io/en/latest/home.html"
 
 [tool.poetry.dependencies]
 python = "^3.8"
+numpy = "1.23.5"
 llvmlite = "^0.39.1"
 pytest = "^7.2.0"
 fair-esm = "^2.0.0"
@@ -45,6 +46,8 @@ hydra-core = "^1.3.2"
 icecream = "^2.1.3"
 chardet = "^5.1.0"
 cchardet = "^2.1.7"
+xgboost = "^1.7.5"
+
 
 [tool.poetry.scripts]
 trill = "trill.trill_main:cli"
