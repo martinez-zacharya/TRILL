@@ -1428,3 +1428,4 @@ def return_parser():
         action="store",
         default=None
         )
+    return parser
