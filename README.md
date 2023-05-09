@@ -20,7 +20,7 @@ TRILL (**TR**aining and **I**nference using the **L**anguage of **L**ife) is a s
 - RFDiffusion (Diffusion-based model for generating synthetic proteins [doi](https://doi.org/10.1101/2022.12.09.519842))
 - DiffDock (Find best poses for protein-ligand binding [doi](https://doi.org/10.48550/arXiv.2210.01776))
 - ProtT5-XL (Embed proteins into high-dimensional space [doi](https://doi.org/10.1109/TPAMI.2021.3095381))
-- TemStaPro (Predict thermostability of proteins [doi](https://doi.org/10.1101/2023.03.27.534365) )
+- TemStaPro (Predict thermostability of proteins [doi](https://doi.org/10.1101/2023.03.27.534365))
 
 ## Documentation
 Check out the documentation and examples at https://trill.readthedocs.io/en/latest/index.html
