@@ -1029,6 +1029,13 @@ def return_parser():
 
     embed = subparsers.add_parser('embed', help='Embed proteins of interest')
 
+    embed.add_argument(
+        "model",
+        help="You can choose from either 'esm2_t6_8M', 'esm2_t12_35M', 'esm2_t30_150M', 'esm2_t33_650M', 'esm2_t36_3B','esm2_t48_15B', or 'ProtT5-XL'",
+        action="store",
+        # default = 'esm2_t12_35M_UR50D',
+)
+
     embed.add_argument("query", 
         help="Input fasta file", 
         action="store"
@@ -1043,21 +1050,20 @@ def return_parser():
 
     embed.add_argument(
         "--finetuned",
-        help="Input path to your own pre-trained ESM model",
+        help="Input path to your own finetuned ESM model",
         action="store",
         default = False,
         dest="finetuned",
 )
-    embed.add_argument(
-        "--model",
-        help="Change model. Default is esm2_t12_35M_UR50D. You can choose from a list of ESM2 models which can be found at https://github.com/facebookresearch/esm or use encoder-only ProtT5-XL-UniRef50 with --model ProtT5-XL",
-        action="store",
-        default = 'esm2_t12_35M_UR50D',
-        dest="model",
-)
 ##############################################################################################################
 
-    finetune = subparsers.add_parser('finetune', help='Fine-tune models')
+    finetune = subparsers.add_parser('finetune', help='Finetune protein language models')
+
+    finetune.add_argument(
+        "model",
+        help="You can choose to finetune either 'esm2_t6_8M', 'esm2_t12_35M', 'esm2_t30_150M', 'esm2_t33_650M', 'esm2_t36_3B','esm2_t48_15B', or 'ProtGPT2'",
+        action="store",
+)
 
     finetune.add_argument("query", 
         help="Input fasta file", 
@@ -1066,8 +1072,13 @@ def return_parser():
     finetune.add_argument("--epochs", 
         help="Number of epochs for fine-tuning. Default is 20", 
         action="store",
-        default=20,
+        default=10,
         dest="epochs",
+        )
+    finetune.add_argument("--save_on_epoch", 
+        help="Saves a checkpoint on every successful epoch completed. WARNING, this could lead to rapid storage consumption", 
+        action="store_true",
+        default=False,
         )
     finetune.add_argument(
         "--lr",
@@ -1076,13 +1087,7 @@ def return_parser():
         default=0.0001,
         dest="lr",
 )
-    finetune.add_argument(
-        "--model",
-        help="Change model. Default is esm2_t12_35M_UR50D. You can choose either ProtGPT2 or various ESM2. List of ESM2 models can be found at https://github.com/facebookresearch/esm",
-        action="store",
-        default = 'esm2_t12_35M_UR50D',
-        dest="model",
-)
+
     finetune.add_argument(
         "--LEGGO",
         help="deepspeed_stage_3_offload.",
@@ -1312,12 +1317,17 @@ def return_parser():
 
     classify.add_argument(
         "classifier",
-        help="Predict thermostability using TemStaPro",
-        choices = ['TemStaPro']
+        help="Predict thermostability using TemStaPro or choose custom to train/use your own XGBoost based binary classifier. Note for training a custom_binary, you need to submit roughly equal amounts of both binary classes as part of your query.",
+        choices = ['TemStaPro', 'custom_binary']
 )
     classify.add_argument(
         "query",
-        help="Fasta file of sequences to score with TemStaPro",
+        help="Fasta file of sequences to score",
+        action="store"
+)
+    classify.add_argument(
+        "--key",
+        help="String that allows for the unique identification of your binary classes from the input fasta headers. For example, --key positive_hits would group all sequences that have 'positive_hits' in the fasta header as one class and the rest as the other class",
         action="store"
 )
     classify.add_argument(
@@ -1325,6 +1335,22 @@ def return_parser():
         help="Save csv of ProtT5 embeddings",
         action="store_true",
         default=False
+)
+    classify.add_argument(
+        "--emb_model",
+        help="Select between 'esm2_t6_8M', 'esm2_t12_35M', 'esm2_t30_150M', 'esm2_t33_650M', 'esm2_t36_3B','esm2_t48_15B', or 'ProtT5-XL' for embedding your query proteins to then train your custom classifier",
+        default = 'esm2_t12_35M',
+        action="store"
+)
+    classify.add_argument(
+        "--train_split",
+        help="Choose your train-test percentage split for training and evaluating your custom classifier. For example, --train .6 would split your input sequences into two groups, one with 60%% of the sequences to train and the other with 40%% for evaluating",
+        action="store",
+)
+    classify.add_argument(
+        "--preTrained",
+        help="Enter the path to your pre-trained XGBoost binary classifier that you've trained with TRILL.",
+        action="store",
 )
 ##############################################################################################################
     
