@@ -820,8 +820,8 @@ def main(args):
         else:
             model = EsmForProteinFolding.from_pretrained('facebook/esmfold_v1', device_map='auto', torch_dtype='auto')
             model.esm = model.esm.half()
-            # device = torch.device("cuda")
-            # model = model.to(device)
+            device = torch.device("cuda")
+            model = model.to(device)
         if args.strategy != None:
             model.trunk.set_chunk_size(int(args.strategy))
         fold_df = pd.DataFrame(list(data), columns = ["Entry", "Sequence"])
@@ -831,17 +831,16 @@ def main(args):
                 tokenized_input = tokenizer([input_ids], return_tensors="pt", add_special_tokens=False)['input_ids']
                 tokenized_input = tokenized_input.clone().detach()
                 prot_len = len(input_ids)
-                # try:
-                output = model(tokenized_input)
-                outputs.append({key: val.cpu() for key, val in output.items()})
-                # except RuntimeError as e:
-                #         if 'out of memory' in str(e):
-                #             print(f'Protein too long to fold for current hardware: {prot_len} amino acids long)')
-                #             print(e)
-                #             break
-                #         else:
-                #             print(e)
-                #             pass
+                try:
+                    output = model(tokenized_input)
+                    outputs.append({key: val.cpu() for key, val in output.items()})
+                except RuntimeError as e:
+                        if 'out of memory' in str(e):
+                            print(f'Protein too long to fold for current hardware: {prot_len} amino acids long)')
+                            print(e)
+                        else:
+                            print(e)
+                            pass
 
         pdb_list = [convert_outputs_to_pdb(output) for output in outputs]
         protein_identifiers = fold_df.Entry.tolist()
