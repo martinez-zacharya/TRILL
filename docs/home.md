@@ -164,7 +164,7 @@ In the examples below the string immediately after `trill` specifies the name of
   ```
   $ trill example_8 1 dock trill/data/4ih9.pdb trill/data/NAG_ideal.sdf
   ```
-### 6. Visualize your embeddings
+### 9. Visualize your embeddings
   Create interactive visualizations for your output embeddings in 2D. You can specify the dimensionality reduction method with --method.
   ```
   $ trill example_6 1 visualize /path/to/embeddings.csv
