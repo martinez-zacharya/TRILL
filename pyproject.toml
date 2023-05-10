@@ -12,6 +12,7 @@ documentation = "https://trill.readthedocs.io/en/latest/home.html"
 
 [tool.poetry.dependencies]
 python = "^3.8"
+urllib3 = "1.26.15"
 numpy = "1.23.5"
 llvmlite = "^0.39.1"
 pytest = "^7.2.0"
