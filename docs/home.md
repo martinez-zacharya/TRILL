@@ -167,7 +167,7 @@ In the examples below the string immediately after `trill` specifies the name of
 ### 9. Visualize your embeddings
   Create interactive visualizations for your output embeddings in 2D. You can specify the dimensionality reduction method with --method.
   ```
-  $ trill example_6 1 visualize /path/to/embeddings.csv
+  $ trill example_9 1 visualize /path/to/embeddings.csv
   ```  
 ## Misc. Tips
 
@@ -179,5 +179,5 @@ In the examples below the string immediately after `trill` specifies the name of
   ```  
 - If you are using TRILL on Google Colab, you need to start your commands with an "!".
   ```
-  !trill example_7 1 embed trill/data/query.fasta
+  !trill example_10 1 embed esm2_t12_35M trill/data/query.fasta
   ```
