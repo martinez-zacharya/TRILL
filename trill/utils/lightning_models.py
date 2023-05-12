@@ -28,7 +28,7 @@ from tqdm import tqdm
 ESM_ALLOWED_AMINO_ACIDS = "ACDEFGHIKLMNPQRSTVWY"
 
 class ESM(pl.LightningModule):
-    def __init__(self, model, lr, args, leggo = False):
+    def __init__(self, model, lr, args):
         super().__init__()
         self.esm, self.alphabet = model
         self.repr_layers = [(i + self.esm.num_layers + 1) % (self.esm.num_layers + 1) for i in [-1]]
@@ -39,10 +39,7 @@ class ESM(pl.LightningModule):
         else:
             self.strat = None
         self.sample_seqs = []
-        if leggo:
-            self.leggo = True
-        else:
-            self.leggo = False
+ 
 
     def training_step(self, batch, batch_idx):
         torch.cuda.empty_cache()
@@ -540,10 +537,92 @@ class ProtT5(pl.LightningModule):
         return reps
     
 
-class Pafnucy(pl.LightningModule):
+class ZymCTRL(pl.LightningModule):
     def __init__(self, args):
         super().__init__()
-        pass
+        if int(args.GPUs) == 1:
+            device_map = {'transformer.wte': 0, 'lm_head': 0, 'transformer.wpe': 0, 'transformer.drop': 0, 'transformer.h.0': 0, 'transformer.h.1': 0, 'transformer.h.2': 0, 'transformer.h.3': 0, 'transformer.h.4': 0, 'transformer.h.5': 0, 'transformer.h.6': 0, 'transformer.h.7': 0, 'transformer.h.8': 0, 'transformer.h.9': 0, 'transformer.h.10': 0, 'transformer.h.11': 0, 'transformer.h.12': 0, 'transformer.h.13': 0, 'transformer.h.14': 0, 'transformer.h.15': 0, 'transformer.h.16': 0, 'transformer.h.17': 0, 'transformer.h.18': 0, 'transformer.h.19': 0, 'transformer.h.20': 0, 'transformer.h.21': 0, 'transformer.h.22': 0, 'transformer.h.23': 0, 'transformer.h.24': 0, 'transformer.h.25': 0, 'transformer.h.26': 0, 'transformer.h.27': 0, 'transformer.h.28': 0, 'transformer.h.29': 0, 'transformer.h.30': 0, 'transformer.h.31': 0, 'transformer.h.32': 0, 'transformer.h.33': 0, 'transformer.h.34': 0, 'transformer.h.35': 0, 'transformer.ln_f': 0}
+            self.model = AutoModelForCausalLM.from_pretrained("nferruz/ZymCTRL", device_map=device_map)
+        elif int(args.GPUs) > 1 and args.command == 'lang_gen':
+            self.model = AutoModelForCausalLM.from_pretrained("nferruz/ZymCTRL", device_map="auto")
+        else:
+            self.model = AutoModelForCausalLM.from_pretrained("nferruz/ZymCTRL", low_cpu_mem_usage=True)
+
+        self.tokenizer = AutoTokenizer.from_pretrained("nferruz/ZymCTRL")
+        self.special_tokens = ['<start>', '<end>', '<|endoftext|>','<pad>',' ', '<sep>']
+        if 'lr' in args:
+            self.ctrl_tag = str(args.ctrl_tag)
+            self.lr = float(args.lr)
+            self.strat = str(args.strategy)
+    
+    def training_step(self, batch, batch_idx):
+        # self.tokenizer.pad_token = self.tokenizer.eos_token
+        sequence = batch["Labels"][0]
+        separator = '<sep>'
+        control_tag_length = len(self.tokenizer(self.ctrl_tag+separator)['input_ids'])
+        available_space = 1021 - control_tag_length
+        if len(sequence) > available_space:
+            total_length = control_tag_length + len(sequence[:available_space]) + 1
+            seq = f"{self.ctrl_tag}{separator}{sequence[:available_space]}<|endoftext|>"
+        else:
+            total_length = control_tag_length + len(sequence) + 3
+            seq = f"{self.ctrl_tag}{separator}<start>{sequence}<end><|endoftext|>"
+
+
+        tokenized = self.tokenizer(
+        seq,
+        padding=True,
+        return_special_tokens_mask=True
+    )
+        if next(self.model.parameters()).is_cuda:
+            att = torch.LongTensor(tokenized['attention_mask']).cuda()
+        else:
+            att = torch.LongTensor(tokenized['attention_mask'])
+        data_collator = DataCollatorForLanguageModeling(tokenizer = self.tokenizer, mlm=False)
+        collated = data_collator([tokenized['input_ids']])
+        if next(self.model.parameters()).is_cuda:
+            outputs = self.model(collated['input_ids'].cuda(), labels = collated['labels'].cuda(), attention_mask = att, return_dict = True)
+        else:
+            outputs = self.model(collated['input_ids'], labels = collated['labels'], attention_mask = att, return_dict = True)
+        loss = outputs[0]
+        self.log("loss", loss)
+        return(loss)
+        
+    def configure_optimizers(self):
+        if 'offload' in self.strat:
+            optimizer = DeepSpeedCPUAdam(self.model.parameters(), lr=self.lr)
+        elif 'fsdp' in self.strat:
+            print("*** FSDP can't currently be used with TRILL and ProtGPT2 ***")
+            raise RuntimeError
+            # optimizer = torch.optim.Adam(self.trainer.model.parameters(), lr=self.lr)
+        else:
+            optimizer = torch.optim.Adam(self.model.parameters(), lr=self.lr)
+        return optimizer
+    
+    def generator(self, tag, seed_seq = "", max_length = 100, do_sample = True, temperature = 1.0, top_k = 9, repetition_penalty = 1.2, num_return_sequences = 1, eos_token_id=1, pad_token_id=0, device = 'cpu'):
+        tokenized_tag = self.tokenizer.encode(tag, return_tensors='pt').to(device)
+        out = self.model.generate(tokenized_tag.to(device), top_k=top_k, repetition_penalty=repetition_penalty,max_length=max_length,eos_token_id=1,pad_token_id=0,do_sample=do_sample,num_return_sequences=1)
+        out = out.squeeze(0)
+        ppls = [(self.tokenizer.decode(output), self.calculatePerplexity(output)) for output in out.unsqueeze(0)]
+        
+        sequence_ppl = [(self.remove_characters(x[0], self.special_tokens), x[1]) for x in ppls]
+        return sequence_ppl
+
+    
+    def calculatePerplexity(self, input_ids):
+        "This function computes perplexities for the generated sequences. Got this from https://huggingface.co/nferruz/ZymCTRL"
+        with torch.no_grad():
+            outputs = self.model(input_ids, labels=input_ids)
+        loss, logits = outputs[:2]
+        return math.exp(loss)
+    
+    def remove_characters(self, sequence, char_list):
+        "This function removes special tokens used during training. Got this from https://huggingface.co/nferruz/ZymCTRL"
+        columns = sequence.split('<sep>')
+        seq = columns[1]
+        for char in char_list:
+            seq = seq.replace(char, '')
+        return seq
 
 
 
