@@ -11,7 +11,7 @@
 [![Documentation Status](https://readthedocs.org/projects/trill/badge/?version=latest&style=flat-square)](https://trill.readthedocs.io/en/latest/?badge=latest)
 ![status](https://github.com/martinez-zacharya/TRILL/workflows/CI/badge.svg?style=flat-square&color=blueviolet)
 # Intro
-TRILL (**TR**aining and **I**nference using the **L**anguage of **L**ife) is a sandbox for creative protein engineering and discovery. As a bioengineer myself, deep-learning based approaches for protein design and analysis are of great interest to me. However, many of these deep-learning models are rather unwieldy, especially for non ML-practitioners due to their sheer size. Not only does TRILL allow researchers to perform inference on their proteins of interest using a variety of models, but it also democratizes the efficient fine-tuning of large-language models. Whether using Google Colab with one GPU or a supercomputer with many, TRILL empowers scientists to leverage models with millions to billions of parameters without worrying (too much) about hardware constraints. Currently, TRILL supports using these models as of v1.2.0:
+TRILL (**TR**aining and **I**nference using the **L**anguage of **L**ife) is a sandbox for creative protein engineering and discovery. As a bioengineer myself, deep-learning based approaches for protein design and analysis are of great interest to me. However, many of these deep-learning models are rather unwieldy, especially for non ML-practitioners due to their sheer size. Not only does TRILL allow researchers to perform inference on their proteins of interest using a variety of models, but it also democratizes the efficient fine-tuning of large-language models. Whether using Google Colab with one GPU or a supercomputer with many, TRILL empowers scientists to leverage models with millions to billions of parameters without worrying (too much) about hardware constraints. Currently, TRILL supports using these models as of v1.3.0:
 - ESM2 (Embed and Finetune all sizes, depending on hardware constraints [doi](https://doi.org/10.1101/2022.07.20.500902). Can also generate synthetic proteins from finetuned ESM2 models using Gibbs sampling [doi](https://doi.org/10.1101/2021.01.26.428322))
 - ESM-IF1 (Generate synthetic proteins from .pdb backbone [doi](https://doi.org/10.1101/2022.04.10.487779))
 - ESMFold (Predict 3D protein structure [doi](https://doi.org/10.1101/2022.07.20.500902))
@@ -21,6 +21,7 @@ TRILL (**TR**aining and **I**nference using the **L**anguage of **L**ife) is a s
 - DiffDock (Find best poses for protein-ligand binding [doi](https://doi.org/10.48550/arXiv.2210.01776))
 - ProtT5-XL (Embed proteins into high-dimensional space [doi](https://doi.org/10.1109/TPAMI.2021.3095381))
 - TemStaPro (Predict thermostability of proteins [doi](https://doi.org/10.1101/2023.03.27.534365))
+- ZymCTRL (Conditional language model for the generation of artificial functional enzymes [link](https://www.mlsb.io/papers_2022/ZymCTRL_a_conditional_language_model_for_the_controllable_generation_of_artificial_enzymes.pdf))
 
 ## Set-Up
 1. I recommend using a virtual environment with conda. If you don't have conda installed, follow these steps
@@ -85,9 +86,13 @@ In the examples below the string immediately after `trill` specifies the name of
   ```
   $ trill example_1 1 finetune esm2_t36_3B trill/data/query.fasta --strategy deepspeed_stage_2
   ```
-  You can also finetune ProtGPT2.
+  You can finetune ProtGPT2.
   ```
   $ trill example_1 1 finetune ProtGPT2 trill/data/query.fasta
+  ```
+  You can also finetune ZymCTRL on certain a certain EC. Note that you must specify a EC tag that corresponds to ALL of the input proteins.
+  ```
+  $ trill example_1 1 finetune ZymCTRL trill/data/query.fasta --ctrl_tag 1.2.3.4
   ```
 ### 2. Create protein embeddings
   Use the embed command to create high-dimensional representations of your proteins of interest. Note that the model that produces the embeddings as well as an input protein fasta file is required.
@@ -131,13 +136,17 @@ In the examples below the string immediately after `trill` specifies the name of
   ```
   $ trill example_4 1 lang_gen ProtGPT2 --num_return_sequences 5
   ```
-  In case you wanted to generate certain "types" of proteins, below is an example of using a fine-tuned ProtGPT2 to generate proteins.
+  In case you wanted to generate certain "types" of proteins with ProtGPT2, below is an example of using a fine-tuned ProtGPT2 to generate proteins.
   ```
   $ trill example_4 1 lang_gen ProtGPT2 --finetuned /path/to/FineTune_ProtGPT2_100.pt
   ```
   ESM2 Gibbs: Using Gibbs sampling, you can generate synthetic proteins from a finetuned ESM2 model. Note you must specify the ESM2 model architecture when doing gibbs sampling.
   ```
   $ trill example_4 1 lang_gen ESM2 --finetuned /path/to/finetuned_model.pt --esm2_arch esm2_t30_150M_UR50D --num_return_sequences 5
+  ```
+  ZymCTRL: By specifying an EC tag, you can control the type of enzyme the model tries to generate. If it is a class of enzymes that was not well represented in the ZymCTRL training set, you can first finetune it and then proceed to generate bespoke enzymes by passing the finetuned model with --finetuned.
+  ```
+  $ trill example_4 1 lang_gen ZymCTRL --num_return_sequences 5 --ctrl_tag 3.1.1.101
   ```
 ### 5. Inverse Folding Protein Generation
    ESM-IF1: When provided a protein backbone structure (.pdb, .cif), the IF1 model is able to predict a sequence that might be able to fold into the input structure backbone. The example input are the backbone coordinates from DWARF14, a rice hydrolase. For every chain in the structure, 2 in 4ih9.pdb, the following command will generate 3 sequences. In total, 6 sequences will be generated.
