@@ -26,7 +26,7 @@ from fairscale.nn.data_parallel import FullyShardedDataParallel as FSDP
 from fairscale.nn.wrap import enable_wrap, wrap
 
 from pytorch_lightning.utilities.deepspeed import convert_zero_checkpoint_to_fp32_state_dict
-from trill.utils.lightning_models import ESM, ProtGPT2, CustomWriter, ESM_Gibbs, ProtT5
+from trill.utils.lightning_models import ESM, ProtGPT2, CustomWriter, ESM_Gibbs, ProtT5, ZymCTRL
 from trill.utils.update_weights import weights_update
 from transformers import AutoTokenizer, EsmForProteinFolding, set_seed
 from pytorch_lightning.callbacks import ModelCheckpoint
@@ -133,7 +133,7 @@ def main(args):
 
     finetune.add_argument(
         "model",
-        help="You can choose to finetune either 'esm2_t6_8M', 'esm2_t12_35M', 'esm2_t30_150M', 'esm2_t33_650M', 'esm2_t36_3B','esm2_t48_15B', or 'ProtGPT2'",
+        help="You can choose to finetune either 'esm2_t6_8M', 'esm2_t12_35M', 'esm2_t30_150M', 'esm2_t33_650M', 'esm2_t36_3B','esm2_t48_15B', 'ProtGPT2', or ZymCTRL.",
         action="store",
 )
 
@@ -161,13 +161,6 @@ def main(args):
 )
 
     finetune.add_argument(
-        "--LEGGO",
-        help="deepspeed_stage_3_offload.",
-        action="store_true",
-        default=False,
-        dest="LEGGO",
-)
-    finetune.add_argument(
         "--batch_size",
         help="Change batch-size number for fine-tuning. Default is 1",
         action="store",
@@ -181,6 +174,12 @@ def main(args):
         action="store",
         default = None,
         dest="strategy",
+)
+
+    finetune.add_argument(
+        "--ctrl_tag",
+        help="Choose an Enzymatic Commision (EC) control tag for finetuning ZymCTRL. Note that the tag must match all of the enzymes in the query fasta file. You can find all ECs here https://www.brenda-enzymes.org/ecexplorer.php?browser=1",
+        action="store"
 )
 ##############################################################################################################
     inv_fold = subparsers.add_parser('inv_fold_gen', help='Generate proteins using inverse folding')
@@ -245,8 +244,8 @@ def main(args):
 
     lang_gen.add_argument(
         "model",
-        help="Choose between Inverse Folding model 'esm_if1_gvp4_t16_142M_UR50' to facilitate fixed backbone sequence design, ProteinMPNN or ProtGPT2.",
-        choices = ['ESM2','ProtGPT2']
+        help="Choose between Gibbs sampling with ESM2, ProtGPT2 or ZymCTRL.",
+        choices = ['ESM2','ProtGPT2', 'ZymCTRL']
 )
     lang_gen.add_argument(
         "--finetuned",
@@ -265,6 +264,12 @@ def main(args):
         help="Choose sampling temperature.",
         action="store",
         default = '1',
+)
+
+    lang_gen.add_argument(
+        "--ctrl_tag",
+        help="Choose an Enzymatic Commision (EC) control tag for conditional protein generation based on the tag. You can find all ECs here https://www.brenda-enzymes.org/ecexplorer.php?browser=1",
+        action="store",
 )
 
     lang_gen.add_argument(
@@ -658,12 +663,38 @@ def main(args):
 
             else:
                 trainer.save_checkpoint(f"{args.name}_{args.model}_{args.epochs}.pt")
+        elif args.model == 'ZymCTRL':
+            model = ZymCTRL(args)
+            seq_dict_df = ProtGPT2_wrangle(data, model.tokenizer)
+            dataloader = torch.utils.data.DataLoader(seq_dict_df, shuffle = False, batch_size = int(args.batch_size), num_workers=0)
+            if args.save_on_epoch:
+                checkpoint_callback = ModelCheckpoint(every_n_epochs=1, save_top_k = -1)
+                if int(args.GPUs) == 0:
+                    trainer = pl.Trainer(profiler=profiler, max_epochs=int(args.epochs), logger = logger, num_nodes = int(args.nodes), callbacks=[checkpoint_callback], default_root_dir=f'{os.path.join(os.getcwd(), args.name)}_ckpt')
+                else:
+                    trainer = pl.Trainer(devices=int(args.GPUs), profiler=profiler, accelerator='gpu', max_epochs=int(args.epochs), logger = logger, num_nodes = int(args.nodes), precision = 16, strategy = args.strategy, callbacks=[checkpoint_callback], default_root_dir=f'{os.path.join(os.getcwd(), args.name)}_ckpt')
+            else:
+                if int(args.GPUs) == 0:
+                    trainer = pl.Trainer(profiler=profiler, max_epochs=int(args.epochs), logger = logger, num_nodes = int(args.nodes), enable_checkpointing=False)
+                else:
+                    trainer = pl.Trainer(devices=int(args.GPUs), profiler=profiler, accelerator='gpu', default_root_dir=f'{os.path.join(os.getcwd(), args.name)}_ckpt', max_epochs=int(args.epochs), logger = logger, num_nodes = int(args.nodes), precision = 16, strategy = args.strategy)
+            trainer.fit(model=model, train_dataloaders = dataloader)
+            if 'deepspeed' in str(args.strategy):
+                save_path = os.path.join(os.getcwd(), f"{os.path.join(os.getcwd(), args.name)}_ckpt/checkpoints/epoch={int(args.epochs) - 1}-step={len_data*int(args.epochs)}.ckpt")
+                output_path = f"{args.name}_ZymCTRL_{args.epochs}.pt"
+                try:
+                    convert_zero_checkpoint_to_fp32_state_dict(save_path, output_path)
+                except Exception as e:
+                    print(f'Exception {e} has occured on attempted save of your deepspeed trained model. If this has to do with CPU RAM, please try pytorch_lightning.utilities.deepspeedconvert_zero_checkpoint_to_fp32_state_dict(your_checkpoint.ckpt, full_model.pt')
+            elif str(args.strategy) in ['fsdp', 'FSDP', 'FullyShardedDataParallel']:
+                pass
+
         else:
             model_import_name = f'esm.pretrained.{args.model}_UR50D()'
-            model = ESM(eval(model_import_name), float(args.lr), args, args.LEGGO)
+            model = ESM(eval(model_import_name), float(args.lr), args)
             dataloader = torch.utils.data.DataLoader(data, shuffle = False, batch_size = int(args.batch_size), num_workers=0, collate_fn=model.alphabet.get_batch_converter())
-            if args.LEGGO:
-                raise RuntimeError('LEGGO is no longer a valid option. Sorry for the confusion')
+            # if args.LEGGO:
+            #     raise RuntimeError('LEGGO is no longer a valid option. Sorry for the confusion')
             #     trainer = pl.Trainer(devices=int(args.GPUs), profiler = profiler,accelerator='gpu',max_epochs=int(args.epochs),logger=logger, num_nodes=int(args.nodes), precision = 16, strategy=DeepSpeedStrategy(stage=3, offload_optimizer=True, offload_parameters=True))
             #     trainer.fit(model=model, train_dataloaders=dataloader)
             #     save_path = os.path.join(os.getcwd(), f"checkpoints/epoch={int(args.epochs) - 1}-step={len_data*int(args.epochs)}.ckpt")
@@ -672,7 +703,7 @@ def main(args):
             #         convert_zero_checkpoint_to_fp32_state_dict(save_path, output_path)
             #     except Exception as e:
             #         print(f'Exception {e} has occured on attempted save of your deepspeed trained model. If this has to do with CPU RAM, please try pytorch_lightning.utilities.deepspeedconvert_zero_checkpoint_to_fp32_state_dict(your_checkpoint.ckpt, full_model.pt')       
-            elif args.strategy == 'deepspeed_stage_3' or args.strategy == 'deepspeed_stage_3_offload' or args.strategy == 'deepspeed_stage_2' or args.strategy == 'deepspeed_stage_2_offload':
+            if args.strategy == 'deepspeed_stage_3' or args.strategy == 'deepspeed_stage_3_offload' or args.strategy == 'deepspeed_stage_2' or args.strategy == 'deepspeed_stage_2_offload':
                 save_path = os.path.join(os.getcwd(), f"checkpoints/epoch={int(args.epochs) - 1}-step={len_data*int(args.epochs)}.ckpt")
                 output_path = f"{args.name}_esm2_{args.epochs}.pt"
                 if args.save_on_epoch:
@@ -734,7 +765,7 @@ def main(args):
         if args.model == 'ProtGPT2':
             model = ProtGPT2(args)
             if args.finetuned != False:
-                model = model.load_from_checkpoint(args.finetuned, args = args)
+                model = model.load_from_checkpoint(args.finetuned, args = args, strict=False)
             tokenizer = AutoTokenizer.from_pretrained("nferruz/ProtGPT2")
             generated_output = []
             with open(f'{args.name}_ProtGPT2.fasta', 'w+') as fasta:
@@ -770,6 +801,21 @@ def main(args):
                         fasta.write(f'>{args.name}_{tuned_name[0:-3]}_Gibbs_{i} \n')
                         fasta.write(f'{out}\n')
                         fasta.flush()  
+
+        elif args.model == 'ZymCTRL':
+            model = ZymCTRL(args)
+            if args.finetuned != False:
+                model = model.load_from_checkpoint(args.finetuned, args = args, strict = False)
+            with open(f'{args.name}_ZymCTRL.fasta', 'w+') as fasta:
+                for i in tqdm(range(int(args.num_return_sequences))):
+                    if int(args.GPUs) == 0:
+                        generated_output = model.generator(str(args.ctrl_tag), device = torch.device('cpu'), max_length=int(args.max_length),repetition_penalty=float(args.repetition_penalty), do_sample=args.do_sample, top_k=int(args.top_k))
+                    else:
+                        generated_output = model.generator(str(args.ctrl_tag), device = torch.device('cuda'), max_length=int(args.max_length),repetition_penalty=float(args.repetition_penalty), do_sample=args.do_sample, top_k=int(args.top_k))
+                    fasta.write(f'>{args.name}_{args.ctrl_tag}_ZymCTRL_{i}_PPL={generated_output[0][1]} \n')
+                    fasta.write(f'{generated_output[0][0]}\n')
+                    fasta.flush()
+                    
     elif args.command == 'diff_gen':
         command = "conda install -c dglteam dgl-cuda11.7 -y -S -q".split(' ')
         subprocess.run(command, check = True)
@@ -1061,7 +1107,7 @@ def return_parser():
 
     finetune.add_argument(
         "model",
-        help="You can choose to finetune either 'esm2_t6_8M', 'esm2_t12_35M', 'esm2_t30_150M', 'esm2_t33_650M', 'esm2_t36_3B','esm2_t48_15B', or 'ProtGPT2'",
+        help="You can choose to finetune either 'esm2_t6_8M', 'esm2_t12_35M', 'esm2_t30_150M', 'esm2_t33_650M', 'esm2_t36_3B','esm2_t48_15B', 'ProtGPT2', or ZymCTRL.",
         action="store",
 )
 
@@ -1089,13 +1135,6 @@ def return_parser():
 )
 
     finetune.add_argument(
-        "--LEGGO",
-        help="deepspeed_stage_3_offload.",
-        action="store_true",
-        default=False,
-        dest="LEGGO",
-)
-    finetune.add_argument(
         "--batch_size",
         help="Change batch-size number for fine-tuning. Default is 1",
         action="store",
@@ -1109,6 +1148,12 @@ def return_parser():
         action="store",
         default = None,
         dest="strategy",
+)
+
+    finetune.add_argument(
+        "--ctrl_tag",
+        help="Choose an Enzymatic Commision (EC) control tag for finetuning ZymCTRL. Note that the tag must match all of the enzymes in the query fasta file. You can find all ECs here https://www.brenda-enzymes.org/ecexplorer.php?browser=1",
+        action="store"
 )
 ##############################################################################################################
     inv_fold = subparsers.add_parser('inv_fold_gen', help='Generate proteins using inverse folding')
@@ -1173,8 +1218,8 @@ def return_parser():
 
     lang_gen.add_argument(
         "model",
-        help="Choose between Inverse Folding model 'esm_if1_gvp4_t16_142M_UR50' to facilitate fixed backbone sequence design, ProteinMPNN or ProtGPT2.",
-        choices = ['ESM2','ProtGPT2']
+        help="Choose between Gibbs sampling with ESM2, ProtGPT2 or ZymCTRL.",
+        choices = ['ESM2','ProtGPT2', 'ZymCTRL']
 )
     lang_gen.add_argument(
         "--finetuned",
@@ -1193,6 +1238,12 @@ def return_parser():
         help="Choose sampling temperature.",
         action="store",
         default = '1',
+)
+
+    lang_gen.add_argument(
+        "--ctrl_tag",
+        help="Choose an Enzymatic Commision (EC) control tag for conditional protein generation based on the tag. You can find all ECs here https://www.brenda-enzymes.org/ecexplorer.php?browser=1",
+        action="store",
 )
 
     lang_gen.add_argument(
@@ -1428,4 +1479,5 @@ def return_parser():
         action="store",
         default=None
         )
+
     return parser
