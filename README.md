@@ -21,6 +21,7 @@ TRILL (**TR**aining and **I**nference using the **L**anguage of **L**ife) is a s
 - DiffDock (Find best poses for protein-ligand binding [doi](https://doi.org/10.48550/arXiv.2210.01776))
 - ProtT5-XL (Embed proteins into high-dimensional space [doi](https://doi.org/10.1109/TPAMI.2021.3095381))
 - TemStaPro (Predict thermostability of proteins [doi](https://doi.org/10.1101/2023.03.27.534365))
+- ZymCTRL (Conditional language model for the generation of artificial functional enzymes [link](https://www.mlsb.io/papers_2022/ZymCTRL_a_conditional_language_model_for_the_controllable_generation_of_artificial_enzymes.pdf))
 
 ## Documentation
 Check out the documentation and examples at https://trill.readthedocs.io/en/latest/index.html
