@@ -178,7 +178,7 @@ def main(args):
 
     finetune.add_argument(
         "--ctrl_tag",
-        help="Choose an Enzymatic Commision (EC) control tag for finetuning ZymCTRL. Note that the tag must match all of the enzymes in the query fasta file. You can find all ECs here https://www.brenda-enzymes.org/ecexplorer.php?browser=1",
+        help="Choose an Enzymatic Commision (EC) control tag for finetuning ZymCTRL. Note that the tag must match all of the enzymes in the query fasta file. You can find all ECs here https://www.brenda-enzymes.org/index.php",
         action="store"
 )
 ##############################################################################################################
@@ -268,7 +268,7 @@ def main(args):
 
     lang_gen.add_argument(
         "--ctrl_tag",
-        help="Choose an Enzymatic Commision (EC) control tag for conditional protein generation based on the tag. You can find all ECs here https://www.brenda-enzymes.org/ecexplorer.php?browser=1",
+        help="Choose an Enzymatic Commision (EC) control tag for conditional protein generation based on the tag. You can find all ECs here https://www.brenda-enzymes.org/index.php",
         action="store",
 )
 
