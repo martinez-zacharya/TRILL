@@ -133,7 +133,7 @@ def main(args):
 
     finetune.add_argument(
         "model",
-        help="You can choose to finetune either 'esm2_t6_8M', 'esm2_t12_35M', 'esm2_t30_150M', 'esm2_t33_650M', 'esm2_t36_3B','esm2_t48_15B', or 'ProtGPT2'",
+        help="You can choose to finetune either 'esm2_t6_8M', 'esm2_t12_35M', 'esm2_t30_150M', 'esm2_t33_650M', 'esm2_t36_3B','esm2_t48_15B', 'ProtGPT2', or ZymCTRL.",
         action="store",
 )
 
@@ -160,13 +160,6 @@ def main(args):
         dest="lr",
 )
 
-#     finetune.add_argument(
-#         "--LEGGO",
-#         help="deepspeed_stage_3_offload.",
-#         action="store_true",
-#         default=False,
-#         dest="LEGGO",
-# )
     finetune.add_argument(
         "--batch_size",
         help="Change batch-size number for fine-tuning. Default is 1",
@@ -811,12 +804,6 @@ def main(args):
 
         elif args.model == 'ZymCTRL':
             model = ZymCTRL(args)
-            for k,v in model.state_dict().items():
-                if k == 'model.lm_head.weight':
-                    print(v)
-            ckpt = torch.load(args.finetuned)
-            for k in ckpt['state_dict']:
-                print(k)
             if args.finetuned != False:
                 model = model.load_from_checkpoint(args.finetuned, args = args, strict = False)
             with open(f'{args.name}_ZymCTRL.fasta', 'w+') as fasta:
@@ -1120,7 +1107,7 @@ def return_parser():
 
     finetune.add_argument(
         "model",
-        help="You can choose to finetune either 'esm2_t6_8M', 'esm2_t12_35M', 'esm2_t30_150M', 'esm2_t33_650M', 'esm2_t36_3B','esm2_t48_15B', or 'ProtGPT2'",
+        help="You can choose to finetune either 'esm2_t6_8M', 'esm2_t12_35M', 'esm2_t30_150M', 'esm2_t33_650M', 'esm2_t36_3B','esm2_t48_15B', 'ProtGPT2', or ZymCTRL.",
         action="store",
 )
 
@@ -1147,13 +1134,6 @@ def return_parser():
         dest="lr",
 )
 
-#     finetune.add_argument(
-#         "--LEGGO",
-#         help="deepspeed_stage_3_offload.",
-#         action="store_true",
-#         default=False,
-#         dest="LEGGO",
-# )
     finetune.add_argument(
         "--batch_size",
         help="Change batch-size number for fine-tuning. Default is 1",
@@ -1168,6 +1148,12 @@ def return_parser():
         action="store",
         default = None,
         dest="strategy",
+)
+
+    finetune.add_argument(
+        "--ctrl_tag",
+        help="Choose an Enzymatic Commision (EC) control tag for finetuning ZymCTRL. Note that the tag must match all of the enzymes in the query fasta file. You can find all ECs here https://www.brenda-enzymes.org/ecexplorer.php?browser=1",
+        action="store"
 )
 ##############################################################################################################
     inv_fold = subparsers.add_parser('inv_fold_gen', help='Generate proteins using inverse folding')
@@ -1232,8 +1218,8 @@ def return_parser():
 
     lang_gen.add_argument(
         "model",
-        help="Choose between Inverse Folding model 'esm_if1_gvp4_t16_142M_UR50' to facilitate fixed backbone sequence design, ProteinMPNN or ProtGPT2.",
-        choices = ['ESM2','ProtGPT2']
+        help="Choose between Gibbs sampling with ESM2, ProtGPT2 or ZymCTRL.",
+        choices = ['ESM2','ProtGPT2', 'ZymCTRL']
 )
     lang_gen.add_argument(
         "--finetuned",
@@ -1252,6 +1238,12 @@ def return_parser():
         help="Choose sampling temperature.",
         action="store",
         default = '1',
+)
+
+    lang_gen.add_argument(
+        "--ctrl_tag",
+        help="Choose an Enzymatic Commision (EC) control tag for conditional protein generation based on the tag. You can find all ECs here https://www.brenda-enzymes.org/ecexplorer.php?browser=1",
+        action="store",
 )
 
     lang_gen.add_argument(
@@ -1487,4 +1479,5 @@ def return_parser():
         action="store",
         default=None
         )
+
     return parser
