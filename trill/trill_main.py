@@ -367,7 +367,8 @@ def main(args):
     diffuse_gen.add_argument("--partial_T", 
         help="Adjust partial diffusion sampling value.",
         action="store",
-        default=None
+        default=None,
+        type=int
         )
     
     diffuse_gen.add_argument("--partial_diff_fix", 
@@ -428,6 +429,13 @@ def main(args):
         "--preTrained",
         help="Enter the path to your pre-trained XGBoost binary classifier that you've trained with TRILL.",
         action="store",
+)
+
+    classify.add_argument(
+        "--embs",
+        help="Enter the path to your pre-computed embeddings",
+        action="store",
+        default=None
 )
 ##############################################################################################################
     
@@ -582,7 +590,7 @@ def main(args):
                 os.remove(file)
         else:
             model_import_name = f'esm.pretrained.{args.model}_UR50D()'
-            model = ESM(eval(model_import_name), 0.0001, args, False)
+            model = ESM(eval(model_import_name), 0.0001, args)
             data = esm.data.FastaBatchedDataset.from_file(args.query)
             dataloader = torch.utils.data.DataLoader(data, shuffle = False, batch_size = int(args.batch_size), num_workers=0, collate_fn=model.alphabet.get_batch_converter())
             pred_writer = CustomWriter(output_dir=".", write_interval="epoch")
@@ -966,9 +974,12 @@ def main(args):
             inference_df = inference_df[['Protein', 'Threshold', 'Mean_Pred', 'Binary_Pred']]
             inference_df.to_csv(f'{args.name}_TemStaPro_preds.csv', index = False)
         elif args.classifier == 'custom_binary':
-            embed_command = f"trill {args.name} {args.GPUs} embed {args.emb_model} {args.query}".split(' ')
-            subprocess.run(embed_command, check=True)
-            df = pd.read_csv(f'{args.name}_{args.emb_model}.csv')
+            if args.embs == None:
+                embed_command = f"trill {args.name} {args.GPUs} embed {args.emb_model} {args.query}".split(' ')
+                subprocess.run(embed_command, check=True)
+                df = pd.read_csv(f'{args.name}_{args.emb_model}.csv')
+            else:
+                df = pd.read_csv(args.embs)
             if args.train_split is not None:
                 df['NewLab'] = np.where(df['Label'].str.contains(args.key) == 1, 1, 0)
                 df = df.sample(frac = 1)
