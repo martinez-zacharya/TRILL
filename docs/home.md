@@ -32,7 +32,7 @@ $ sh ./Miniconda3-latest-Linux-x86_64.sh
 2. Once conda is set up, create a new environment with
 ```
 $ conda create -n TRILL python=3.10
-$ conda activate TRILL
+$ conda activate TRILL ; conda install pytorch==1.13.0 -c pytorch
 ```
 3. Next, simply install TRILL!
 ```
