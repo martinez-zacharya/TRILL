@@ -26,17 +26,17 @@ TRILL (**TR**aining and **I**nference using the **L**anguage of **L**ife) is a s
 ## Set-Up
 1. I recommend using a virtual environment with conda. If you don't have conda installed, follow these steps
 ```
-$ wget https://repo.anaconda.com/miniconda/Miniconda3-latest-Linux-x86_64.sh
-$ sh ./Miniconda3-latest-Linux-x86_64.sh
+wget https://repo.anaconda.com/miniconda/Miniconda3-latest-Linux-x86_64.sh
+sh ./Miniconda3-latest-Linux-x86_64.sh
 ```
 2. Once conda is set up, create a new environment with
 ```
-$ conda create -n TRILL python=3.10
-$ conda activate TRILL ; conda install pytorch==1.13.0 pytorch-cuda=11.7 -c pytorch -c nvidia
+conda create -n TRILL python=3.10
+conda activate TRILL ; conda install pytorch==1.13.0 pytorch-cuda=11.7 -c pytorch -c nvidia ; conda install -c conda-forge openbabel
 ```
 3. Next, simply install TRILL!
 ```
-$ pip install trill-proteins
+pip install trill-proteins
 ```
 
 ## Use
@@ -80,28 +80,28 @@ In the examples below the string immediately after `trill` specifies the name of
 ### 1. Finetune Protein Language Models
   The default mode for TRILL is to just fine-tune the selected model with the query input for 20 epochs with a learning rate of 0.0001.
   ```
-  $ trill example_1 1 finetune esm2_t12_35M trill/data/query.fasta
+  trill example_1 1 finetune esm2_t12_35M trill/data/query.fasta
   ```
   By specifying --strategy, you can efficiently train large language models that would not normally be supported by your hardware. For example, if you run out of CUDA memory, you can try using Deepspeed or other strategies found [here](https://pytorch-lightning.readthedocs.io/en/stable/extensions/strategy.html). 
   ```
-  $ trill example_1 1 finetune esm2_t36_3B trill/data/query.fasta --strategy deepspeed_stage_2
+  trill example_1 1 finetune esm2_t36_3B trill/data/query.fasta --strategy deepspeed_stage_2
   ```
   You can finetune ProtGPT2.
   ```
-  $ trill example_1 1 finetune ProtGPT2 trill/data/query.fasta
+  trill example_1 1 finetune ProtGPT2 trill/data/query.fasta
   ```
   You can also finetune ZymCTRL on certain a certain EC. Note that you must specify a EC tag that corresponds to ALL of the input proteins.
   ```
-  $ trill example_1 1 finetune ZymCTRL trill/data/query.fasta --ctrl_tag 1.2.3.4
+  trill example_1 1 finetune ZymCTRL trill/data/query.fasta --ctrl_tag 1.2.3.4
   ```
 ### 2. Create protein embeddings
   Use the embed command to create high-dimensional representations of your proteins of interest. Note that the model that produces the embeddings as well as an input protein fasta file is required.
   ```
-  $ trill example_2 1 embed esm2_t12_35M trill/data/query.fasta
+  trill example_2 1 embed esm2_t12_35M trill/data/query.fasta
   ```  
   If you wanted to change the batch_size and use a finetuned ESM2 model for embeddings, you can specify it with --batch_size and --finetuned respectively
   ```
-  $ trill example_2 1 embed esm2_t33_650M_UR50D trill/data/query.fasta --batch_size 2 --finetuned /path/to/models/finetuned_esm2_t30_150M_UR50D.pt
+  trill example_2 1 embed esm2_t33_650M_UR50D trill/data/query.fasta --batch_size 2 --finetuned /path/to/models/finetuned_esm2_t30_150M_UR50D.pt
   ```
 ### 3. Distributed Training/Inference
   In order to scale/speed up your analyses, you can distribute your training/inference across many GPUs with a few extra flags to your command. You can even fit models that do not normally fit on your GPUs with sharding, CPU-offloading etc. Below is an example slurm batch submission file. The list of strategies can be found here (https://pytorch-lightning.readthedocs.io/en/stable/extensions/strategy.html). The example below utilizes 16 GPUs in total (4(GPUs) * 4(--nodes)) with deepspeed_stage_2_offload and the 650M parameter ESM2 model.
@@ -126,7 +126,7 @@ In the examples below the string immediately after `trill` specifies the name of
   ```
   You can then submit this job with:
   ```
-  $ sbatch distributed_example.slurm
+  sbatch distributed_example.slurm
   ```
   More examples for distributed training/inference without slurm coming soon!
 
@@ -134,49 +134,49 @@ In the examples below the string immediately after `trill` specifies the name of
   You can use pretrained or finetuned protein language models such as ProtGPT2 or ESM2 to generate synthetic proteins with various hyperparameters.
   ProtGPT2: The command below generates 5 proteins. The default seed sequence is "M", but you can also change this. Check out the command-line arguments for more details.
   ```
-  $ trill example_4 1 lang_gen ProtGPT2 --num_return_sequences 5
+  trill example_4 1 lang_gen ProtGPT2 --num_return_sequences 5
   ```
   In case you wanted to generate certain "types" of proteins with ProtGPT2, below is an example of using a fine-tuned ProtGPT2 to generate proteins.
   ```
-  $ trill example_4 1 lang_gen ProtGPT2 --finetuned /path/to/FineTune_ProtGPT2_100.pt
+  trill example_4 1 lang_gen ProtGPT2 --finetuned /path/to/FineTune_ProtGPT2_100.pt
   ```
   ESM2 Gibbs: Using Gibbs sampling, you can generate synthetic proteins from a finetuned ESM2 model. Note you must specify the ESM2 model architecture when doing gibbs sampling.
   ```
-  $ trill example_4 1 lang_gen ESM2 --finetuned /path/to/finetuned_model.pt --esm2_arch esm2_t30_150M_UR50D --num_return_sequences 5
+  trill example_4 1 lang_gen ESM2 --finetuned /path/to/finetuned_model.pt --esm2_arch esm2_t30_150M_UR50D --num_return_sequences 5
   ```
   ZymCTRL: By specifying an EC tag, you can control the type of enzyme the model tries to generate. If it is a class of enzymes that was not well represented in the ZymCTRL training set, you can first finetune it and then proceed to generate bespoke enzymes by passing the finetuned model with --finetuned.
   ```
-  $ trill example_4 1 lang_gen ZymCTRL --num_return_sequences 5 --ctrl_tag 3.1.1.101
+  trill example_4 1 lang_gen ZymCTRL --num_return_sequences 5 --ctrl_tag 3.1.1.101
   ```
 ### 5. Inverse Folding Protein Generation
    ESM-IF1: When provided a protein backbone structure (.pdb, .cif), the IF1 model is able to predict a sequence that might be able to fold into the input structure backbone. The example input are the backbone coordinates from DWARF14, a rice hydrolase. For every chain in the structure, 2 in 4ih9.pdb, the following command will generate 3 sequences. In total, 6 sequences will be generated.
   ```
-  $ trill example_5 1 inv_fold_gen ESM-IF1 trill/data/4ih9.pdb --num_return_sequences 3
+  trill example_5 1 inv_fold_gen ESM-IF1 trill/data/4ih9.pdb --num_return_sequences 3
   ```
   ProteinMPNN: Another model for inverse folding! You can specify the max length you want your protein to be with --max_length. Note that max_length must be at least as long as the input structure.
   ```
-  $ trill example_5 1 inv_fold_gen ProteinMPNN trill/data/4ih9.pdb --max_length 1000 --num_return_sequences 5
+  trill example_5 1 inv_fold_gen ProteinMPNN trill/data/4ih9.pdb --max_length 1000 --num_return_sequences 5
   ```
 ### 6. Diffusion based Protein Generation
   RFDiffusion: You can perform a variety of protein design tasks, including designing binders! In the example below, you specify the target structure with --query, which in this case is an insulin receptor. The --contigs specify that we want residues 1-150 from chain A of the target structure, a chain break with /0 and a binder between 70-100 residues. We also specify residue hotspots, where we can tell the model to specifically target certain residues. Note that TRILL's implimentation of RFDiffusion does not yet have all of the knobs that the normal RFDiffusion has **yet**.
   ```
-  $ trill example_6 1 diff_gen --query trill/data/insulin_target.pdb --contigs 'A1-150/0 70-100' --hotspots 'A59,A83,A91' --num_return_sequences 3
+  trill example_6 1 diff_gen --query trill/data/insulin_target.pdb --contigs 'A1-150/0 70-100' --hotspots 'A59,A83,A91' --num_return_sequences 3
   ```
   More examples are coming soon for using RFDiffusion! I recommend checking out the examples for RFDiffusion on their [repo](https://github.com/RosettaCommons/RFdiffusion)
 ### 7. Predicting protein structure using ESMFold
   You can predict 3D protein structures rapidly in bulk using ESMFold. The output will be PDB files.
   ```
-  $ trill example_7 1 fold trill/data/query.fasta
+  trill example_7 1 fold trill/data/query.fasta
   ```  
 ### 8. Docking
   DiffDock: Currently, TRILL's implementation of DiffDock is only able to dock small molecules and proteins, but we are currently working on implementing DiffDock-PP for protein-protein docking. The output is ranked poses of the ligand.
   ```
-  $ trill example_8 1 dock trill/data/4ih9.pdb trill/data/NAG_ideal.sdf
+  trill example_8 1 dock trill/data/4ih9.pdb trill/data/NAG_ideal.sdf
   ```
 ### 9. Visualize your embeddings
   Create interactive visualizations for your output embeddings in 2D. You can specify the dimensionality reduction method with --method.
   ```
-  $ trill example_9 1 visualize /path/to/embeddings.csv
+  trill example_9 1 visualize /path/to/embeddings.csv
   ```  
 ## Misc. Tips
 
