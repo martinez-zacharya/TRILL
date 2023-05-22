@@ -6,8 +6,16 @@ from umap import UMAP
 from bokeh.io import output_file, save, show
 from sklearn.decomposition import PCA
 from sklearn.manifold import TSNE
-from bokeh.plotting import figure
-from bokeh.models import HoverTool
+from bokeh.models import CustomJSFilter, CDSView, ColumnDataSource, TextInput, CustomJS, HoverTool, GroupFilter
+from bokeh.plotting import figure, curdoc, output_notebook, show
+from bokeh.layouts import column
+from bokeh.resources  import settings
+
+# from bokeh.models import ColumnDataSource, HoverTool, CustomJS, TextInput, CDSView, CustomJSFilter, GroupFilter
+# from bokeh.io import output_notebook, show
+# from bokeh.layouts import column
+# import pandas as pd
+# from bokeh.plotting import figure
 # hv.extension('bokeh')
 
 
@@ -48,22 +56,23 @@ def reduce_dims(name, data, method = 'PCA'):
     return reduced_df, incsv
 
 
+
+
+
 def create_group(row):
     return row.split('_')[-1]
 
-
-def viz(reduced_df, title, grouped):
-    col1, col2, _ = reduced_df.columns
-    fig = figure(
-        title=title,
-        width=600, 
-        height=600, 
-        x_axis_label = col1, 
-        y_axis_label = col2
-        )
-    if grouped == True:
-        reduced_df['Group'] = reduced_df['Label'].apply(create_group)
-        # palette from http://mkweb.bcgsc.ca/colorblind/palettes/15.color.blindness.palette.txt
+def viz(df, title, grouped):
+    col1, col2, _ = df.columns
+    
+    # Check if grouped is True
+    if grouped:
+        # Add 'Group' column based on 'Label' values
+        df['Group'] = df['Label'].apply(create_group)
+        # Create a column data source from the dataframe
+        source = ColumnDataSource(df)
+        
+        # Define the palette for coloring groups
         palette = ['#68023F',
                 '#008169',
                 '#EF0096',
@@ -79,41 +88,87 @@ def viz(reduced_df, title, grouped):
                 '#F60239',
                 '#00E307',
                 '#FFDC3D']
-        for group, color in zip((reduced_df.Group.unique()), palette):
-            fig.circle(
-            source = reduced_df.loc[reduced_df['Group'] == group, :],
-            color = color,
-            x = col1,
-            y = col2,
-            legend_label = group
-            )
         
+        # Create a figure
+        fig = figure(title=title, width=600, height=600, x_axis_label=col1, y_axis_label=col2)
+        # Create a TextInput widget for the search feature
+        text_input = TextInput(value='', title='Search:')
+        custom_filter = CustomJSFilter(args=dict(text_input=text_input), code="""
+            var indices = [];
+            var data = source.data;
+            var names = data['Label'];
+            var value = text_input.value;  // get the value from TextInput widget
 
-        fig.add_tools(
-            HoverTool(
-                tooltips=[("Protein", "@Label")]
-                )
-            )
-        fig.legend.click_policy="hide"
+            // Iterate over the data and select the indices of points to keep based on the filter value
+            for (var i = 0; i < names.length; i++) {
+                if (names[i].includes(value)) {
+                    indices.push(i);
+                }
+            }
+            return indices;
+        """)
+        
+        # Create a scatter plot for each group and add them to the figure
+        scatter_renderers = []
+        for group, color in zip(df['Group'].unique(), palette):
+            # Create a GroupFilter for the group
+            group_filter = GroupFilter(column_name='Group', group=group)
+            
+            # Create a scatter plot for the group
+            scatter_renderer = fig.circle(col1, col2, source=source, color=color, legend_label=group, view=CDSView(source=source, filters=[custom_filter, group_filter]))
+            scatter_renderers.append(scatter_renderer)
+        
+        # Add hover tool
+        fig.add_tools(HoverTool(renderers=scatter_renderers, tooltips=[('Protein', '@Label')]))
+        
+        # Update the CustomJS callback when the input value changes
+        text_input.js_on_change('value', CustomJS(args=dict(source=source, scatter_renderers=scatter_renderers), code="""
+            for (var i = 0; i < scatter_renderers.length; i++) {
+                scatter_renderers[i].data_source.change.emit();
+            }
+        """))
+        
+        # Add legend
+        fig.legend.click_policy = 'hide'
+        
+        # Create the layout with the TextInput widget and the figure
+        layout = column(text_input, fig)
+        
+        # Show the plot
+        return layout
 
-        return(fig)
     else:
-        fig.circle(
-        source = reduced_df,
-        color = '#68023F',
-        x = col1,
-        y = col2,
-        )
-    
+        source = ColumnDataSource(df)
+        # Create a simple scatter plot without grouping
+        fig = figure(title=title, width=600, height=600, x_axis_label=col1, y_axis_label=col2)
+        # Create a CustomJSFilter
+        # Create a CustomJSFilter
+        text_input = TextInput(value='', title='Search:')
+        custom_filter = CustomJSFilter(args=dict(text_input=text_input, data=dict(source.data)), code="""
+            var indices = [];
+            var names = data['Label'];
+            var value = text_input.value;  // get the value from TextInput widget
 
-        fig.add_tools(
-            HoverTool(
-                tooltips=[("Protein", "@Label")]
-                )
-            )
+            // Iterate over the data and select the indices of points to keep based on the filter value
+            for (var i = 0; i < names.length; i++) {
+                if (names[i].includes(value)) {
+                    indices.push(i);
+                }
+            }
+            return indices;
+        """)
+        view = CDSView(source=source, filters=[custom_filter])
+        scatter_renderer = fig.circle(col1, col2, source=source, view=view, color='#68023F')
+        # Add hover tool
+        fig.add_tools(HoverTool(renderers=[scatter_renderer], tooltips=[('Protein', '@Label')]))
+        # Update the CustomJS callback when the input value changes
+        text_input.js_on_change('value', CustomJS(args=dict(source=source, scatter_renderer=scatter_renderer), code="""
+            scatter_renderer.data_source.change.emit();
+        """))
 
-        return(fig)
-        
+        # Create the layout with the TextInput widget and the figure
+        layout = column(text_input, fig)
+        return layout
 
 
 

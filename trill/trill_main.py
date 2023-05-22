@@ -18,6 +18,7 @@ from pytorch_lightning.loggers import TensorBoardLogger
 from pytorch_lightning.profilers import PyTorchProfiler
 from pytorch_lightning.strategies import DeepSpeedStrategy
 import yaml
+import re
 from sklearn.metrics import precision_recall_fscore_support
 from tqdm import tqdm
 import numpy as np
@@ -35,11 +36,22 @@ from trill.utils.protgpt2_utils import ProtGPT2_wrangle
 from trill.utils.esm_utils import ESM_IF1_Wrangle, ESM_IF1, convert_outputs_to_pdb
 from trill.utils.visualize import reduce_dims, viz
 from trill.utils.MLP import MLP_C2H2, inference_epoch
-
+from sklearn.ensemble import IsolationForest
+import skops.io as sio
 from pyfiglet import Figlet
 import bokeh
 os.environ['CUDA_LAUNCH_BLOCKING'] = '1'
 os.environ["TOKENIZERS_PARALLELISM"] = "false"
+
+class CustomDataset(torch.utils.data.Dataset):
+    def __init__(self, data):
+        self.data = data
+    
+    def __len__(self):
+        return len(self.data)
+    
+    def __getitem__(self, idx):
+        return self.data[idx]
 
 def main(args):
 
@@ -396,7 +408,7 @@ def main(args):
     classify.add_argument(
         "classifier",
         help="Predict thermostability using TemStaPro or choose custom to train/use your own XGBoost based binary classifier. Note for training a custom_binary, you need to submit roughly equal amounts of both binary classes as part of your query.",
-        choices = ['TemStaPro', 'custom_binary']
+        choices = ['TemStaPro', 'custom_binary', 'iForest']
 )
     classify.add_argument(
         "query",
@@ -432,10 +444,10 @@ def main(args):
 )
 
     classify.add_argument(
-        "--embs",
-        help="Enter the path to your pre-computed embeddings",
+        "--preComputed_Embs",
+        help="Enter the path to your pre-computed embeddings. Make sure they match the --emb_model you select.",
         action="store",
-        default=None
+        default=False
 )
 ##############################################################################################################
     
@@ -470,7 +482,7 @@ def main(args):
         )
     
 ##############################################################################################################
-    dock = subparsers.add_parser('dock', help='Dock protein to protein using DiffDock')
+    dock = subparsers.add_parser('dock', help='Dock protein to protein using DiffDock. If you are supplying a protein as your ligand, make sure to specify that with --pp, otherwise it assumes the ligand is a small molecule.')
 
     dock.add_argument("protein", 
         help="Protein of interest to be docked with ligand", 
@@ -481,6 +493,12 @@ def main(args):
         help="Ligand to dock protein with", 
         action="store",
         )
+    
+    # dock.add_argument("-pp", 
+    #     help="Flag to use DiffDock-PP and perform protein-protein docking.", 
+    #     action="store_true",
+    #     default=False
+    #     ) 
     dock.add_argument("--save_visualisation", 
         help="Save a pdb file with all of the steps of the reverse diffusion.", 
         action="store_true",
@@ -548,9 +566,9 @@ def main(args):
 
     if args.command == 'visualize':
         reduced_df, incsv = reduce_dims(args.name, args.embeddings, args.method)
-        fig = viz(reduced_df, args.name, args.group)
+        layout = viz(reduced_df, args.name, args.group)
         bokeh.io.output_file(filename=f'{args.name}_{args.method}_{incsv}.html', title=args.name) 
-        bokeh.io.save(fig, filename=f'{args.name}_{args.method}_{incsv}.html', title = args.name)
+        bokeh.io.save(layout, filename=f'{args.name}_{args.method}_{incsv}.html', title = args.name)
     
 
     elif args.command == 'embed':
@@ -903,6 +921,23 @@ def main(args):
                 f.write("".join(pdb))
 
     elif args.command == 'dock':
+            
+        # if args.pp:
+        #     if not os.path.exists('DiffDock-PP/'):
+        #         print('Cloning forked DiffDock-PP')
+        #         os.makedirs('DiffDock-PP/')
+        #         diffdock_pp = Repo.clone_from('https://github.com/martinez-zacharya/DiffDock-PP', 'DiffDock-PP/')
+        #         diffdock_pp_root = diffdock_pp.git.rev_parse("--show-toplevel")
+        #         subprocess.run(['pip', 'install', '-e', diffdock_pp_root])
+        #         sys.path.insert(0, 'DiffDock-PP/')
+        #     else:
+        #         sys.path.insert(0, 'DiffDock-PP/')
+        #         diffdock_pp = Repo('DiffDock-PP')
+        #         diffdock_pp_root = diffdock_pp.git.rev_parse("--show-toplevel")
+        #     from src.main_inf import run_diffdockpp
+        #     args.dataset = 'db5'
+        #     run_diffdockpp(args, diffdock_pp_root)
+
         if not os.path.exists('DiffDock/'):
             print('Cloning forked DiffDock')
             os.makedirs('DiffDock/')
@@ -917,36 +952,64 @@ def main(args):
         from inference import run_diffdock
         run_diffdock(args, diffdock_root)
 
+        out_dir = os.path.join(os.getcwd(), 'DiffDock_out')
+        rec = args.protein.split('.')[-2]
+        convert_rec = f'obabel {rec}.pdb -O {rec}.pdbqt'.split(' ')
+        subprocess.run(convert_rec, stdout=subprocess.DEVNULL)
+        for file in os.listdir(out_dir):
+            file_pre = file.split('.sdf')[-2]
+            convert_lig = f'obabel {out_dir}/{file} -O {file_pre}.pdbqt'.split(' ')
+            subprocess.run(convert_lig, stdout=subprocess.DEVNULL)
+
+            smina_cmd = f'./smina --score_only -r {rec}.pdbqt -l {file_pre}.pdbqt -o smina_{rec}_{file_pre}.pdbqt'.split(' ')
+            result = subprocess.run(smina_cmd, stdout=subprocess.PIPE)
+            result = re.search("Affinity: \w+.\w+", result.stdout.decode('utf-8'))
+            affinity = result.group()
+            affinity = re.search('\d+\.\d+', affinity).group()
+
+            dock_cmd = f'obabel {rec}.pdbqt {file_pre}.pdbqt -j -O docked_{rec}_{file_pre}_{affinity}.pdb'.split(' ')
+            subprocess.run(dock_cmd, stdout=subprocess.DEVNULL)
+
     elif args.command == 'classify':
         if args.classifier == 'TemStaPro':
-            data = esm.data.FastaBatchedDataset.from_file(args.query)
-            model = ProtT5(args)
-            dataloader = torch.utils.data.DataLoader(data, shuffle = False, batch_size = 1, num_workers=0)
-            if int(args.GPUs) > 0:
-                trainer = pl.Trainer(enable_checkpointing=False, devices=int(args.GPUs), accelerator='gpu', logger=logger, num_nodes=int(args.nodes))
-            else:
-                trainer = pl.Trainer(enable_checkpointing=False, logger=logger, num_nodes=int(args.nodes))
-            reps = trainer.predict(model, dataloader)
-            if args.save_emb:
-                emb_4export = []
-                for rep in reps:
-                    intermed = []
-                    for i in range(len(rep[0])):
-                        intermed.append(rep[0][i].cpu().numpy())
-                    intermed.append(rep[1])
-                    emb_4export.append(intermed)
-                emb_df = pd.DataFrame(emb_4export)
-                emb_df.to_csv(f'{args.name}_ProtT5-XL_embeddings.csv', index=False)
+            if not args.preComputed_Embs:
+                data = esm.data.FastaBatchedDataset.from_file(args.query)
+                model = ProtT5(args)
+                dataloader = torch.utils.data.DataLoader(data, shuffle = False, batch_size = 1, num_workers=0)
+                if int(args.GPUs) > 0:
+                    trainer = pl.Trainer(enable_checkpointing=False, devices=int(args.GPUs), accelerator='gpu', logger=logger, num_nodes=int(args.nodes))
+                else:
+                    trainer = pl.Trainer(enable_checkpointing=False, logger=logger, num_nodes=int(args.nodes))
+                reps = trainer.predict(model, dataloader)
+                if args.save_emb:
+                    emb_4export = []
+                    for rep in reps:
+                        intermed = []
+                        for i in range(len(rep[0])):
+                            intermed.append(rep[0][i].cpu().numpy())
+                        intermed.append(rep[1])
+                        emb_4export.append(intermed)
+                    emb_df = pd.DataFrame(emb_4export)
+                    emb_df.to_csv(f'{args.name}_ProtT5-XL_embeddings.csv', index=False)
             if not os.path.exists('TemStaPro_models/'):
                 temstapro_models = Repo.clone_from('https://github.com/martinez-zacharya/TemStaPro_models', 'TemStaPro_models/')
                 temstapro_models_root = temstapro_models.git.rev_parse("--show-toplevel")
             else:
                 temstapro_models = Repo('TemStaPro_models')
                 temstapro_models_root = temstapro_models.git.rev_parse("--show-toplevel")
-            dataloader = torch.utils.data.DataLoader(data, shuffle = False, batch_size = 1, num_workers=0)
+            # dataloader = torch.utils.data.DataLoader(data, shuffle = False, batch_size = 1, num_workers=0)
             THRESHOLDS = ["40", "45", "50", "55", "60", "65"]
             SEEDS = ["41", "42", "43", "44", "45"]
-            emb_loader = torch.utils.data.DataLoader(reps, shuffle = False, batch_size = 1, num_workers = 0)
+            if not args.preComputed_Embs:
+                emb_loader = torch.utils.data.DataLoader(reps, shuffle = False, batch_size = 1, num_workers = 0)
+            else:
+                emb_df = pd.read_csv(args.preComputed_Embs)
+                embs = emb_df[emb_df.columns[:-1]].applymap(lambda x: torch.tensor(x)).values.tolist()
+                labels = emb_df.iloc[:,-1]
+                list_of_tensors = [torch.tensor(l) for l in embs]
+                input_data = list(zip(list_of_tensors, labels))
+                custom_dataset = CustomDataset(input_data)
+                emb_loader = torch.utils.data.DataLoader(custom_dataset, shuffle=False, batch_size=1, num_workers = 0)
             inferences = {}
             for thresh in THRESHOLDS:
                 threshold_inferences = {}
@@ -974,12 +1037,12 @@ def main(args):
             inference_df = inference_df[['Protein', 'Threshold', 'Mean_Pred', 'Binary_Pred']]
             inference_df.to_csv(f'{args.name}_TemStaPro_preds.csv', index = False)
         elif args.classifier == 'custom_binary':
-            if args.embs == None:
+            if not args.preComputed_Embs:
                 embed_command = f"trill {args.name} {args.GPUs} embed {args.emb_model} {args.query}".split(' ')
                 subprocess.run(embed_command, check=True)
                 df = pd.read_csv(f'{args.name}_{args.emb_model}.csv')
             else:
-                df = pd.read_csv(args.embs)
+                df = pd.read_csv(args.preComputed_Embs)
             if args.train_split is not None:
                 df['NewLab'] = np.where(df['Label'].str.contains(args.key) == 1, 1, 0)
                 df = df.sample(frac = 1)
@@ -992,7 +1055,7 @@ def main(args):
                 print(f'{recall=}')
                 print(f'{fscore=}')
 
-                if not args.save_emb:
+                if not args.save_emb and not args.preComputed_embs:
                     os.remove(f'{args.name}_{args.emb_model}.csv')
                 model.save_model(f'{args.name}_XGBoost_binary_{len(test_df.columns)-2}.json')
             else:
@@ -1007,6 +1070,25 @@ def main(args):
                 if not args.save_emb:
                     os.remove(f'{args.name}_{args.emb_model}.csv')
 
+        elif args.classifier == 'iForest':
+            if not args.preComputed_Embs:
+                embed_command = f"trill {args.name} {args.GPUs} embed {args.emb_model} {args.query}".split(' ')
+                subprocess.run(embed_command, check=True)
+                df = pd.read_csv(f'{args.name}_{args.emb_model}.csv')
+            else:
+                df = pd.read_csv(args.preComputed_Embs)
+            
+            if args.train_split is not None:
+                model = IsolationForest(random_state=int(args.RNG_seed), verbose=True).fit(df.iloc[:,:-1])
+                obj = sio.dump(model, f'{args.name}_iForest.skops')
+            else:
+                model = sio.load(args.preTrained)
+                preds = model.predict(df.iloc[:,:-1])
+                df['Predicted_Class'] = preds
+                out_df = df[['Label', 'Predicted_Class']]
+                out_df.to_csv(f'{args.name}_predictions.csv', index = False)
+                if not args.save_emb:
+                    os.remove(f'{args.name}_{args.emb_model}.csv')
 
 
 
@@ -1163,7 +1245,7 @@ def return_parser():
 
     finetune.add_argument(
         "--ctrl_tag",
-        help="Choose an Enzymatic Commision (EC) control tag for finetuning ZymCTRL. Note that the tag must match all of the enzymes in the query fasta file. You can find all ECs here https://www.brenda-enzymes.org/ecexplorer.php?browser=1",
+        help="Choose an Enzymatic Commision (EC) control tag for finetuning ZymCTRL. Note that the tag must match all of the enzymes in the query fasta file. You can find all ECs here https://www.brenda-enzymes.org/index.php",
         action="store"
 )
 ##############################################################################################################
@@ -1253,7 +1335,7 @@ def return_parser():
 
     lang_gen.add_argument(
         "--ctrl_tag",
-        help="Choose an Enzymatic Commision (EC) control tag for conditional protein generation based on the tag. You can find all ECs here https://www.brenda-enzymes.org/ecexplorer.php?browser=1",
+        help="Choose an Enzymatic Commision (EC) control tag for conditional protein generation based on the tag. You can find all ECs here https://www.brenda-enzymes.org/index.php",
         action="store",
 )
 
@@ -1352,7 +1434,8 @@ def return_parser():
     diffuse_gen.add_argument("--partial_T", 
         help="Adjust partial diffusion sampling value.",
         action="store",
-        default=None
+        default=None,
+        type=int
         )
     
     diffuse_gen.add_argument("--partial_diff_fix", 
@@ -1380,7 +1463,7 @@ def return_parser():
     classify.add_argument(
         "classifier",
         help="Predict thermostability using TemStaPro or choose custom to train/use your own XGBoost based binary classifier. Note for training a custom_binary, you need to submit roughly equal amounts of both binary classes as part of your query.",
-        choices = ['TemStaPro', 'custom_binary']
+        choices = ['TemStaPro', 'custom_binary', 'iForest']
 )
     classify.add_argument(
         "query",
@@ -1413,6 +1496,13 @@ def return_parser():
         "--preTrained",
         help="Enter the path to your pre-trained XGBoost binary classifier that you've trained with TRILL.",
         action="store",
+)
+
+    classify.add_argument(
+        "--preComputed_Embs",
+        help="Enter the path to your pre-computed embeddings. Make sure they match the --emb_model you select.",
+        action="store",
+        default=False
 )
 ##############################################################################################################
     
@@ -1447,7 +1537,7 @@ def return_parser():
         )
     
 ##############################################################################################################
-    dock = subparsers.add_parser('dock', help='Dock protein to protein using DiffDock')
+    dock = subparsers.add_parser('dock', help='Dock protein to protein using DiffDock. If you are supplying a protein as your ligand, make sure to specify that with --pp, otherwise it assumes the ligand is a small molecule.')
 
     dock.add_argument("protein", 
         help="Protein of interest to be docked with ligand", 
@@ -1458,6 +1548,12 @@ def return_parser():
         help="Ligand to dock protein with", 
         action="store",
         )
+    
+    # dock.add_argument("-pp", 
+    #     help="Flag to use DiffDock-PP and perform protein-protein docking.", 
+    #     action="store_true",
+    #     default=False
+    #     ) 
     dock.add_argument("--save_visualisation", 
         help="Save a pdb file with all of the steps of the reverse diffusion.", 
         action="store_true",
@@ -1490,5 +1586,7 @@ def return_parser():
         action="store",
         default=None
         )
+
+##############################################################################################################
 
     return parser
