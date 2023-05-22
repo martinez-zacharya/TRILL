@@ -482,7 +482,7 @@ def main(args):
         )
     
 ##############################################################################################################
-    dock = subparsers.add_parser('dock', help='Dock protein to protein using DiffDock. If you are supplying a protein as your ligand, make sure to specify that with --pp, otherwise it assumes the ligand is a small molecule.')
+    dock = subparsers.add_parser('dock', help='Dock proteins and small molecule ligands with DiffDock')
 
     dock.add_argument("protein", 
         help="Protein of interest to be docked with ligand", 
@@ -890,7 +890,8 @@ def main(args):
         if int(args.GPUs) == 0:
             model = EsmForProteinFolding.from_pretrained('facebook/esmfold_v1', low_cpu_mem_usage=True, torch_dtype='auto')
         else:
-            model = EsmForProteinFolding.from_pretrained('facebook/esmfold_v1', device_map='auto', torch_dtype='auto')
+            model = EsmForProteinFolding.from_pretrained('facebook/esmfold_v1', torch_dtype='auto')
+            # model = EsmForProteinFolding.from_pretrained('facebook/esmfold_v1', device_map='auto', torch_dtype='auto')
             model.esm = model.esm.half()
             device = torch.device("cuda")
             model = model.to(device)
@@ -954,21 +955,24 @@ def main(args):
 
         out_dir = os.path.join(os.getcwd(), 'DiffDock_out')
         rec = args.protein.split('.')[-2]
-        convert_rec = f'obabel {rec}.pdb -O {rec}.pdbqt'.split(' ')
+        out_rec = rec.split('/')[-1]
+        convert_rec = f'obabel {rec}.pdb -O {out_rec}.pdbqt'.split(' ')
         subprocess.run(convert_rec, stdout=subprocess.DEVNULL)
         for file in os.listdir(out_dir):
-            file_pre = file.split('.sdf')[-2]
-            convert_lig = f'obabel {out_dir}/{file} -O {file_pre}.pdbqt'.split(' ')
-            subprocess.run(convert_lig, stdout=subprocess.DEVNULL)
+            if 'confidence' in file:
+                file_pre = file.split('.sdf')[-2]
+                convert_lig = f'obabel {out_dir}/{file} -O {file_pre}.pdbqt'.split(' ')
+                subprocess.run(convert_lig, stdout=subprocess.DEVNULL)
 
-            smina_cmd = f'./smina --score_only -r {rec}.pdbqt -l {file_pre}.pdbqt -o smina_{rec}_{file_pre}.pdbqt'.split(' ')
-            result = subprocess.run(smina_cmd, stdout=subprocess.PIPE)
-            result = re.search("Affinity: \w+.\w+", result.stdout.decode('utf-8'))
-            affinity = result.group()
-            affinity = re.search('\d+\.\d+', affinity).group()
+                smina_cmd = f'./smina --score_only -r {out_rec}.pdbqt -l {file_pre}.pdbqt'.split(' ')
+                result = subprocess.run(smina_cmd, stdout=subprocess.PIPE)
 
-            dock_cmd = f'obabel {rec}.pdbqt {file_pre}.pdbqt -j -O docked_{rec}_{file_pre}_{affinity}.pdb'.split(' ')
-            subprocess.run(dock_cmd, stdout=subprocess.DEVNULL)
+                result = re.search("Affinity: \w+.\w+", result.stdout.decode('utf-8'))
+                affinity = result.group()
+                affinity = re.search('\d+\.\d+', affinity).group()
+
+                dock_cmd = f'obabel {out_rec}.pdbqt {file_pre}.pdbqt -j -O docked_{out_rec}_{file_pre}_{affinity}.pdb'.split(' ')
+                subprocess.run(dock_cmd, stdout=subprocess.DEVNULL)
 
     elif args.command == 'classify':
         if args.classifier == 'TemStaPro':

@@ -25,17 +25,21 @@ TRILL (**TR**aining and **I**nference using the **L**anguage of **L**ife) is a s
 
 ## Set-Up
 1. I recommend using a virtual environment with conda. If you don't have conda installed, follow these steps
-```
+```shell
 wget https://repo.anaconda.com/miniconda/Miniconda3-latest-Linux-x86_64.sh
 sh ./Miniconda3-latest-Linux-x86_64.sh
 ```
 2. Once conda is set up, create a new environment with
-```
+```shell
 conda create -n TRILL python=3.10
 conda activate TRILL ; conda install pytorch==1.13.0 pytorch-cuda=11.7 -c pytorch -c nvidia ; conda install -c conda-forge openbabel
 ```
-3. Next, simply install TRILL!
+3. Next, you need to download the Smina binary to perform binding affinity prediction. You should add smina to your path, because if not, you will need to have smina in the working directory wherever you run TRILL. This should hopefully be more smoothly integrated into TRILL soon
+```shell
+wget -O smina https://sourceforge.net/projects/smina/files/smina.static/download
 ```
+4. Next, simply install TRILL!
+```shell
 pip install trill-proteins
 ```
 
