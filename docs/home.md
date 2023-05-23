@@ -36,7 +36,7 @@ conda activate TRILL ; conda install pytorch==1.13.0 pytorch-cuda=11.7 -c pytorc
 ```
 3. Next, you need to download the Smina binary to perform binding affinity prediction. You should add smina to your path, because if not, you will need to have smina in the working directory wherever you run TRILL. This should hopefully be more smoothly integrated into TRILL soon
 ```shell
-wget -O smina https://sourceforge.net/projects/smina/files/smina.static/download
+wget -O smina https://sourceforge.net/projects/smina/files/smina.static/download ; chmod +x smina
 ```
 4. Next, simply install TRILL!
 ```shell
