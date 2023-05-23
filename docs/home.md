@@ -45,7 +45,7 @@ pip install trill-proteins
 
 ## Use
 
-```
+```shell
 usage: trill [-h] [--nodes NODES] [--logger LOGGER] [--profiler] [--RNG_seed RNG_SEED]
              name GPUs
              {embed,finetune,inv_fold_gen,lang_gen,diff_gen,classify,fold,visualize,dock}
