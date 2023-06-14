@@ -886,34 +886,48 @@ def main(args):
     elif args.command == 'fold':
         data = esm.data.FastaBatchedDataset.from_file(args.query)
         tokenizer = AutoTokenizer.from_pretrained("facebook/esmfold_v1")
-
         if int(args.GPUs) == 0:
             model = EsmForProteinFolding.from_pretrained('facebook/esmfold_v1', low_cpu_mem_usage=True, torch_dtype='auto')
         else:
-            model = EsmForProteinFolding.from_pretrained('facebook/esmfold_v1', torch_dtype='auto')
-            # model = EsmForProteinFolding.from_pretrained('facebook/esmfold_v1', device_map='auto', torch_dtype='auto')
+            model = EsmForProteinFolding.from_pretrained('facebook/esmfold_v1', device_map='sequential', torch_dtype='auto')
+            model = model.cuda()
             model.esm = model.esm.half()
-            device = torch.device("cuda")
-            model = model.to(device)
+            model = model.cuda()
         if args.strategy != None:
             model.trunk.set_chunk_size(int(args.strategy))
         fold_df = pd.DataFrame(list(data), columns = ["Entry", "Sequence"])
         outputs = []
         with torch.no_grad():
             for input_ids in tqdm(fold_df.Sequence.tolist()):
-                tokenized_input = tokenizer([input_ids], return_tensors="pt", add_special_tokens=False)['input_ids']
-                tokenized_input = tokenized_input.clone().detach()
-                prot_len = len(input_ids)
-                try:
-                    output = model(tokenized_input)
-                    outputs.append({key: val.cpu() for key, val in output.items()})
-                except RuntimeError as e:
-                        if 'out of memory' in str(e):
-                            print(f'Protein too long to fold for current hardware: {prot_len} amino acids long)')
-                            print(e)
-                        else:
-                            print(e)
-                            pass
+                if int(args.GPUs) == 0:
+                    tokenized_input = tokenizer([input_ids], return_tensors="pt", add_special_tokens=False)['input_ids']
+                    tokenized_input = tokenized_input.clone().detach()
+                    prot_len = len(input_ids)
+                    try:
+                        output = model(tokenized_input)
+                        outputs.append({key: val.cpu() for key, val in output.items()})
+                    except RuntimeError as e:
+                            if 'out of memory' in str(e):
+                                print(f'Protein too long to fold for current hardware: {prot_len} amino acids long)')
+                                print(e)
+                            else:
+                                print(e)
+                                pass
+                else:
+                    tokenized_input = tokenizer([input_ids], return_tensors="pt", add_special_tokens=False)['input_ids']
+                    tokenized_input = tokenized_input.clone().detach()
+                    prot_len = len(input_ids)
+                    try:
+                        tokenized_input = tokenized_input.to(model.device)
+                        output = model(tokenized_input)
+                        outputs.append({key: val.cpu() for key, val in output.items()})
+                    except RuntimeError as e:
+                            if 'out of memory' in str(e):
+                                print(f'Protein too long to fold for current hardware: {prot_len} amino acids long)')
+                                print(e)
+                            else:
+                                print(e)
+                                pass
 
         pdb_list = [convert_outputs_to_pdb(output) for output in outputs]
         protein_identifiers = fold_df.Entry.tolist()
@@ -922,23 +936,6 @@ def main(args):
                 f.write("".join(pdb))
 
     elif args.command == 'dock':
-            
-        # if args.pp:
-        #     if not os.path.exists('DiffDock-PP/'):
-        #         print('Cloning forked DiffDock-PP')
-        #         os.makedirs('DiffDock-PP/')
-        #         diffdock_pp = Repo.clone_from('https://github.com/martinez-zacharya/DiffDock-PP', 'DiffDock-PP/')
-        #         diffdock_pp_root = diffdock_pp.git.rev_parse("--show-toplevel")
-        #         subprocess.run(['pip', 'install', '-e', diffdock_pp_root])
-        #         sys.path.insert(0, 'DiffDock-PP/')
-        #     else:
-        #         sys.path.insert(0, 'DiffDock-PP/')
-        #         diffdock_pp = Repo('DiffDock-PP')
-        #         diffdock_pp_root = diffdock_pp.git.rev_parse("--show-toplevel")
-        #     from src.main_inf import run_diffdockpp
-        #     args.dataset = 'db5'
-        #     run_diffdockpp(args, diffdock_pp_root)
-
         if not os.path.exists('DiffDock/'):
             print('Cloning forked DiffDock')
             os.makedirs('DiffDock/')
