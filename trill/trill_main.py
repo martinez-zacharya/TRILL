@@ -18,6 +18,7 @@ from pytorch_lightning.loggers import TensorBoardLogger
 from pytorch_lightning.profilers import PyTorchProfiler
 from pytorch_lightning.strategies import DeepSpeedStrategy
 import yaml
+import shutil
 import re
 from sklearn.metrics import precision_recall_fscore_support
 from tqdm import tqdm
@@ -29,6 +30,7 @@ from fairscale.nn.wrap import enable_wrap, wrap
 from pytorch_lightning.utilities.deepspeed import convert_zero_checkpoint_to_fp32_state_dict
 from trill.utils.lightning_models import ESM, ProtGPT2, CustomWriter, ESM_Gibbs, ProtT5, ZymCTRL
 from trill.utils.update_weights import weights_update
+from trill.utils.dock_utils import perform_docking
 from transformers import AutoTokenizer, EsmForProteinFolding, set_seed
 from pytorch_lightning.callbacks import ModelCheckpoint
 # from trill.utils.strategy_tuner import tune_esm_inference, tune_esm_train
@@ -192,6 +194,14 @@ def main(args):
         "--ctrl_tag",
         help="Choose an Enzymatic Commision (EC) control tag for finetuning ZymCTRL. Note that the tag must match all of the enzymes in the query fasta file. You can find all ECs here https://www.brenda-enzymes.org/index.php",
         action="store"
+)
+
+    finetune.add_argument(
+        "--finetuned",
+        help="Input path to your previously finetuned model to continue finetuning",
+        action="store",
+        default = False,
+        dest="finetuned",
 )
 ##############################################################################################################
     inv_fold = subparsers.add_parser('inv_fold_gen', help='Generate proteins using inverse folding')
@@ -482,7 +492,12 @@ def main(args):
         )
     
 ##############################################################################################################
-    dock = subparsers.add_parser('dock', help='Dock proteins and small molecule ligands with DiffDock')
+    dock = subparsers.add_parser('dock', help='Dock proteins and small molecule ligands with DiffDock or Smina')
+
+    dock.add_argument("algorithm",
+        help="Choose between DiffDock and Smina. Note that while Smina can dock small-molecule and protein ligands, DiffDock can only do small-molecules.",
+        choices = ['DiffDock', 'Smina']
+    )
 
     dock.add_argument("protein", 
         help="Protein of interest to be docked with ligand", 
@@ -494,11 +509,12 @@ def main(args):
         action="store",
         )
     
-    # dock.add_argument("-pp", 
-    #     help="Flag to use DiffDock-PP and perform protein-protein docking.", 
-    #     action="store_true",
-    #     default=False
-    #     ) 
+    dock.add_argument("--force_ligand", 
+        help="TRILL will automatically assume your ligand is a small molecule if the MW is less than 800. To get around this, you can force TRILL to read the ligand as either type.", 
+        default=False,
+        choices = ['small', 'protein']
+        )
+    
     dock.add_argument("--save_visualisation", 
         help="Save a pdb file with all of the steps of the reverse diffusion.", 
         action="store_true",
@@ -639,7 +655,7 @@ def main(args):
 
 
             else:
-                model = weights_update(model = ESM(eval(model_import_name), 0.0001, args, False), checkpoint = torch.load(args.finetuned))
+                model = weights_update(model = ESM(eval(model_import_name), 0.0001, args), checkpoint = torch.load(args.finetuned))
                 trainer.predict(model, dataloader)
                 cwd_files = os.listdir()
                 pt_files = [file for file in cwd_files if 'predictions_' in file]
@@ -662,6 +678,8 @@ def main(args):
         len_data = len(data)
         if args.model == 'ProtGPT2':
             model = ProtGPT2(args)
+            if args.finetuned != False:
+                model = model.load_from_checkpoint(args.finetuned, args = args, strict=False)
             tokenizer = AutoTokenizer.from_pretrained("nferruz/ProtGPT2")
             seq_dict_df = ProtGPT2_wrangle(data, tokenizer)
             dataloader = torch.utils.data.DataLoader(seq_dict_df, shuffle = False, batch_size = int(args.batch_size), num_workers=0)
@@ -718,6 +736,8 @@ def main(args):
         else:
             model_import_name = f'esm.pretrained.{args.model}_UR50D()'
             model = ESM(eval(model_import_name), float(args.lr), args)
+            if args.finetuned:
+                model = weights_update(model = ESM(eval(model_import_name), 0.0001, args), checkpoint = torch.load(args.finetuned))
             dataloader = torch.utils.data.DataLoader(data, shuffle = False, batch_size = int(args.batch_size), num_workers=0, collate_fn=model.alphabet.get_batch_converter())
             # if args.LEGGO:
             #     raise RuntimeError('LEGGO is no longer a valid option. Sorry for the confusion')
@@ -936,40 +956,56 @@ def main(args):
                 f.write("".join(pdb))
 
     elif args.command == 'dock':
-        if not os.path.exists('DiffDock/'):
-            print('Cloning forked DiffDock')
-            os.makedirs('DiffDock/')
-            diffdock = Repo.clone_from('https://github.com/martinez-zacharya/DiffDock', 'DiffDock/')
-            diffdock_root = diffdock.git.rev_parse("--show-toplevel")
-            subprocess.run(['pip', 'install', '-e', diffdock_root])
-            sys.path.insert(0, 'DiffDock/')
-        else:
-            sys.path.insert(0, 'DiffDock/')
-            diffdock = Repo('DiffDock')
-            diffdock_root = diffdock.git.rev_parse("--show-toplevel")
-        from inference import run_diffdock
-        run_diffdock(args, diffdock_root)
 
-        out_dir = os.path.join(os.getcwd(), 'DiffDock_out')
-        rec = args.protein.split('.')[-2]
-        out_rec = rec.split('/')[-1]
-        convert_rec = f'obabel {rec}.pdb -O {out_rec}.pdbqt'.split(' ')
-        subprocess.run(convert_rec, stdout=subprocess.DEVNULL)
-        for file in os.listdir(out_dir):
-            if 'confidence' in file:
-                file_pre = file.split('.sdf')[-2]
-                convert_lig = f'obabel {out_dir}/{file} -O {file_pre}.pdbqt'.split(' ')
-                subprocess.run(convert_lig, stdout=subprocess.DEVNULL)
+        if args.algorithm == 'DiffDock':
+            if not os.path.exists('DiffDock/'):
+                print('Cloning forked DiffDock')
+                os.makedirs('DiffDock/')
+                diffdock = Repo.clone_from('https://github.com/martinez-zacharya/DiffDock', 'DiffDock/')
+                diffdock_root = diffdock.git.rev_parse("--show-toplevel")
+                subprocess.run(['pip', 'install', '-e', diffdock_root])
+                sys.path.insert(0, 'DiffDock/')
+            else:
+                sys.path.insert(0, 'DiffDock/')
+                diffdock = Repo('DiffDock')
+                diffdock_root = diffdock.git.rev_parse("--show-toplevel")
+            from inference import run_diffdock
+            run_diffdock(args, diffdock_root)
 
-                smina_cmd = f'./smina --score_only -r {out_rec}.pdbqt -l {file_pre}.pdbqt'.split(' ')
-                result = subprocess.run(smina_cmd, stdout=subprocess.PIPE)
+            out_dir = os.path.join(os.getcwd(), 'DiffDock_out')
+            rec = args.protein.split('.')[-2]
+            out_rec = rec.split('/')[-1]
+            convert_rec = f'obabel {rec}.pdb -O {out_rec}.pdbqt'.split(' ')
+            subprocess.run(convert_rec, stdout=subprocess.DEVNULL)
+            for file in os.listdir(out_dir):
+                if 'confidence' in file:
+                    file_pre = file.split('.sdf')[-2]
+                    convert_lig = f'obabel {out_dir}/{file} -O {file_pre}.pdbqt'.split(' ')
+                    subprocess.run(convert_lig, stdout=subprocess.DEVNULL)
 
-                result = re.search("Affinity: \w+.\w+", result.stdout.decode('utf-8'))
-                affinity = result.group()
-                affinity = re.search('\d+\.\d+', affinity).group()
+                    smina_cmd = f'./smina --score_only -r {out_rec}.pdbqt -l {file_pre}.pdbqt'.split(' ')
+                    result = subprocess.run(smina_cmd, stdout=subprocess.PIPE)
 
-                dock_cmd = f'obabel {out_rec}.pdbqt {file_pre}.pdbqt -j -O docked_{out_rec}_{file_pre}_{affinity}.pdb'.split(' ')
-                subprocess.run(dock_cmd, stdout=subprocess.DEVNULL)
+                    result = re.search("Affinity: \w+.\w+", result.stdout.decode('utf-8'))
+                    affinity = result.group()
+                    affinity = re.search('\d+\.\d+', affinity).group()
+
+                    dock_cmd = f'obabel {out_rec}.pdbqt {file_pre}.pdbqt -j -O docked_{out_rec}_{file_pre}_{affinity}.pdb'.split(' ')
+                    # subprocess.run(dock_cmd, stdout=subprocess.DEVNULL)
+        elif args.algorithm == 'Smina':
+            docking_results = perform_docking(args.protein, args.ligand, args.force_ligand)
+            protein_file = os.path.abspath(args.protein)
+            protein_name = os.path.basename(protein_file).split('.')[0]
+            fpocket_output = f"{os.path.dirname(protein_file)}/{protein_name}_out/"
+            shutil.rmtree(fpocket_output)
+
+            with open(f'{args.name}_smina.out', 'w+') as out:
+                for num, res in docking_results:
+                    res_out = res.decode('utf-8')
+                    out.write(f'{protein_name}_pocket{num}: \n')
+                    out.write(res_out)
+                    out.write('\n')
+                    out.write('-------------------------------------------------------------------------------------------------- \n')
 
     elif args.command == 'classify':
         if args.classifier == 'TemStaPro':
@@ -1249,6 +1285,14 @@ def return_parser():
         help="Choose an Enzymatic Commision (EC) control tag for finetuning ZymCTRL. Note that the tag must match all of the enzymes in the query fasta file. You can find all ECs here https://www.brenda-enzymes.org/index.php",
         action="store"
 )
+
+    finetune.add_argument(
+        "--finetuned",
+        help="Input path to your previously finetuned model to continue finetuning",
+        action="store",
+        default = False,
+        dest="finetuned",
+)
 ##############################################################################################################
     inv_fold = subparsers.add_parser('inv_fold_gen', help='Generate proteins using inverse folding')
     inv_fold.add_argument(
@@ -1538,7 +1582,12 @@ def return_parser():
         )
     
 ##############################################################################################################
-    dock = subparsers.add_parser('dock', help='Dock protein to protein using DiffDock. If you are supplying a protein as your ligand, make sure to specify that with --pp, otherwise it assumes the ligand is a small molecule.')
+    dock = subparsers.add_parser('dock', help='Dock proteins and small molecule ligands with DiffDock or Smina')
+
+    dock.add_argument("algorithm",
+        help="Choose between DiffDock and Smina. Note that while Smina can dock small-molecule and protein ligands, DiffDock can only do small-molecules.",
+        choices = ['DiffDock', 'Smina']
+    )
 
     dock.add_argument("protein", 
         help="Protein of interest to be docked with ligand", 
@@ -1550,11 +1599,12 @@ def return_parser():
         action="store",
         )
     
-    # dock.add_argument("-pp", 
-    #     help="Flag to use DiffDock-PP and perform protein-protein docking.", 
-    #     action="store_true",
-    #     default=False
-    #     ) 
+    dock.add_argument("--force_ligand", 
+        help="TRILL will automatically assume your ligand is a small molecule if the MW is less than 800. To get around this, you can force TRILL to read the ligand as either type.", 
+        default=False,
+        choices = ['small', 'protein']
+        )
+    
     dock.add_argument("--save_visualisation", 
         help="Save a pdb file with all of the steps of the reverse diffusion.", 
         action="store_true",
@@ -1589,5 +1639,7 @@ def return_parser():
         )
 
 ##############################################################################################################
+
+    
 
     return parser
