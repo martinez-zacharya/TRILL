@@ -916,16 +916,15 @@ def main(args):
         if args.strategy != None:
             model.trunk.set_chunk_size(int(args.strategy))
         fold_df = pd.DataFrame(list(data), columns = ["Entry", "Sequence"])
-        outputs = []
         with torch.no_grad():
-            for input_ids in tqdm(fold_df.Sequence.tolist()):
+            for i, input_ids in enumerate(tqdm(fold_df.Sequence.tolist())):
                 if int(args.GPUs) == 0:
                     tokenized_input = tokenizer([input_ids], return_tensors="pt", add_special_tokens=False)['input_ids']
                     tokenized_input = tokenized_input.clone().detach()
                     prot_len = len(input_ids)
                     try:
                         output = model(tokenized_input)
-                        outputs.append({key: val.cpu() for key, val in output.items()})
+                        output = {key: val.cpu() for key, val in output.items()}
                     except RuntimeError as e:
                             if 'out of memory' in str(e):
                                 print(f'Protein too long to fold for current hardware: {prot_len} amino acids long)')
@@ -940,7 +939,7 @@ def main(args):
                     try:
                         tokenized_input = tokenized_input.to(model.device)
                         output = model(tokenized_input)
-                        outputs.append({key: val.cpu() for key, val in output.items()})
+                        output = {key: val.cpu() for key, val in output.items()}
                     except RuntimeError as e:
                             if 'out of memory' in str(e):
                                 print(f'Protein too long to fold for current hardware: {prot_len} amino acids long)')
@@ -949,11 +948,11 @@ def main(args):
                                 print(e)
                                 pass
 
-        pdb_list = [convert_outputs_to_pdb(output) for output in outputs]
-        protein_identifiers = fold_df.Entry.tolist()
-        for identifier, pdb in zip(protein_identifiers, pdb_list):
-            with open(f"{identifier}.pdb", "w") as f:
-                f.write("".join(pdb))
+                output = convert_outputs_to_pdb(output)
+                identifier = fold_df.Entry[i]
+        # for identifier, pdb in zip(protein_identifiers, pdb_list):
+                with open(f"{identifier}.pdb", "w") as f:
+                    f.write("".join(output))
 
     elif args.command == 'dock':
 
@@ -983,7 +982,7 @@ def main(args):
                     convert_lig = f'obabel {out_dir}/{file} -O {file_pre}.pdbqt'.split(' ')
                     subprocess.run(convert_lig, stdout=subprocess.DEVNULL)
 
-                    smina_cmd = f'./smina --score_only -r {out_rec}.pdbqt -l {file_pre}.pdbqt'.split(' ')
+                    smina_cmd = f'smina --score_only -r {out_rec}.pdbqt -l {file_pre}.pdbqt'.split(' ')
                     result = subprocess.run(smina_cmd, stdout=subprocess.PIPE)
 
                     result = re.search("Affinity: \w+.\w+", result.stdout.decode('utf-8'))
@@ -992,12 +991,13 @@ def main(args):
 
                     dock_cmd = f'obabel {out_rec}.pdbqt {file_pre}.pdbqt -j -O docked_{out_rec}_{file_pre}_{affinity}.pdb'.split(' ')
                     # subprocess.run(dock_cmd, stdout=subprocess.DEVNULL)
+            
         elif args.algorithm == 'Smina':
             docking_results = perform_docking(args.protein, args.ligand, args.force_ligand)
             protein_file = os.path.abspath(args.protein)
             protein_name = os.path.basename(protein_file).split('.')[0]
             fpocket_output = f"{os.path.dirname(protein_file)}/{protein_name}_out/"
-            shutil.rmtree(fpocket_output)
+            # shutil.rmtree(fpocket_output)
 
             with open(f'{args.name}_smina.out', 'w+') as out:
                 for num, res in docking_results:

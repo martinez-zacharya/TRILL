@@ -22,7 +22,6 @@ def perform_docking(protein_file, ligand_file, force_ligand):
     protein_file = os.path.abspath(protein_file)
     ligand_file = os.path.abspath(ligand_file)
 
-    # Run fpocket
 
     protein_name = os.path.basename(protein_file).split('.')[0]
     lig_name = os.path.basename(ligand_file).split('.')[0]
@@ -48,10 +47,10 @@ def perform_docking(protein_file, ligand_file, force_ligand):
         is_small_molecule = mw < 800  # Lowered the threshold
     if is_small_molecule:
         fpock_cmd = f"fpocket -f {protein_file}".split(' ')
-        subprocess.run(fpock_cmd, stdout=subprocess.DEVNULL)
+        subprocess.run(fpock_cmd)
     else:
         fpock_cmd = f"fpocket -f {protein_file} -m 3.5 -M 10.0 -i 3 -n 2".split(' ')
-        subprocess.run(fpock_cmd, stdout=subprocess.DEVNULL)
+        subprocess.run(fpock_cmd)
 
     # Load fpocket output
     output_file_path = f"{os.path.dirname(protein_file)}/{protein_name}_out/{protein_name}_info.txt"
@@ -71,9 +70,9 @@ def perform_docking(protein_file, ligand_file, force_ligand):
         pocket = {line.split(':')[0].strip(): float(line.split(':')[1].strip()) for line in pocket_lines[1:] if ':' in line}
         # Filter pockets based on ligand properties and pocket properties
         if is_small_molecule:
-            if (pocket['Score'] > 0.2 and
+            if (pocket['Score'] > 0.2):
                 # pocket['Druggability Score'] > 0.15 and 
-                pocket['Volume'] < mw*3):
+                # pocket['Volume'] < mw*3):
                 # pocket['Polarity score'] >= tpsa*0.8 and
                 # pocket['Mean local hydrophobic density'] <= logp):
               
