@@ -32,13 +32,9 @@ sh ./Miniconda3-latest-Linux-x86_64.sh
 2. Once conda is set up, create a new environment with
 ```shell
 conda create -n TRILL python=3.10
-conda activate TRILL ; conda install pytorch==1.13.0 pytorch-cuda=11.7 -c pytorch -c nvidia ; conda install -c conda-forge openbabel
+conda activate TRILL ; conda install pytorch==1.13.0 pytorch-cuda=11.7 -c pytorch -c nvidia ; conda install -c conda-forge openbabel smina
 ```
-3. Next, you need to download the Smina binary to perform binding affinity prediction. You should add smina to your path, because if not, you will need to have smina in the working directory wherever you run TRILL. This should hopefully be more smoothly integrated into TRILL soon
-```shell
-wget -O smina https://sourceforge.net/projects/smina/files/smina.static/download ; chmod +x smina
-```
-4. Next, simply install TRILL!
+3. Next, simply install TRILL!
 ```shell
 pip install trill-proteins
 ```
