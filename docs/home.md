@@ -31,8 +31,10 @@ sh ./Miniconda3-latest-Linux-x86_64.sh
 ```
 2. Once conda is set up, create a new environment with
 ```shell
-conda create -n TRILL python=3.10
-conda activate TRILL ; conda install pytorch==1.13.0 pytorch-cuda=11.7 -c pytorch -c nvidia ; conda install -c conda-forge openbabel smina fpocket
+conda create -n TRILL python=3.10 ; conda activate TRILL
+conda install pytorch==1.13.1 pytorch-cuda=11.7 -c pytorch -c nvidia
+conda install -c conda-forge openbabel smina fpocket
+pip install pyg-lib torch-scatter torch-sparse torch-cluster torch-spline-conv torch-geometric -f https://data.pyg.org/whl/torch-1.13.1+cu117.html
 ```
 3. Next, simply install TRILL!
 ```shell
