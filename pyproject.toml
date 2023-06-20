@@ -55,12 +55,6 @@ skops = "^0.6.0"
 [tool.poetry.scripts]
 trill = "trill.trill_main:cli"
 
-[[tool.poetry.source]]
-name = "pyg"
-url = "https://data.pyg.org/whl/torch-1.13.1+cu117.html"
-default = false
-secondary = true
-
 [build-system]
 requires = ["poetry-core"]
 build-backend = "poetry.core.masonry.api"
