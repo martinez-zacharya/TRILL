@@ -7,8 +7,6 @@ build:
   jobs:
     post_install:
     - pip install poetry
-    - pip install torch==1.13.1 --extra-index-url https://download.pytorch.org/whl/cpu
-    - pip install pyg-lib torch-scatter torch-sparse torch-cluster torch-spline-conv torch-geometric -f https://data.pyg.org/whl/torch-1.13.1+cpu.html
     - poetry config virtualenvs.create false
     - poetry install
 
@@ -17,4 +15,6 @@ sphinx:
   
 python:
   install:
+    - pip install torch==1.13.1+cpu -f https://download.pytorch.org/whl/cpu
+    - pip install pyg-lib torch-scatter torch-sparse torch-cluster torch-spline-conv torch-geometric -f https://data.pyg.org/whl/torch-1.13.1+cpu.html
     - requirements: docs/doc_requirements.txt
