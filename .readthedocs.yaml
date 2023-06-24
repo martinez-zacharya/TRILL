@@ -10,7 +10,7 @@ build:
     - poetry config virtualenvs.create false
     - pip install torch==1.13.1 -f https://download.pytorch.org/whl/cpu
     - pip install pytorch-lightning
-    - pip install fair-esm GitPython xgboost pandas rdkit e3nn biopython spyrmsd SentencePiece omegaconf hydra-core icecream chardet cchardet skops
+    - pip install fair-esm GitPython xgboost pandas rdkit e3nn biopython spyrmsd SentencePiece omegaconf hydra-core icecream chardet cchardet skops fairscale
     - pip install pyg-lib torch-scatter torch-sparse torch-cluster torch-spline-conv torch-geometric -f https://data.pyg.org/whl/torch-1.13.1+cpu.html
 sphinx:
   configuration: docs/conf.py
