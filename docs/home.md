@@ -41,6 +41,16 @@ pip install pyg-lib torch-scatter torch-sparse torch-cluster torch-spline-conv t
 pip install trill-proteins
 ```
 
+## Docker setup
+Until a CI pipeline is established, you can build the Dockerfile locally with: 
+```shell 
+docker build -t trill .
+```
+which installs all dependencies for you. You can then prepend every example below with `docker run`. For example, to finetune a model: 
+```shell 
+docker run trill example_1 1 finetune esm2_t12_35M trill/data/query.fasta
+```
+
 ## Use
 
 ```shell
