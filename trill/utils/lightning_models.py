@@ -513,28 +513,47 @@ class ProtT5(pl.LightningModule):
     
     def predict_step(self, batch, batch_idx):
         label, seqs = batch
-        modded_seqs = ''
-        for seq in seqs[0]:
-            modded_seqs += seq
-            modded_seqs += ' '
-        modded_seqs = (modded_seqs[:-1],)
+        if len(seqs) == 1:
+            modded_seqs = ''
+            for seq in seqs[0]:
+                modded_seqs += seq
+                modded_seqs += ' '
+            modded_seqs = (modded_seqs[:-1],)
+        else:
+            modded_seqs = []
+            for seq in seqs:
+                temp_prot = ''
+                for aa in seq:
+                    temp_prot += aa
+                    temp_prot += ' '
+                modded_seqs.append(temp_prot)
+
         token_encoding = self.tokenizer.batch_encode_plus(modded_seqs, 
                 add_special_tokens=True, padding='longest')
         input_ids = torch.tensor(token_encoding['input_ids'])
         attention_mask = torch.tensor(token_encoding['attention_mask'])
+        # print(f'{input_ids}=')
+        # print(f'{input_ids.size()}=')
         if next(self.model.parameters()).is_cuda:
             embedding_repr = self.model(input_ids.cuda(), attention_mask=attention_mask.cuda())
         else:
             embedding_repr = self.model(input_ids, attention_mask=attention_mask)
+        # print(f'{embedding_repr.size()}=')
         emb = embedding_repr.last_hidden_state.squeeze(0)
-        protein_emb = emb.mean(dim=0)
-        reps = tuple((protein_emb, label[0]))
+        if len(seqs) == 1:
+            protein_emb = emb.mean(dim=0)
+            return tuple((protein_emb, label[0]))
+        else:
+            protein_emb = emb.mean(dim=1)
+            return list(zip(protein_emb, label))
+            # for emb, lab in zip(protein_emb, label):
+                # print(emb, lab)
+        
         # self.reps.append(tuple((protein_emb, label)))
         # reps = []
         # for i in range(len(rep_numpy)):
         #     reps.append(tuple([rep_numpy[i].mean(0), label[i]]))
 
-        return reps
     
 
 class ZymCTRL(pl.LightningModule):

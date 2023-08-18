@@ -107,6 +107,19 @@ def main(args):
         action="store",
         default = 123
 )
+    parser.add_argument(
+        "--outdir",
+        help="Input full path to directory where you want the output from TRILL",
+        action="store",
+        default = '.'
+)
+
+    parser.add_argument(
+        "--n_workers",
+        help="Change number of CPU cores/'workers' TRILL uses",
+        action="store",
+        default = 1
+)
 
 
 ##############################################################################################################
@@ -579,13 +592,21 @@ def main(args):
             profiler = PyTorchProfiler(filename='test-logs')
         else:
             profiler = None
-
+    def process_sublist(sublist):
+        if isinstance(sublist, tuple) and len(sublist) == 2:
+            return [sublist]
+        elif isinstance(sublist, list):
+            return sublist
+        else:
+            print(f"Unexpected data structure: {sublist=}")
+        return []
     if args.command == 'visualize':
         reduced_df, incsv = reduce_dims(args.name, args.embeddings, args.method)
         layout = viz(reduced_df, args.name, args.group)
         bokeh.io.output_file(filename=f'{args.name}_{args.method}_{incsv}.html', title=args.name) 
         bokeh.io.save(layout, filename=f'{args.name}_{args.method}_{incsv}.html', title = args.name)
-    
+
+
 
     elif args.command == 'embed':
         if args.query.endswith(('.fasta', '.faa', '.fa')) == False:
@@ -595,82 +616,77 @@ def main(args):
             model = ProtT5(args)
             data = esm.data.FastaBatchedDataset.from_file(args.query)
             dataloader = torch.utils.data.DataLoader(data, shuffle = False, batch_size = int(args.batch_size), num_workers=0)
-            pred_writer = CustomWriter(output_dir=".", write_interval="epoch")
+            pred_writer = CustomWriter(output_dir=args.outdir, write_interval="epoch")
             if int(args.GPUs) == 0:
                 trainer = pl.Trainer(enable_checkpointing=False, callbacks = [pred_writer], logger=logger, num_nodes=int(args.nodes))
             else:
                 trainer = pl.Trainer(enable_checkpointing=False, devices=int(args.GPUs), callbacks = [pred_writer], accelerator='gpu', logger=logger, num_nodes=int(args.nodes))
-            trainer.predict(model, dataloader)
-            cwd_files = os.listdir()
+            reps = trainer.predict(model, dataloader)
+            cwd_files = os.listdir(args.outdir)
             pt_files = [file for file in cwd_files if 'predictions_' in file]
             pred_embeddings = []
-            for pt in pt_files:
-                preds = torch.load(pt)
-                for pred in preds:
-                    for sublist in pred:
-                        if len(sublist) == 2:
-                            pred_embeddings.append(tuple([sublist[0], sublist[1]]))
-                        else:
-                            for sub in sublist:
-                                print(sub[0])
-                                print(sub[1])
-                        #     for sub in sublist:
-                        #         pred_embeddings.append(tuple([sub[0], sub[1]]))
-            embedding_df = pd.DataFrame(pred_embeddings, columns = ['Embeddings', 'Label'])
-            finaldf = embedding_df['Embeddings'].apply(pd.Series)
-            finaldf['Label'] = embedding_df['Label']
-            finaldf.to_csv(f'{args.name}_{args.model}.csv', index = False)
+            if args.batch_size == 1 or int(args.GPUs) > 1:
+                for pt in pt_files:
+                    preds = torch.load(os.path.join(args.outdir, pt))
+                    for pred in preds:
+                        for sublist in pred:
+                            if len(sublist) == 2 and args.batch_size == 1:
+                                pred_embeddings.append(tuple([sublist[0], sublist[1]]))
+                            else:
+                                processed_sublists = process_sublist(sublist)
+                                for sub in processed_sublists:
+
+                                    pred_embeddings.append(tuple([sub[0], sub[1]]))
+                embedding_df = pd.DataFrame(pred_embeddings, columns = ['Embeddings', 'Label'])
+                finaldf = embedding_df['Embeddings'].apply(pd.Series)
+                finaldf['Label'] = embedding_df['Label']
+            else:
+                embs = [] 
+                for rep in reps:
+                    inner_embeddings = [item[0].numpy() for item in rep] 
+                    inner_labels = [item[1] for item in rep]
+                    for emb_lab in zip(inner_embeddings, inner_labels):
+                        embs.append(emb_lab)
+                embedding_df = pd.DataFrame(embs, columns = ['Embeddings', 'Label'])
+                finaldf = embedding_df['Embeddings'].apply(pd.Series)
+                finaldf['Label'] = embedding_df['Label']
+
+
+            outname = os.path.join(args.outdir, f'{args.name}_{args.model}.csv')
+            finaldf.to_csv(outname, index = False)
             for file in pt_files:
-                os.remove(file)
+                os.remove(os.path.join(args.outdir,file))
+
         else:
             model_import_name = f'esm.pretrained.{args.model}_UR50D()'
             model = ESM(eval(model_import_name), 0.0001, args)
             data = esm.data.FastaBatchedDataset.from_file(args.query)
             dataloader = torch.utils.data.DataLoader(data, shuffle = False, batch_size = int(args.batch_size), num_workers=0, collate_fn=model.alphabet.get_batch_converter())
-            pred_writer = CustomWriter(output_dir=".", write_interval="epoch")
+            pred_writer = CustomWriter(output_dir=args.outdir, write_interval="epoch")
             if int(args.GPUs) == 0:
                 trainer = pl.Trainer(enable_checkpointing=False, callbacks = [pred_writer], logger=logger, num_nodes=int(args.nodes))
             else:
                 trainer = pl.Trainer(enable_checkpointing=False, devices=int(args.GPUs), callbacks = [pred_writer], accelerator='gpu', logger=logger, num_nodes=int(args.nodes))
-            if args.finetuned == False:
-                trainer.predict(model, dataloader)
-                cwd_files = os.listdir()
-                pt_files = [file for file in cwd_files if 'predictions_' in file]
-                pred_embeddings = []
-                for pt in pt_files:
-                    preds = torch.load(pt)
-                    for pred in preds:
-                        for sublist in pred:
-                            if len(sublist) == 1:
-                                pred_embeddings.append(tuple([sublist[0][0], sublist[0][1]]))
-                            else:
-                                for sub in sublist:
-                                    pred_embeddings.append(tuple([sub[0], sub[1]]))
-                embedding_df = pd.DataFrame(pred_embeddings, columns = ['Embeddings', 'Label'])
-                finaldf = embedding_df['Embeddings'].apply(pd.Series)
-                finaldf['Label'] = embedding_df['Label']
-                finaldf.to_csv(f'{args.name}_{args.model}.csv', index = False)
-                for file in pt_files:
-                    os.remove(file)
-
-
-            else:
+            if args.finetuned:
                 model = weights_update(model = ESM(eval(model_import_name), 0.0001, args), checkpoint = torch.load(args.finetuned))
-                trainer.predict(model, dataloader)
-                cwd_files = os.listdir()
-                pt_files = [file for file in cwd_files if 'predictions_' in file]
-                pred_embeddings = []
-                for pt in pt_files:
-                    preds = torch.load(pt)
-                    for pred in preds:
-                        for sublist in pred:
-                            pred_embeddings.append(tuple([sublist[0][0], sublist[0][1]]))
-                embedding_df = pd.DataFrame(pred_embeddings, columns = ['Embeddings', 'Label'])
-                finaldf = embedding_df['Embeddings'].apply(pd.Series)
-                finaldf['Label'] = embedding_df['Label']
-                finaldf.to_csv(f'{args.name}_{args.model}.csv', index = False)
-                for file in pt_files:
-                    os.remove(file)
+            trainer.predict(model, dataloader)
+            cwd_files = os.listdir(args.outdir)
+            pt_files = [file for file in cwd_files if 'predictions_' in file]
+            pred_embeddings = []
+            for pt in pt_files:
+                preds = torch.load(os.path.join(args.outdir, pt))
+                for pred in preds:
+                    for sublist in pred:
+                        processed_sublists = process_sublist(sublist)
+                        for item in processed_sublists:
+                            pred_embeddings.append(tuple(item))
+            embedding_df = pd.DataFrame(pred_embeddings, columns=['Embeddings', 'Label'])
+            finaldf = embedding_df['Embeddings'].apply(pd.Series)
+            finaldf['Label'] = embedding_df['Label']
+            outname = os.path.join(args.outdir, f'{args.name}_{args.model}.csv')
+            finaldf.to_csv(outname, index=False)
+            for file in pt_files:
+                os.remove(os.path.join(args.outdir, file))
 
     
     elif args.command == 'finetune':
@@ -686,18 +702,18 @@ def main(args):
             if args.save_on_epoch:
                 checkpoint_callback = ModelCheckpoint(every_n_epochs=1, save_top_k = -1)
                 if int(args.GPUs) == 0:
-                    trainer = pl.Trainer(profiler=profiler, max_epochs=int(args.epochs), logger = logger, num_nodes = int(args.nodes), callbacks=[checkpoint_callback], default_root_dir=f'{os.path.join(os.getcwd(), args.name)}_ckpt')
+                    trainer = pl.Trainer(profiler=profiler, max_epochs=int(args.epochs), logger = logger, num_nodes = int(args.nodes), callbacks=[checkpoint_callback], default_root_dir=f'{os.path.join(args.outdir, args.name)}_ckpt')
                 else:
-                    trainer = pl.Trainer(devices=int(args.GPUs), profiler=profiler, accelerator='gpu', max_epochs=int(args.epochs), logger = logger, num_nodes = int(args.nodes), precision = 16, strategy = args.strategy, callbacks=[checkpoint_callback], default_root_dir=f'{os.path.join(os.getcwd(), args.name)}_ckpt')
+                    trainer = pl.Trainer(devices=int(args.GPUs), profiler=profiler, accelerator='gpu', max_epochs=int(args.epochs), logger = logger, num_nodes = int(args.nodes), precision = 16, strategy = args.strategy, callbacks=[checkpoint_callback], default_root_dir=f'{os.path.join(args.outdir, args.name)}_ckpt')
             else:
                 if int(args.GPUs) == 0:
                     trainer = pl.Trainer(profiler=profiler, max_epochs=int(args.epochs), logger = logger, num_nodes = int(args.nodes), enable_checkpointing=False)
                 else:
-                    trainer = pl.Trainer(devices=int(args.GPUs), profiler=profiler, accelerator='gpu', default_root_dir=f'{os.path.join(os.getcwd(), args.name)}_ckpt', max_epochs=int(args.epochs), logger = logger, num_nodes = int(args.nodes), precision = 16, strategy = args.strategy)
+                    trainer = pl.Trainer(devices=int(args.GPUs), profiler=profiler, accelerator='gpu', default_root_dir=f'{os.path.join(args.outdir, args.name)}_ckpt', max_epochs=int(args.epochs), logger = logger, num_nodes = int(args.nodes), precision = 16, strategy = args.strategy)
             trainer.fit(model=model, train_dataloaders = dataloader)
             if 'deepspeed' in str(args.strategy):
-                save_path = os.path.join(os.getcwd(), f"{os.path.join(os.getcwd(), args.name)}_ckpt/checkpoints/epoch={int(args.epochs) - 1}-step={len_data*int(args.epochs)}.ckpt")
-                output_path = f"{args.name}_ProtGPT2_{args.epochs}.pt"
+                save_path = os.path.join(os.getcwd(), f"{os.path.join(args.outdir, args.name)}_ckpt/checkpoints/epoch={int(args.epochs) - 1}-step={len_data*int(args.epochs)}.ckpt")
+                output_path = os.path.join(args.outdir, f"{args.name}_ProtGPT2_{args.epochs}.pt")
                 try:
                     convert_zero_checkpoint_to_fp32_state_dict(save_path, output_path)
                 except Exception as e:
@@ -706,7 +722,8 @@ def main(args):
                 pass
 
             else:
-                trainer.save_checkpoint(f"{args.name}_{args.model}_{args.epochs}.pt")
+                trainer.save_checkpoint(os.path.join(args.outdir, f"{args.name}_{args.model}_{args.epochs}.pt"))
+
         elif args.model == 'ZymCTRL':
             model = ZymCTRL(args)
             seq_dict_df = ProtGPT2_wrangle(data, model.tokenizer)
@@ -714,24 +731,26 @@ def main(args):
             if args.save_on_epoch:
                 checkpoint_callback = ModelCheckpoint(every_n_epochs=1, save_top_k = -1)
                 if int(args.GPUs) == 0:
-                    trainer = pl.Trainer(profiler=profiler, max_epochs=int(args.epochs), logger = logger, num_nodes = int(args.nodes), callbacks=[checkpoint_callback], default_root_dir=f'{os.path.join(os.getcwd(), args.name)}_ckpt')
+                    trainer = pl.Trainer(profiler=profiler, max_epochs=int(args.epochs), logger = logger, num_nodes = int(args.nodes), callbacks=[checkpoint_callback], default_root_dir=f'{os.path.join(args.outdir, args.name)}_ckpt')
                 else:
-                    trainer = pl.Trainer(devices=int(args.GPUs), profiler=profiler, accelerator='gpu', max_epochs=int(args.epochs), logger = logger, num_nodes = int(args.nodes), precision = 16, strategy = args.strategy, callbacks=[checkpoint_callback], default_root_dir=f'{os.path.join(os.getcwd(), args.name)}_ckpt')
+                    trainer = pl.Trainer(devices=int(args.GPUs), profiler=profiler, accelerator='gpu', max_epochs=int(args.epochs), logger = logger, num_nodes = int(args.nodes), precision = 16, strategy = args.strategy, callbacks=[checkpoint_callback], default_root_dir=f'{os.path.join(args.outdir, args.name)}_ckpt')
             else:
                 if int(args.GPUs) == 0:
                     trainer = pl.Trainer(profiler=profiler, max_epochs=int(args.epochs), logger = logger, num_nodes = int(args.nodes), enable_checkpointing=False)
                 else:
-                    trainer = pl.Trainer(devices=int(args.GPUs), profiler=profiler, accelerator='gpu', default_root_dir=f'{os.path.join(os.getcwd(), args.name)}_ckpt', max_epochs=int(args.epochs), logger = logger, num_nodes = int(args.nodes), precision = 16, strategy = args.strategy)
+                    trainer = pl.Trainer(devices=int(args.GPUs), profiler=profiler, accelerator='gpu', default_root_dir=f'{os.path.join(args.outdir, args.name)}_ckpt', max_epochs=int(args.epochs), logger = logger, num_nodes = int(args.nodes), precision = 16, strategy = args.strategy)
             trainer.fit(model=model, train_dataloaders = dataloader)
             if 'deepspeed' in str(args.strategy):
-                save_path = os.path.join(os.getcwd(), f"{os.path.join(os.getcwd(), args.name)}_ckpt/checkpoints/epoch={int(args.epochs) - 1}-step={len_data*int(args.epochs)}.ckpt")
-                output_path = f"{args.name}_ZymCTRL_{args.epochs}.pt"
+                save_path = os.path.join(args.outdir, f"{args.name}_ckpt/checkpoints/epoch={int(args.epochs) - 1}-step={len_data*int(args.epochs)}.ckpt")
+                output_path = os.path.join(args.outdir, f"{args.name}_ZymCTRL_{args.epochs}.pt")
                 try:
                     convert_zero_checkpoint_to_fp32_state_dict(save_path, output_path)
                 except Exception as e:
                     print(f'Exception {e} has occured on attempted save of your deepspeed trained model. If this has to do with CPU RAM, please try pytorch_lightning.utilities.deepspeedconvert_zero_checkpoint_to_fp32_state_dict(your_checkpoint.ckpt, full_model.pt')
             elif str(args.strategy) in ['fsdp', 'FSDP', 'FullyShardedDataParallel']:
                 pass
+            else:
+                trainer.save_checkpoint(os.path.join(args.outdir, f"{args.name}_{args.model}_{args.epochs}.pt"))
 
         else:
             model_import_name = f'esm.pretrained.{args.model}_UR50D()'
@@ -739,44 +758,35 @@ def main(args):
             if args.finetuned:
                 model = weights_update(model = ESM(eval(model_import_name), 0.0001, args), checkpoint = torch.load(args.finetuned))
             dataloader = torch.utils.data.DataLoader(data, shuffle = False, batch_size = int(args.batch_size), num_workers=0, collate_fn=model.alphabet.get_batch_converter())
-            # if args.LEGGO:
-            #     raise RuntimeError('LEGGO is no longer a valid option. Sorry for the confusion')
-            #     trainer = pl.Trainer(devices=int(args.GPUs), profiler = profiler,accelerator='gpu',max_epochs=int(args.epochs),logger=logger, num_nodes=int(args.nodes), precision = 16, strategy=DeepSpeedStrategy(stage=3, offload_optimizer=True, offload_parameters=True))
-            #     trainer.fit(model=model, train_dataloaders=dataloader)
-            #     save_path = os.path.join(os.getcwd(), f"checkpoints/epoch={int(args.epochs) - 1}-step={len_data*int(args.epochs)}.ckpt")
-            #     output_path = f"{args.name}_esm2_{args.epochs}.pt"
-            #     try:
-            #         convert_zero_checkpoint_to_fp32_state_dict(save_path, output_path)
-            #     except Exception as e:
-            #         print(f'Exception {e} has occured on attempted save of your deepspeed trained model. If this has to do with CPU RAM, please try pytorch_lightning.utilities.deepspeedconvert_zero_checkpoint_to_fp32_state_dict(your_checkpoint.ckpt, full_model.pt')       
+    
             if args.strategy == 'deepspeed_stage_3' or args.strategy == 'deepspeed_stage_3_offload' or args.strategy == 'deepspeed_stage_2' or args.strategy == 'deepspeed_stage_2_offload':
-                save_path = os.path.join(os.getcwd(), f"checkpoints/epoch={int(args.epochs) - 1}-step={len_data*int(args.epochs)}.ckpt")
-                output_path = f"{args.name}_esm2_{args.epochs}.pt"
+                save_path = os.path.join(args.outdir, f"checkpoints/epoch={int(args.epochs) - 1}-step={len_data*int(args.epochs)}.ckpt")
+                output_path = os.path.join(args.outdir, f"{args.name}_{args.model}_{args.epochs}.pt")
                 if args.save_on_epoch:
                     checkpoint_callback = ModelCheckpoint(every_n_epochs=1, save_top_k = -1)
-                    trainer = pl.Trainer(devices=int(args.GPUs), profiler = profiler, callbacks=[checkpoint_callback], default_root_dir=f'{os.path.join(os.getcwd(), args.name)}_ckpt', accelerator='gpu', strategy = args.strategy, max_epochs=int(args.epochs), logger=logger, num_nodes=int(args.nodes), precision = 16)        
+                    trainer = pl.Trainer(devices=int(args.GPUs), profiler = profiler, callbacks=[checkpoint_callback], default_root_dir=f'{os.path.join(args.outdir, args.name)}_ckpt', accelerator='gpu', strategy = args.strategy, max_epochs=int(args.epochs), logger=logger, num_nodes=int(args.nodes), precision = 16)        
                 else:
-                    trainer = pl.Trainer(devices=int(args.GPUs), profiler = profiler, callbacks=[checkpoint_callback], default_root_dir=f'{os.path.join(os.getcwd(), args.name)}_ckpt', accelerator='gpu', strategy = args.strategy, max_epochs=int(args.epochs), logger=logger, num_nodes=int(args.nodes), precision = 16)        
+                    trainer = pl.Trainer(devices=int(args.GPUs), profiler = profiler, callbacks=[checkpoint_callback], default_root_dir=f'{os.path.join(args.outdir, args.name)}_ckpt', accelerator='gpu', strategy = args.strategy, max_epochs=int(args.epochs), logger=logger, num_nodes=int(args.nodes), precision = 16)        
                 trainer.fit(model=model, train_dataloaders=dataloader)
-                trainer.save_checkpoint(f"{args.name}_{args.model}_{args.epochs}.pt")
+                trainer.save_checkpoint(os.path.join(args.outdir, f"{args.name}_{args.model}_{args.epochs}.pt"))
                 try:
-                    convert_zero_checkpoint_to_fp32_state_dict(f"{args.name}_{args.model}_{args.epochs}.pt", output_path)
+                    convert_zero_checkpoint_to_fp32_state_dict(os.path.join(args.outdir, f"{args.name}_{args.model}_{args.epochs}.pt", output_path))
                 except Exception as e:
                     print(f'Exception {e} has occured on attempted save of your deepspeed trained model. If this has to do with CPU RAM, please try pytorch_lightning.utilities.deepspeedconvert_zero_checkpoint_to_fp32_state_dict(your_checkpoint.ckpt, full_model.pt')       
             else:
                 if args.save_on_epoch:
                     checkpoint_callback = ModelCheckpoint(every_n_epochs=1, save_top_k = -1)
                     if int(args.GPUs) == 0:
-                        trainer = pl.Trainer(profiler = profiler, max_epochs=int(args.epochs), callbacks=[checkpoint_callback], default_root_dir=f'{os.path.join(os.getcwd(), args.name)}_ckpt', logger=logger, num_nodes=int(args.nodes)) 
+                        trainer = pl.Trainer(profiler = profiler, max_epochs=int(args.epochs), callbacks=[checkpoint_callback], default_root_dir=f'{os.path.join(args.outdir, args.name)}_ckpt', logger=logger, num_nodes=int(args.nodes)) 
                     else:
-                        trainer = pl.Trainer(devices=int(args.GPUs), profiler = profiler, accelerator='gpu', callbacks=[checkpoint_callback], default_root_dir=f'{os.path.join(os.getcwd(), args.name)}_ckpt',strategy = args.strategy, max_epochs=int(args.epochs), logger=logger, num_nodes=int(args.nodes), precision = 16, amp_backend='native')        
+                        trainer = pl.Trainer(devices=int(args.GPUs), profiler = profiler, accelerator='gpu', callbacks=[checkpoint_callback], default_root_dir=f'{os.path.join(args.outdir, args.name)}_ckpt',strategy = args.strategy, max_epochs=int(args.epochs), logger=logger, num_nodes=int(args.nodes), precision = 16, amp_backend='native')        
                 else:
                     if int(args.GPUs) == 0:
                         trainer = pl.Trainer(profiler = profiler, max_epochs=int(args.epochs), logger=logger, num_nodes=int(args.nodes), enable_checkpointing=False) 
                     else:
                         trainer = pl.Trainer(devices=int(args.GPUs), profiler = profiler, accelerator='gpu', strategy = args.strategy, max_epochs=int(args.epochs), logger=logger, num_nodes=int(args.nodes), precision = 16, amp_backend='native', enable_checkpointing=False)     
                 trainer.fit(model=model, train_dataloaders=dataloader)
-                trainer.save_checkpoint(f"{args.name}_{args.model}_{args.epochs}.pt")
+                trainer.save_checkpoint(os.path.join(args.outdir, f"{args.name}_{args.model}_{args.epochs}.pt"))
 
     elif args.command == 'inv_fold_gen':
         if args.model == 'ESM-IF1':
@@ -814,7 +824,7 @@ def main(args):
                 model = model.load_from_checkpoint(args.finetuned, args = args, strict=False)
             tokenizer = AutoTokenizer.from_pretrained("nferruz/ProtGPT2")
             generated_output = []
-            with open(f'{args.name}_ProtGPT2.fasta', 'w+') as fasta:
+            with open(os.path.join(args.outdir, f'{args.name}_ProtGPT2.fasta'), 'w+') as fasta:
                 for i in tqdm(range(int(args.num_return_sequences))):
                     generated_output = (model.generate(seed_seq=args.seed_seq, max_length=int(args.max_length), do_sample = args.do_sample, top_k=int(args.top_k), repetition_penalty=float(args.repetition_penalty)))
                     fasta.write(f'>{args.name}_ProtGPT2_{i} \n')
@@ -822,7 +832,7 @@ def main(args):
                     fasta.flush()
         elif args.model == 'ESM2':
             model_import_name = f'esm.pretrained.{args.esm2_arch}()'
-            with open(f'{args.name}_{args.esm2_arch}_Gibbs.fasta', 'w+') as fasta:
+            with open(os.path.join(args.outdir, f'{args.name}_{args.esm2_arch}_Gibbs.fasta'), 'w+') as fasta:
                 if args.finetuned != False:
                     model = ESM_Gibbs(eval(model_import_name), args)
                     if args.finetuned != False:
@@ -852,7 +862,7 @@ def main(args):
             model = ZymCTRL(args)
             if args.finetuned != False:
                 model = model.load_from_checkpoint(args.finetuned, args = args, strict = False)
-            with open(f'{args.name}_ZymCTRL.fasta', 'w+') as fasta:
+            with open(os.path.join(args.outdir, f'{args.name}_ZymCTRL.fasta'), 'w+') as fasta:
                 for i in tqdm(range(int(args.num_return_sequences))):
                     if int(args.GPUs) == 0:
                         generated_output = model.generator(str(args.ctrl_tag), device = torch.device('cpu'), max_length=int(args.max_length),repetition_penalty=float(args.repetition_penalty), do_sample=args.do_sample, top_k=int(args.top_k))
@@ -951,7 +961,7 @@ def main(args):
                 output = convert_outputs_to_pdb(output)
                 identifier = fold_df.Entry[i]
         # for identifier, pdb in zip(protein_identifiers, pdb_list):
-                with open(f"{identifier}.pdb", "w") as f:
+                with open(os.path.join(args.outdir,f"{identifier}.pdb"), "w") as f:
                     f.write("".join(output))
 
     elif args.command == 'dock':
