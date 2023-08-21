@@ -942,7 +942,7 @@ def main(args):
         # else:    
         #     run_rfdiff((f'{rfdiff_git_root}/config/inference/base.yaml'), args)
         run_rfdiff((f'{rfdiff_git_root}/config/inference/base.yaml'), args)
-        
+
     elif args.command == 'fold':
         data = esm.data.FastaBatchedDataset.from_file(args.query)
         tokenizer = AutoTokenizer.from_pretrained("facebook/esmfold_v1")
@@ -956,12 +956,18 @@ def main(args):
         if args.strategy != None:
             model.trunk.set_chunk_size(int(args.strategy))
         fold_df = pd.DataFrame(list(data), columns = ["Entry", "Sequence"])
+        sequences = fold_df.Sequence.tolist()
         with torch.no_grad():
-            for i, input_ids in enumerate(tqdm(fold_df.Sequence.tolist())):
+            for input_ids in tqdm(range(0, len(sequences), int(args.batch_size))):
+                i = input_ids
+                batch_input_ids = sequences[i: i + int(args.batch_size)]
                 if int(args.GPUs) == 0:
-                    tokenized_input = tokenizer([input_ids], return_tensors="pt", add_special_tokens=False)['input_ids']
+                    if int(args.batch_size) > 1:
+                        tokenized_input = tokenizer(batch_input_ids, return_tensors="pt", add_special_tokens=False, padding=True)['input_ids']    
+                    else:
+                        tokenized_input = tokenizer(batch_input_ids, return_tensors="pt", add_special_tokens=False)['input_ids'] 
                     tokenized_input = tokenized_input.clone().detach()
-                    prot_len = len(input_ids)
+                    prot_len = len(batch_input_ids[0])
                     try:
                         output = model(tokenized_input)
                         output = {key: val.cpu() for key, val in output.items()}
@@ -973,9 +979,13 @@ def main(args):
                                 print(e)
                                 pass
                 else:
-                    tokenized_input = tokenizer([input_ids], return_tensors="pt", add_special_tokens=False)['input_ids']
+                    if int(args.batch_size) > 1:
+                        tokenized_input = tokenizer(batch_input_ids, return_tensors="pt", add_special_tokens=False, padding=True)['input_ids']  
+                        prot_len = len(batch_input_ids[0])  
+                    else:
+                        tokenized_input = tokenizer(batch_input_ids, return_tensors="pt", add_special_tokens=False)['input_ids']    
+                        prot_len = len(batch_input_ids[0])
                     tokenized_input = tokenized_input.clone().detach()
-                    prot_len = len(input_ids)
                     try:
                         tokenized_input = tokenized_input.to(model.device)
                         output = model(tokenized_input)
@@ -987,77 +997,16 @@ def main(args):
                             else:
                                 print(e)
                                 pass
-
                 output = convert_outputs_to_pdb(output)
-                identifier = fold_df.Entry[i]
-        # for identifier, pdb in zip(protein_identifiers, pdb_list):
-                with open(os.path.join(args.outdir,f"{identifier}.pdb"), "w") as f:
-                    f.write("".join(output))
-    # elif args.command == 'fold':
-    #     data = esm.data.FastaBatchedDataset.from_file(args.query)
-    #     tokenizer = AutoTokenizer.from_pretrained("facebook/esmfold_v1")
-    #     if int(args.GPUs) == 0:
-    #         model = EsmForProteinFolding.from_pretrained('facebook/esmfold_v1', low_cpu_mem_usage=True, torch_dtype='auto')
-    #     else:
-    #         model = EsmForProteinFolding.from_pretrained('facebook/esmfold_v1', device_map='sequential', torch_dtype='auto')
-    #         model = model.cuda()
-    #         model.esm = model.esm.half()
-    #         model = model.cuda()
-    #     if args.strategy != None:
-    #         model.trunk.set_chunk_size(int(args.strategy))
-    #     fold_df = pd.DataFrame(list(data), columns = ["Entry", "Sequence"])
-    #     sequences = fold_df.Sequence.tolist()
-    #     with torch.no_grad():
-    #         for i, input_ids in enumerate(tqdm(range(0, len(sequences), int(args.batch_size)))):
-    #             batch_input_ids = sequences[i: i + int(args.batch_size)]
-    #             if int(args.GPUs) == 0:
-    #                 if int(args.batch_size) > 1:
-    #                     tokenized_input = tokenizer(batch_input_ids, return_tensors="pt", add_special_tokens=False, padding=True)['input_ids']    
-    #                 else:
-    #                     tokenized_input = tokenizer(batch_input_ids, return_tensors="pt", add_special_tokens=False)['input_ids'] 
-    #                 tokenized_input = tokenized_input.clone().detach()
-    #                 prot_len = len(batch_input_ids[0])
-    #                 try:
-    #                     output = model(tokenized_input)
-    #                     output = {key: val.cpu() for key, val in output.items()}
-    #                 except RuntimeError as e:
-    #                         if 'out of memory' in str(e):
-    #                             print(f'Protein too long to fold for current hardware: {prot_len} amino acids long)')
-    #                             print(e)
-    #                         else:
-    #                             print(e)
-    #                             pass
-    #             else:
-    #                 if int(args.batch_size) > 1:
-    #                     tokenized_input = tokenizer(batch_input_ids, return_tensors="pt", add_special_tokens=False, padding=True)['input_ids']  
-    #                     prot_len = len(batch_input_ids[0])  
-    #                 else:
-    #                     tokenized_input = tokenizer(batch_input_ids, return_tensors="pt", add_special_tokens=False)['input_ids']    
-    #                     prot_len = len(batch_input_ids)  
-    #                 tokenized_input = tokenized_input.clone().detach()
-    #                 try:
-    #                     tokenized_input = tokenized_input.to(model.device)
-    #                     output = model(tokenized_input)
-    #                     output = {key: val.cpu() for key, val in output.items()}
-    #                 except RuntimeError as e:
-    #                         if 'out of memory' in str(e):
-    #                             print(f'Protein too long to fold for current hardware: {prot_len} amino acids long)')
-    #                             print(e)
-    #                         else:
-    #                             print(e)
-    #                             pass
-    #             output = convert_outputs_to_pdb(output)
-    #             if int(args.batch_size) > 1:
-    #                 start_idx = i
-    #                 end_idx = i + int(args.batch_size)
-    #                 identifier = fold_df.Entry[start_idx:end_idx].tolist()
-    #             else:
-    #                 identifier = fold_df.Entry[i]
-    #             for out, iden in zip(output, identifier):
-    #                 print(iden)
-    #                 with open(os.path.join(args.outdir,f"{iden}.pdb"), "w") as f:
-    #                     f.write("".join(out))
-        # for identifier, pdb in zip(protein_identifiers, pdb_list):
+                if int(args.batch_size) > 1:
+                    start_idx = i
+                    end_idx = i + int(args.batch_size)
+                    identifier = fold_df.Entry[start_idx:end_idx].tolist()
+                else:
+                    identifier = [fold_df.Entry[i]]
+                for out, iden in zip(output, identifier):
+                    with open(os.path.join(args.outdir,f"{iden}.pdb"), "w") as f:
+                        f.write("".join(out))
 
 
     elif args.command == 'dock':
