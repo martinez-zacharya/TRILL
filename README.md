@@ -23,6 +23,7 @@ TRILL (**TR**aining and **I**nference using the **L**anguage of **L**ife) is a s
 - ProstT5 (Embed proteins or protein structures using 3Di alphabet. Also can perform inverse folding[doi](https://doi.org/10.1101/2023.07.23.550085))
 - TemStaPro (Predict thermostability of proteins [doi](https://doi.org/10.1101/2023.03.27.534365))
 - EpHod (Predicts optimal pH for enzymes [doi](https://doi.org/10.1101/2023.06.22.544776))
+- Smina (A fork of AutoDock Vina used for docking both small-molecules and proteins to proteins [doi](https://doi.org/10.1021/ci300604z))
 - ZymCTRL (Conditional language model for the generation of artificial functional enzymes [link](https://www.mlsb.io/papers_2022/ZymCTRL_a_conditional_language_model_for_the_controllable_generation_of_artificial_enzymes.pdf))
 
 ## Documentation
