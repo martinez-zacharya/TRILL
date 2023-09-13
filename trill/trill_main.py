@@ -1806,7 +1806,7 @@ def return_parser():
     classify.add_argument(
         "classifier",
         help="Predict thermostability using TemStaPro or choose custom to train/use your own XGBoost based binary classifier. Note for training a custom_binary, you need to submit roughly equal amounts of both binary classes as part of your query.",
-        choices = ['TemStaPro', 'custom_binary', 'iForest']
+        choices = ['TemStaPro', 'EpHod', 'custom_binary', 'iForest']
 )
     classify.add_argument(
         "query",
@@ -1846,6 +1846,13 @@ def return_parser():
         help="Enter the path to your pre-computed embeddings. Make sure they match the --emb_model you select.",
         action="store",
         default=False
+)
+
+    classify.add_argument(
+        "--batch_size",
+        help="Sets batch_size for embedding with ESM1v when using EpHod.",
+        action="store",
+        default=1
 )
 ##############################################################################################################
     
@@ -1968,7 +1975,6 @@ def return_parser():
     #     type=int,
     #     default=100
     #     )
-
 ##############################################################################################################
 
     return parser
