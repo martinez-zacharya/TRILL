@@ -36,7 +36,7 @@ def load_structure(fpath, chain=None):
         with open(fpath) as fin:
             pdbxf = pdbx.PDBxFile.read(fin)
         structure = pdbx.get_structure(pdbxf, model=1)
-    elif fpath.endswith('pdb'):
+    elif fpath.endswith('pdb') or fpath.endswith('3di'):
         with open(fpath) as fin:
             pdbf = pdb.PDBFile.read(fin)
         structure = pdb.get_structure(pdbf, model=1)
@@ -126,6 +126,7 @@ def score_sequence(model, alphabet, coords, seq):
     loss, target_padding_mask = get_sequence_loss(model, alphabet, coords, seq)
     ll_fullseq = -np.sum(loss * ~target_padding_mask) / np.sum(~target_padding_mask)
     # Also calculate average when excluding masked portions
+    coords = coords.numpy()
     coord_mask = np.all(np.isfinite(coords), axis=(-1, -2))
     ll_withcoord = -np.sum(loss * coord_mask) / np.sum(coord_mask)
     return ll_fullseq, ll_withcoord
