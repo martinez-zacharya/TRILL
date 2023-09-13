@@ -14,6 +14,7 @@ from sklearn.model_selection import train_test_split
 import torch.nn as nn
 import torch.nn.functional as F
 import pandas as pd
+import requests
 from pytorch_lightning.loggers import TensorBoardLogger
 from pytorch_lightning.profilers import PyTorchProfiler
 from pytorch_lightning.strategies import DeepSpeedStrategy
@@ -40,6 +41,8 @@ from trill.utils.visualize import reduce_dims, viz
 from trill.utils.MLP import MLP_C2H2, inference_epoch
 from sklearn.ensemble import IsolationForest
 import skops.io as sio
+import trill.utils.ephod_utils as eu
+import logging
 from pyfiglet import Figlet
 import bokeh
 os.environ['CUDA_LAUNCH_BLOCKING'] = '1'
@@ -437,7 +440,7 @@ def main(args):
     classify.add_argument(
         "classifier",
         help="Predict thermostability using TemStaPro or choose custom to train/use your own XGBoost based binary classifier. Note for training a custom_binary, you need to submit roughly equal amounts of both binary classes as part of your query.",
-        choices = ['TemStaPro', 'custom_binary', 'iForest']
+        choices = ['TemStaPro', 'EpHod', 'custom_binary', 'iForest']
 )
     classify.add_argument(
         "query",
@@ -477,6 +480,13 @@ def main(args):
         help="Enter the path to your pre-computed embeddings. Make sure they match the --emb_model you select.",
         action="store",
         default=False
+)
+
+    classify.add_argument(
+        "--batch_size",
+        help="Sets batch_size for embedding with ESM1v when using EpHod.",
+        action="store",
+        default=1
 )
 ##############################################################################################################
     
@@ -1273,6 +1283,75 @@ def main(args):
             inference_df = inference_df.drop(columns='RawLab')
             inference_df = inference_df[['Protein', 'Threshold', 'Mean_Pred', 'Binary_Pred']]
             inference_df.to_csv(os.path.join(args.outdir, f'{args.name}_TemStaPro_preds.csv'), index = False)
+
+        
+        elif args.classifier == 'EpHod':
+            logging.getLogger("pytorch_lightning.utilities.rank_zero").addHandler(logging.NullHandler())
+            logging.getLogger("pytorch_lightning.accelerators.cuda").addHandler(logging.NullHandler())
+            if not os.path.exists(os.path.join(cache_dir, 'EpHod_Models')):
+                cmd = ['curl', '-o', 'saved_models.tar.gz', '--progress-bar', 'https://zenodo.org/record/8011249/files/saved_models.tar.gz?download=1']
+                result = subprocess.run(cmd)
+
+                cmd = f'mv saved_models.tar.gz {cache_dir}/'.split()
+
+                subprocess.run(cmd)
+                tarfile = os.path.join(cache_dir, 'saved_models.tar.gz') 
+                _ = subprocess.call(f"tar -xvzf {tarfile}", shell=True)
+                _ = subprocess.call(f"rm -rfv {tarfile}", shell=True)
+            else:
+                headers, sequences = eu.read_fasta(args.query)
+                accessions = [head.split()[0] for head in headers]
+                headers, sequences, accessions = [np.array(item) for item in \
+                                                (headers, sequences, accessions)]
+                assert len(accessions) == len(headers) == len(sequences), 'Fasta file has unequal headers and sequences'
+                numseqs = len(sequences)
+                    
+                
+                # Check sequence lengths
+                lengths = np.array([len(seq) for seq in sequences])
+                long_count = np.sum(lengths > 1022)
+                warning = f"{long_count} sequences are longer than 1022 residues and will be omitted"
+                
+                # Omit sequences longer than 1022
+                if max(lengths) > 1022:
+                    print(warning)
+                    locs = np.argwhere(lengths <= 1022).flatten()
+                    headers, sequences, accessions = [array[locs] for array in \
+                                                    (headers, sequences, accessions)]
+                    numseqs = len(sequences)
+
+            if not os.path.exists(args.outdir):
+                os.makedirs(args.outdir)
+                
+            # Prediction output file
+            phout_file = f'{args.outdir}/{args.name}_EpHod.csv'
+            embed_file = f'{args.outdir}/{args.name}_ESM1v_embeddings.csv'
+            ephod_model = eu.EpHodModel(args)
+            num_batches = int(np.ceil(numseqs / args.batch_size))
+            all_ypred, all_emb_ephod = [], []
+            batches = range(1, num_batches + 1)
+            batches = tqdm(batches, desc="Predicting pHopt")
+            for batch_step in batches:
+                start_idx = (batch_step - 1) * args.batch_size
+                stop_idx = batch_step * args.batch_size
+                accs = accessions[start_idx : stop_idx] 
+                seqs = sequences[start_idx : stop_idx]
+                
+                # Predict with EpHod model
+                ypred, emb_ephod, attention_weights = ephod_model.batch_predict(accs, seqs, args)
+                all_ypred.extend(ypred.to('cpu').detach().numpy())
+                all_emb_ephod.extend(emb_ephod.to('cpu').detach().numpy())
+                
+            if args.save_emb:
+                all_emb_ephod = pd.DataFrame(np.array(all_emb_ephod), index=accessions)
+                all_emb_ephod.to_csv(embed_file)
+
+            all_ypred = pd.DataFrame(all_ypred, index=accessions, columns=['pHopt'])
+            all_ypred = all_ypred.reset_index(drop=False)
+            all_ypred.rename(columns={'index': 'Label'}, inplace=True)
+            all_ypred.to_csv(phout_file, index=False)
+
+
         elif args.classifier == 'custom_binary':
             if not args.preComputed_Embs:
                 embed_command = f"trill {args.name} {args.GPUs} --outdir {args.outdir} embed {args.emb_model} {args.query}".split(' ')
