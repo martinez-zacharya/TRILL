@@ -47,8 +47,12 @@ def ESM_IF1(data, genIters, temp, GPUs):
             loop_gen_iters = tqdm(range(int(genIters)))
             loop_gen_iters.set_description('Generative Iterations')
             if complex_flag == False:
+                if isinstance(native_seq[chain], list):
+                    seq = native_seq[chain][0]
+                else:
+                    seq = native_seq[chain]
                 n_ll, _ = score_sequence(
-                    model, alphabet, coords[chain], native_seq[chain])
+                    model, alphabet, coords[chain], seq)
             else:
                 coords_4scoring = {}
                 for k, v in coords.items():

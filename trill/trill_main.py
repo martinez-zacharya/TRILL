@@ -583,6 +583,11 @@ def main(args):
 
     args = parser.parse_args()
 
+    home_dir = os.path.expanduser("~")
+    cache_dir = os.path.join(home_dir, ".trill_cache")
+    if not os.path.exists(cache_dir):
+        os.makedirs(cache_dir)
+
     pl.seed_everything(int(args.RNG_seed))
     set_seed(int(args.RNG_seed))
     
@@ -617,8 +622,8 @@ def main(args):
     if args.command == 'visualize':
         reduced_df, incsv = reduce_dims(args.name, args.embeddings, args.method)
         layout = viz(reduced_df, args.name, args.group)
-        bokeh.io.output_file(filename=f'{args.name}_{args.method}_{incsv}.html', title=args.name) 
-        bokeh.io.save(layout, filename=f'{args.name}_{args.method}_{incsv}.html', title = args.name)
+        bokeh.io.output_file(filename=os.path.join(args.outdir, f'{args.name}_{args.method}_{incsv}.html'), title=args.name) 
+        bokeh.io.save(layout, filename=os.path.join(args.outdir, f'{args.name}_{args.method}_{incsv}.html'), title = args.name)
 
 
 
@@ -810,7 +815,7 @@ def main(args):
             dataloader = torch.utils.data.DataLoader(data, batch_size=1, shuffle=False)
             sample_df, native_seq_df = ESM_IF1(dataloader, genIters=int(args.num_return_sequences), temp = float(args.temp), GPUs = int(args.GPUs))
             pdb_name = args.query.split('.')[-2].split('/')[-1]
-            with open(f'{args.name}_ESM-IF1_gen.fasta', 'w+') as fasta:
+            with open(os.path.join(args.outdir,f'{args.name}_ESM-IF1_gen.fasta'), 'w+') as fasta:
                 for ix, row in native_seq_df.iterrows():
                     fasta.write(f'>{pdb_name}_chain-{row[1]} \n')
                     fasta.write(f'{row[0][0]}\n')
@@ -818,15 +823,15 @@ def main(args):
                     fasta.write(f'>{args.name}_ESM-IF1_chain-{row[1]} \n')
                     fasta.write(f'{row[0]}\n')
         elif args.model == 'ProteinMPNN':
-            if not os.path.exists('ProteinMPNN/'):
+            if not os.path.exists((os.path.join(cache_dir, 'ProteinMPNN/'))):
                 print('Cloning forked ProteinMPNN')
-                os.makedirs('ProteinMPNN/')
-                proteinmpnn = Repo.clone_from('https://github.com/martinez-zacharya/ProteinMPNN', 'ProteinMPNN/')
+                os.makedirs(os.path.join(cache_dir, 'ProteinMPNN/'))
+                proteinmpnn = Repo.clone_from('https://github.com/martinez-zacharya/ProteinMPNN', (os.path.join(cache_dir, 'ProteinMPNN/')))
                 mpnn_git_root = proteinmpnn.git.rev_parse("--show-toplevel")
                 subprocess.run(['pip', 'install', '-e', mpnn_git_root])
-                sys.path.insert(0, 'ProteinMPNN/')
+                sys.path.insert(0, (os.path.join(cache_dir, 'ProteinMPNN/')))
             else:
-                sys.path.insert(0, 'ProteinMPNN/')
+                sys.path.insert(0, (os.path.join(cache_dir, 'ProteinMPNN/')))
             from mpnnrun import run_mpnn
             print('ProteinMPNN generation starting...')
             run_mpnn(args)
@@ -905,35 +910,37 @@ def main(args):
     elif args.command == 'diff_gen':
         command = "conda install -c dglteam dgl-cuda11.7 -y -S -q".split(' ')
         subprocess.run(command, check = True)
-        os.makedirs("RFDiffusion_weights", exist_ok=True)
-        commands = [
-        'wget -nc http://files.ipd.uw.edu/pub/RFdiffusion/6f5902ac237024bdd0c176cb93063dc4/Base_ckpt.pt', 
-        'wget -nc http://files.ipd.uw.edu/pub/RFdiffusion/e29311f6f1bf1af907f9ef9f44b8328b/Complex_base_ckpt.pt', 
-        'wget -nc http://files.ipd.uw.edu/pub/RFdiffusion/60f09a193fb5e5ccdc4980417708dbab/Complex_Fold_base_ckpt.pt', 
-        'wget -nc http://files.ipd.uw.edu/pub/RFdiffusion/74f51cfb8b440f50d70878e05361d8f0/InpaintSeq_ckpt.pt', 
-        'wget -nc http://files.ipd.uw.edu/pub/RFdiffusion/76d00716416567174cdb7ca96e208296/InpaintSeq_Fold_ckpt.pt', 
-        'wget -nc http://files.ipd.uw.edu/pub/RFdiffusion/5532d2e1f3a4738decd58b19d633b3c3/ActiveSite_ckpt.pt', 
-        'wget -nc http://files.ipd.uw.edu/pub/RFdiffusion/12fc204edeae5b57713c5ad7dcb97d39/Base_epoch8_ckpt.pt'
-        ]
-
         print('Finding RFDiffusion weights... \n')
-        for command in commands:
-            if not os.path.isfile(f'RFDiffusion_weights/{command.split("/")[-1]}'):
-                subprocess.run(command.split(' '))
-                subprocess.run(['mv', command.split("/")[-1], 'RFDiffusion_weights/'])
-        if not os.path.exists('RFDiffusion/'):
+        if not os.path.exists((os.path.join(cache_dir, 'RFDiffusion_weights'))):
+            os.makedirs(os.path.join(cache_dir, 'RFDiffusion_weights'))
+
+            commands = [
+            'wget -nc http://files.ipd.uw.edu/pub/RFdiffusion/6f5902ac237024bdd0c176cb93063dc4/Base_ckpt.pt', 
+            'wget -nc http://files.ipd.uw.edu/pub/RFdiffusion/e29311f6f1bf1af907f9ef9f44b8328b/Complex_base_ckpt.pt', 
+            'wget -nc http://files.ipd.uw.edu/pub/RFdiffusion/60f09a193fb5e5ccdc4980417708dbab/Complex_Fold_base_ckpt.pt', 
+            'wget -nc http://files.ipd.uw.edu/pub/RFdiffusion/74f51cfb8b440f50d70878e05361d8f0/InpaintSeq_ckpt.pt', 
+            'wget -nc http://files.ipd.uw.edu/pub/RFdiffusion/76d00716416567174cdb7ca96e208296/InpaintSeq_Fold_ckpt.pt', 
+            'wget -nc http://files.ipd.uw.edu/pub/RFdiffusion/5532d2e1f3a4738decd58b19d633b3c3/ActiveSite_ckpt.pt', 
+            'wget -nc http://files.ipd.uw.edu/pub/RFdiffusion/12fc204edeae5b57713c5ad7dcb97d39/Base_epoch8_ckpt.pt'
+                ]
+            for command in commands:
+                if not os.path.isfile(os.path.join(cache_dir, f'RFDiffusion_weights/{command.split("/")[-1]}')):
+                    subprocess.run(command.split(' '))
+                    subprocess.run(['mv', command.split("/")[-1], os.path.join(cache_dir, 'RFDiffusion_weights')])
+                                
+        if not os.path.exists(os.path.join(cache_dir, 'RFDiffusion')):
             print('Cloning forked RFDiffusion')
-            os.makedirs('RFDiffusion/')
-            rfdiff = Repo.clone_from('https://github.com/martinez-zacharya/RFDiffusion', 'RFDiffusion/')
+            os.makedirs(os.path.join(cache_dir, 'RFDiffusion'))
+            rfdiff = Repo.clone_from('https://github.com/martinez-zacharya/RFDiffusion', os.path.join(cache_dir, 'RFDiffusion/'))
             rfdiff_git_root = rfdiff.git.rev_parse("--show-toplevel")
             subprocess.run(['pip', 'install', '-e', rfdiff_git_root])
             command = f'pip install {rfdiff_git_root}/env/SE3Transformer'.split(' ')
             subprocess.run(command)
-            sys.path.insert(0, 'RFDiffusion/')
+            sys.path.insert(0, os.path.join(cache_dir, 'RFDiffusion'))
 
         else:
-            sys.path.insert(0, 'RFDiffusion/')
-            git_repo = Repo('RFDiffusion/', search_parent_directories=True)
+            sys.path.insert(0, os.path.join(cache_dir, 'RFDiffusion'))
+            git_repo = Repo(os.path.join(cache_dir, 'RFDiffusion'), search_parent_directories=True)
             rfdiff_git_root = git_repo.git.rev_parse("--show-toplevel")
 
         from run_inference import run_rfdiff
