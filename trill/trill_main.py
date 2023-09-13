@@ -114,12 +114,12 @@ def main(args):
         default = '.'
 )
 
-    parser.add_argument(
-        "--n_workers",
-        help="Change number of CPU cores/'workers' TRILL uses",
-        action="store",
-        default = 1
-)
+#     parser.add_argument(
+#         "--n_workers",
+#         help="Change number of CPU cores/'workers' TRILL uses",
+#         action="store",
+#         default = 1
+# )
 
 
 ##############################################################################################################
@@ -1255,6 +1255,19 @@ def return_parser():
         action="store",
         default = 123
 )
+    parser.add_argument(
+        "--outdir",
+        help="Input full path to directory where you want the output from TRILL",
+        action="store",
+        default = '.'
+)
+
+#     parser.add_argument(
+#         "--n_workers",
+#         help="Change number of CPU cores/'workers' TRILL uses",
+#         action="store",
+#         default = 1
+# )
 
 
 ##############################################################################################################
@@ -1441,7 +1454,13 @@ def return_parser():
         help="Choose an Enzymatic Commision (EC) control tag for conditional protein generation based on the tag. You can find all ECs here https://www.brenda-enzymes.org/index.php",
         action="store",
 )
-
+    lang_gen.add_argument(
+        "--batch_size",
+        help="Change batch-size number to modulate how many proteins are generated at a time. Default is 1",
+        action="store",
+        default = 1,
+        dest="batch_size",
+)
     lang_gen.add_argument(
         "--seed_seq",
         help="Sequence to seed generation",
@@ -1620,6 +1639,14 @@ def return_parser():
         action="store",
         default = None,
         )    
+
+    fold.add_argument(
+        "--batch_size",
+        help="Change batch-size number for folding proteins. Default is 1",
+        action="store",
+        default = 1,
+        dest="batch_size",
+)
 ##############################################################################################################
     visualize = subparsers.add_parser('visualize', help='Reduce dimensionality of embeddings to 2D')
 
@@ -1695,8 +1722,6 @@ def return_parser():
         action="store",
         default=None
         )
-
-##############################################################################################################
 
     
 
