@@ -26,7 +26,7 @@ import numpy as np
 from rdkit import Chem
 from fairscale.nn.data_parallel import FullyShardedDataParallel as FSDP
 from fairscale.nn.wrap import enable_wrap, wrap
-
+import builtins
 from pytorch_lightning.utilities.deepspeed import convert_zero_checkpoint_to_fp32_state_dict
 from trill.utils.lightning_models import ESM, ProtGPT2, CustomWriter, ESM_Gibbs, ProtT5, ZymCTRL
 from trill.utils.update_weights import weights_update
@@ -927,7 +927,7 @@ def main(args):
                 if not os.path.isfile(os.path.join(cache_dir, f'RFDiffusion_weights/{command.split("/")[-1]}')):
                     subprocess.run(command.split(' '))
                     subprocess.run(['mv', command.split("/")[-1], os.path.join(cache_dir, 'RFDiffusion_weights')])
-                                
+
         if not os.path.exists(os.path.join(cache_dir, 'RFDiffusion')):
             print('Cloning forked RFDiffusion')
             os.makedirs(os.path.join(cache_dir, 'RFDiffusion'))
@@ -1019,49 +1019,45 @@ def main(args):
     elif args.command == 'dock':
 
         if args.algorithm == 'DiffDock':
-            if not os.path.exists('DiffDock/'):
+            if not os.path.exists(os.path.join(cache_dir, 'DiffDock')):
                 print('Cloning forked DiffDock')
-                os.makedirs('DiffDock/')
-                diffdock = Repo.clone_from('https://github.com/martinez-zacharya/DiffDock', 'DiffDock/')
+                os.makedirs(os.path.join(cache_dir, 'DiffDock'))
+                diffdock = Repo.clone_from('https://github.com/martinez-zacharya/DiffDock', os.path.join(cache_dir, 'DiffDock'))
                 diffdock_root = diffdock.git.rev_parse("--show-toplevel")
                 subprocess.run(['pip', 'install', '-e', diffdock_root])
-                sys.path.insert(0, 'DiffDock/')
+                sys.path.insert(0, os.path.join(cache_dir, 'DiffDock'))
             else:
-                sys.path.insert(0, 'DiffDock/')
-                diffdock = Repo('DiffDock')
+                sys.path.insert(0, os.path.join(cache_dir, 'DiffDock'))
+                diffdock = Repo(os.path.join(cache_dir, 'DiffDock'))
                 diffdock_root = diffdock.git.rev_parse("--show-toplevel")
             from inference import run_diffdock
             run_diffdock(args, diffdock_root)
 
-            out_dir = os.path.join(os.getcwd(), 'DiffDock_out')
-            rec = args.protein.split('.')[-2]
-            out_rec = rec.split('/')[-1]
-            convert_rec = f'obabel {rec}.pdb -O {out_rec}.pdbqt'.split(' ')
-            subprocess.run(convert_rec, stdout=subprocess.DEVNULL)
-            for file in os.listdir(out_dir):
-                if 'confidence' in file:
-                    file_pre = file.split('.sdf')[-2]
-                    convert_lig = f'obabel {out_dir}/{file} -O {file_pre}.pdbqt'.split(' ')
-                    subprocess.run(convert_lig, stdout=subprocess.DEVNULL)
+            # out_dir = os.path.join(args.outdir, f'{args.name}_DiffDock_out')
+            # rec = args.protein.split('.')[-2]
+            # out_rec = rec.split('/')[-1]
+            # convert_rec = f'obabel {rec}.pdb -O {out_rec}.pdbqt'.split(' ')
+            # subprocess.run(convert_rec, stdout=subprocess.DEVNULL)
+            # for file in os.listdir(out_dir):
+            #     if 'confidence' in file:
+            #         file_pre = file.split('.sdf')[-2]
+            #         convert_lig = f'obabel {out_dir}/{file} -O {file_pre}.pdbqt'.split(' ')
+            #         subprocess.run(convert_lig, stdout=subprocess.DEVNULL)
 
-                    smina_cmd = f'smina --score_only -r {out_rec}.pdbqt -l {file_pre}.pdbqt'.split(' ')
-                    result = subprocess.run(smina_cmd, stdout=subprocess.PIPE)
+            #         smina_cmd = f'smina --score_only -r {out_rec}.pdbqt -l {file_pre}.pdbqt'.split(' ')
+            #         result = subprocess.run(smina_cmd, stdout=subprocess.PIPE)
 
-                    result = re.search("Affinity: \w+.\w+", result.stdout.decode('utf-8'))
-                    affinity = result.group()
-                    affinity = re.search('\d+\.\d+', affinity).group()
+            #         result = re.search("Affinity: \w+.\w+", result.stdout.decode('utf-8'))
+            #         affinity = result.group()
+            #         affinity = re.search('\d+\.\d+', affinity).group()
 
-                    dock_cmd = f'obabel {out_rec}.pdbqt {file_pre}.pdbqt -j -O docked_{out_rec}_{file_pre}_{affinity}.pdb'.split(' ')
-                    # subprocess.run(dock_cmd, stdout=subprocess.DEVNULL)
             
         elif args.algorithm == 'Smina':
-            docking_results = perform_docking(args.protein, args.ligand, args.force_ligand)
+            docking_results = perform_docking(args)
             protein_file = os.path.abspath(args.protein)
             protein_name = os.path.basename(protein_file).split('.')[0]
-            fpocket_output = f"{os.path.dirname(protein_file)}/{protein_name}_out/"
-            # shutil.rmtree(fpocket_output)
 
-            with open(f'{args.name}_smina.out', 'w+') as out:
+            with open(os.path.join(args.outdir, f'{args.name}_smina.out'), 'w+') as out:
                 for num, res in docking_results:
                     res_out = res.decode('utf-8')
                     out.write(f'{protein_name}_pocket{num}: \n')
@@ -1089,12 +1085,12 @@ def main(args):
                         intermed.append(rep[1])
                         emb_4export.append(intermed)
                     emb_df = pd.DataFrame(emb_4export)
-                    emb_df.to_csv(f'{args.name}_ProtT5-XL_embeddings.csv', index=False)
-            if not os.path.exists('TemStaPro_models/'):
-                temstapro_models = Repo.clone_from('https://github.com/martinez-zacharya/TemStaPro_models', 'TemStaPro_models/')
+                    emb_df.to_csv(os.path.join(args.outdir, f'{args.name}_ProtT5-XL_embeddings.csv'), index=False)
+            if not os.path.exists(os.path.join(cache_dir, 'TemStaPro_models')):
+                temstapro_models = Repo.clone_from('https://github.com/martinez-zacharya/TemStaPro_models', os.path.join(cache_dir, 'TemStaPro_models'))
                 temstapro_models_root = temstapro_models.git.rev_parse("--show-toplevel")
             else:
-                temstapro_models = Repo('TemStaPro_models')
+                temstapro_models = Repo(os.path.join(cache_dir, 'TemStaPro_models'))
                 temstapro_models_root = temstapro_models.git.rev_parse("--show-toplevel")
             # dataloader = torch.utils.data.DataLoader(data, shuffle = False, batch_size = 1, num_workers=0)
             THRESHOLDS = ["40", "45", "50", "55", "60", "65"]
@@ -1126,7 +1122,7 @@ def main(args):
                     for seed in SEEDS:
                         mean_prediction += threshold_inferences[seed][seq]
                     mean_prediction /= len(SEEDS)
-                    binary_pred = round(mean_prediction)
+                    binary_pred = builtins.round(mean_prediction)
                     inferences[f'{seq}$%#{thresh}'] = (mean_prediction, binary_pred)
             inference_df = pd.DataFrame.from_dict(inferences, orient='index', columns=['Mean_Pred', 'Binary_Pred'])
             inference_df = inference_df.reset_index(names='RawLab')
@@ -1134,12 +1130,12 @@ def main(args):
             inference_df['Threshold'] = inference_df['RawLab'].apply(lambda x: x.split('$%#')[-1])
             inference_df = inference_df.drop(columns='RawLab')
             inference_df = inference_df[['Protein', 'Threshold', 'Mean_Pred', 'Binary_Pred']]
-            inference_df.to_csv(f'{args.name}_TemStaPro_preds.csv', index = False)
+            inference_df.to_csv(os.path.join(args.outdir, f'{args.name}_TemStaPro_preds.csv'), index = False)
         elif args.classifier == 'custom_binary':
             if not args.preComputed_Embs:
-                embed_command = f"trill {args.name} {args.GPUs} embed {args.emb_model} {args.query}".split(' ')
+                embed_command = f"trill {args.name} {args.GPUs} --outdir {args.outdir} embed {args.emb_model} {args.query}".split(' ')
                 subprocess.run(embed_command, check=True)
-                df = pd.read_csv(f'{args.name}_{args.emb_model}.csv')
+                df = pd.read_csv(os.path.join(args.outdir, f'{args.name}_{args.emb_model}.csv'))
             else:
                 df = pd.read_csv(args.preComputed_Embs)
             if args.train_split is not None:
@@ -1155,8 +1151,8 @@ def main(args):
                 print(f'{fscore=}')
 
                 if not args.save_emb and not args.preComputed_embs:
-                    os.remove(f'{args.name}_{args.emb_model}.csv')
-                model.save_model(f'{args.name}_XGBoost_binary_{len(test_df.columns)-2}.json')
+                    os.remove(os.path.join(args.outdir, f'{args.name}_{args.emb_model}.csv'))
+                model.save_model(os.path.join(args.outdir, f'{args.name}_XGBoost_binary_{len(test_df.columns)-2}.json'))
             else:
                 model = xgb.Booster()
                 model.load_model(args.preTrained)
@@ -1165,29 +1161,29 @@ def main(args):
                 binary_scores = test_preds.round()
                 df['Predicted_Class'] = binary_scores.astype(int)
                 out_df = df[['Label', 'Predicted_Class']]
-                out_df.to_csv(f'{args.name}_predictions.csv', index = False)
+                out_df.to_csv(os.path.join(args.outdir, f'{args.name}_predictions.csv'), index = False)
                 if not args.save_emb:
-                    os.remove(f'{args.name}_{args.emb_model}.csv')
+                    os.remove(os.path.join(args.outdir, f'{args.name}_{args.emb_model}.csv'))
 
         elif args.classifier == 'iForest':
             if not args.preComputed_Embs:
-                embed_command = f"trill {args.name} {args.GPUs} embed {args.emb_model} {args.query}".split(' ')
+                embed_command = f"trill {args.name} {args.GPUs} --outdir {args.outdir} embed {args.emb_model} {args.query}".split(' ')
                 subprocess.run(embed_command, check=True)
-                df = pd.read_csv(f'{args.name}_{args.emb_model}.csv')
+                df = pd.read_csv(os.path.join(args.outdir, f'{args.name}_{args.emb_model}.csv'))
             else:
                 df = pd.read_csv(args.preComputed_Embs)
             
             if args.train_split is not None:
                 model = IsolationForest(random_state=int(args.RNG_seed), verbose=True).fit(df.iloc[:,:-1])
-                obj = sio.dump(model, f'{args.name}_iForest.skops')
+                obj = sio.dump(model, os.path.join(args.outdir, f'{args.name}_iForest.skops'))
             else:
                 model = sio.load(args.preTrained)
                 preds = model.predict(df.iloc[:,:-1])
                 df['Predicted_Class'] = preds
                 out_df = df[['Label', 'Predicted_Class']]
-                out_df.to_csv(f'{args.name}_predictions.csv', index = False)
+                out_df.to_csv(os.path.join(args.outdir, f'{args.name}_predictions.csv'), index = False)
                 if not args.save_emb:
-                    os.remove(f'{args.name}_{args.emb_model}.csv')
+                    os.remove(os.path.join(args.outdir, f'{args.name}_{args.emb_model}.csv'))
 
 
 
