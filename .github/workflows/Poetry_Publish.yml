@@ -21,5 +21,7 @@ jobs:
         uses: abatilo/actions-poetry@v2
         with:
           poetry-version: ${{ matrix.poetry-version }}
+      - name: Install or Upgrade urllib3
+        run: pip install --upgrade urllib3
       - name: Build and Publish
         run: poetry publish --build -u __token__ -p ${{ secrets.PYPI_TOKEN }}
