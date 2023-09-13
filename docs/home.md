@@ -9,7 +9,7 @@
 ![downloads](https://img.shields.io/pypi/dm/trill-proteins?color=blueviolet&style=flat-square)
 [![license](https://img.shields.io/pypi/l/trill-proteins?color=blueviolet&style=flat-square)](LICENSE)
 [![Documentation Status](https://readthedocs.org/projects/trill/badge/?version=latest&style=flat-square)](https://trill.readthedocs.io/en/latest/?badge=latest)
-![status](https://github.com/martinez-zacharya/TRILL/workflows/CI/badge.svg?style=flat-square&color=blueviolet)
+<!-- ![status](https://github.com/martinez-zacharya/TRILL/workflows/CI/badge.svg?style=flat-square&color=blueviolet) -->
 # Intro
 TRILL (**TR**aining and **I**nference using the **L**anguage of **L**ife) is a sandbox for creative protein engineering and discovery. As a bioengineer myself, deep-learning based approaches for protein design and analysis are of great interest to me. However, many of these deep-learning models are rather unwieldy, especially for non ML-practitioners due to their sheer size. Not only does TRILL allow researchers to perform inference on their proteins of interest using a variety of models, but it also democratizes the efficient fine-tuning of large-language models. Whether using Google Colab with one GPU or a supercomputer with many, TRILL empowers scientists to leverage models with millions to billions of parameters without worrying (too much) about hardware constraints. Currently, TRILL supports using these models as of v1.3.0:
 - ESM2 (Embed and Finetune all sizes, depending on hardware constraints [doi](https://doi.org/10.1101/2022.07.20.500902). Can also generate synthetic proteins from finetuned ESM2 models using Gibbs sampling [doi](https://doi.org/10.1101/2021.01.26.428322))
@@ -32,8 +32,10 @@ sh ./Miniconda3-latest-Linux-x86_64.sh
 2. Once conda is set up, create a new environment with
 ```shell
 conda create -n TRILL python=3.10 ; conda activate TRILL
-conda install pytorch==1.13.1 pytorch-cuda=11.7 -c pytorch -c nvidia
-conda install -c conda-forge openbabel smina fpocket
+conda install mamba -c conda-forge
+mamba install pytorch==1.13.1 pytorch-cuda=11.7 -c pytorch -c nvidia
+mamba install -c conda-forge openbabel smina fpocket
+mamba install -c conda-forge -c bioconda foldseek
 pip install pyg-lib torch-scatter torch-sparse torch-cluster torch-spline-conv torch-geometric -f https://data.pyg.org/whl/torch-1.13.1+cu117.html
 ```
 3. Next, simply install TRILL!
@@ -44,10 +46,8 @@ pip install trill-proteins
 ## Use
 
 ```shell
-usage: trill [-h] [--nodes NODES] [--logger LOGGER] [--profiler] [--RNG_seed RNG_SEED]
-             name GPUs
-             {embed,finetune,inv_fold_gen,lang_gen,diff_gen,classify,fold,visualize,dock}
-             ...
+usage: trill [-h] [--nodes NODES] [--logger LOGGER] [--profiler] [--RNG_seed RNG_SEED] [--outdir OUTDIR]
+             name GPUs {embed,finetune,inv_fold_gen,lang_gen,diff_gen,classify,fold,visualize,dock} ...
 
 positional arguments:
   name                  Name of run
@@ -56,14 +56,12 @@ positional arguments:
     embed               Embed proteins of interest
     finetune            Finetune protein language models
     inv_fold_gen        Generate proteins using inverse folding
-    lang_gen            Generate proteins using large language models including ProtGPT2
-                        and ESM2
+    lang_gen            Generate proteins using large language models including ProtGPT2 and ESM2
     diff_gen            Generate proteins using RFDiffusion
-    classify            Classify proteins based on thermostability predicted through
-                        TemStaPro
-    fold                Predict 3D protein structures using ESMFold
+    classify            Classify proteins based on thermostability predicted through TemStaPro
+    fold                Predict 3D protein structures using ESMFold or obtain 3Di structure for use with Foldseek to perform remote homology detection
     visualize           Reduce dimensionality of embeddings to 2D
-    dock                Dock protein to protein using DiffDock
+    dock                Dock proteins and small molecule ligands with DiffDock or Smina
 
 options:
   -h, --help            show this help message and exit
@@ -71,6 +69,7 @@ options:
   --logger LOGGER       Enable Tensorboard logger. Default is None
   --profiler            Utilize PyTorchProfiler
   --RNG_seed RNG_SEED   Input RNG seed. Default is 123
+  --outdir OUTDIR       Input full path to directory where you want the output from TRILL
 
 ```
 
@@ -171,9 +170,9 @@ In the examples below the string immediately after `trill` specifies the name of
   trill example_7 1 fold trill/data/query.fasta
   ```  
 ### 8. Docking
-  DiffDock: Currently, TRILL's implementation of DiffDock is only able to dock small molecules and proteins, but we are currently working on implementing DiffDock-PP for protein-protein docking. The output is ranked poses of the ligand.
+  Currently, TRILL's implementation of DiffDock is only able to dock small molecules. The output is ranked poses of the ligand. However, Smina can be used to dock both small molecules and proteins to receptors.
   ```
-  trill example_8 1 dock trill/data/4ih9.pdb trill/data/NAG_ideal.sdf
+  trill example_8 1 dock DiffDock trill/data/4ih9.pdb trill/data/NAG_ideal.sdf
   ```
 ### 9. Visualize your embeddings
   Create interactive visualizations for your output embeddings in 2D. You can specify the dimensionality reduction method with --method.

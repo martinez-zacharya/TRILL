@@ -28,7 +28,7 @@ from fairscale.nn.data_parallel import FullyShardedDataParallel as FSDP
 from fairscale.nn.wrap import enable_wrap, wrap
 import builtins
 from pytorch_lightning.utilities.deepspeed import convert_zero_checkpoint_to_fp32_state_dict
-from trill.utils.lightning_models import ESM, ProtGPT2, CustomWriter, ESM_Gibbs, ProtT5, ZymCTRL
+from trill.utils.lightning_models import ESM, ProtGPT2, CustomWriter, ESM_Gibbs, ProtT5, ZymCTRL, ProstT5, Custom3DiDataset
 from trill.utils.update_weights import weights_update
 from trill.utils.dock_utils import perform_docking
 from transformers import AutoTokenizer, EsmForProteinFolding, set_seed
@@ -130,7 +130,7 @@ def main(args):
 
     embed.add_argument(
         "model",
-        help="You can choose from either 'esm2_t6_8M', 'esm2_t12_35M', 'esm2_t30_150M', 'esm2_t33_650M', 'esm2_t36_3B','esm2_t48_15B', or 'ProtT5-XL'",
+        help="You can choose from either 'esm2_t6_8M', 'esm2_t12_35M', 'esm2_t30_150M', 'esm2_t33_650M', 'esm2_t36_3B','esm2_t48_15B', 'ProtT5-XL' or 'ProstT5'",
         action="store",
         # default = 'esm2_t12_35M_UR50D',
 )
@@ -221,7 +221,7 @@ def main(args):
     inv_fold.add_argument(
         "model",
         help="Choose between ESM-IF1 or ProteinMPNN to generate proteins using inverse folding.",
-        choices = ['ESM-IF1', 'ProteinMPNN']
+        choices = ['ESM-IF1', 'ProteinMPNN', 'ProstT5']
     )
 
     inv_fold.add_argument("query", 
@@ -480,8 +480,13 @@ def main(args):
 )
 ##############################################################################################################
     
-    fold = subparsers.add_parser('fold', help='Predict 3D protein structures using ESMFold')
+    fold = subparsers.add_parser('fold', help='Predict 3D protein structures using ESMFold or obtain 3Di structure for use with Foldseek to perform remote homology detection')
 
+    fold.add_argument("model", 
+        help="Input fasta file", 
+        choices = ['ESMFold', 'ProstT5']
+        )
+    
     fold.add_argument("query", 
         help="Input fasta file", 
         action="store"
@@ -543,37 +548,57 @@ def main(args):
         )
     
     dock.add_argument("--save_visualisation", 
-        help="Save a pdb file with all of the steps of the reverse diffusion.", 
+        help="DiffDock: Save a pdb file with all of the steps of the reverse diffusion.", 
         action="store_true",
         default=False
         )
     
     dock.add_argument("--samples_per_complex", 
-        help="Number of samples to generate.", 
+        help="DiffDock: Number of samples to generate.", 
         type = int,
         action="store",
         default=10
         )
     
     dock.add_argument("--no_final_step_noise", 
-        help="Use no noise in the final step of the reverse diffusion", 
+        help="DiffDock: Use no noise in the final step of the reverse diffusion", 
         action="store_true",
         default=False
         )
     
     dock.add_argument("--inference_steps", 
-        help="Number of denoising steps", 
+        help="DiffDock: Number of denoising steps", 
         type=int,
         action="store",
         default=20
         )
 
     dock.add_argument("--actual_steps", 
-        help="Number of denoising steps that are actually performed", 
+        help="DiffDock: Number of denoising steps that are actually performed", 
         type=int,
         action="store",
         default=None
         )
+    
+    # dock.add_argument("--anm", 
+    #     help="LightDock: If selected, backbone flexibility is modeled using Anisotropic Network Model (via ProDy)", 
+    #     action="store_true",
+    #     default=False
+    #     )
+    
+    # dock.add_argument("--swarms", 
+    #     help="LightDock: The number of swarms of the simulations, if not provided by the user, automatically calculated depending on receptor surface area and shape", 
+    #     action="store",
+    #     type=int,
+    #     default=False
+    #     )
+    
+    # dock.add_argument("--sim_steps", 
+    #     help="LightDock: The number of steps of the simulation", 
+    #     action="store",
+    #     type=int,
+    #     default=100
+    #     )
 
 ##############################################################################################################
 
@@ -676,6 +701,52 @@ def main(args):
             for file in pt_files:
                 os.remove(os.path.join(args.outdir,file))
 
+        elif args.model == "ProstT5":
+            model = ProstT5(args)
+            data = esm.data.FastaBatchedDataset.from_file(args.query)
+            dataloader = torch.utils.data.DataLoader(data, shuffle = False, batch_size = int(args.batch_size), num_workers=0)
+            pred_writer = CustomWriter(output_dir=args.outdir, write_interval="epoch")
+            if int(args.GPUs) == 0:
+                trainer = pl.Trainer(enable_checkpointing=False, callbacks = [pred_writer], logger=logger, num_nodes=int(args.nodes))
+            else:
+                trainer = pl.Trainer(enable_checkpointing=False, devices=int(args.GPUs), callbacks = [pred_writer], accelerator='gpu', logger=logger, num_nodes=int(args.nodes))
+
+            reps = trainer.predict(model, dataloader, args)
+            cwd_files = os.listdir(args.outdir)
+            pt_files = [file for file in cwd_files if 'predictions_' in file]
+            pred_embeddings = []
+            if args.batch_size == 1 or int(args.GPUs) > 1:
+                for pt in pt_files:
+                    preds = torch.load(os.path.join(args.outdir, pt))
+                    for pred in preds:
+                        for sublist in pred:
+                            if len(sublist) == 2 and args.batch_size == 1:
+                                pred_embeddings.append(tuple([sublist[0], sublist[1]]))
+                            else:
+                                processed_sublists = process_sublist(sublist)
+                                for sub in processed_sublists:
+
+                                    pred_embeddings.append(tuple([sub[0], sub[1]]))
+                embedding_df = pd.DataFrame(pred_embeddings, columns = ['Embeddings', 'Label'])
+                finaldf = embedding_df['Embeddings'].apply(pd.Series)
+                finaldf['Label'] = embedding_df['Label']
+            else:
+                embs = [] 
+                for rep in reps:
+                    inner_embeddings = [item[0].numpy() for item in rep] 
+                    inner_labels = [item[1] for item in rep]
+                    for emb_lab in zip(inner_embeddings, inner_labels):
+                        embs.append(emb_lab)
+                embedding_df = pd.DataFrame(embs, columns = ['Embeddings', 'Label'])
+                finaldf = embedding_df['Embeddings'].apply(pd.Series)
+                finaldf['Label'] = embedding_df['Label']
+
+
+            outname = os.path.join(args.outdir, f'{args.name}_{args.model}.csv')
+            finaldf.to_csv(outname, index = False)
+            for file in pt_files:
+                os.remove(os.path.join(args.outdir,file))
+            
         else:
             model_import_name = f'esm.pretrained.{args.model}_UR50D()'
             model = ESM(eval(model_import_name), 0.0001, args)
@@ -835,6 +906,32 @@ def main(args):
             from mpnnrun import run_mpnn
             print('ProteinMPNN generation starting...')
             run_mpnn(args)
+
+        elif args.model == 'ProstT5':
+            model = ProstT5(args)
+            os.makedirs('foldseek_intermediates')
+            create_db_cmd = f'foldseek createdb {os.path.abspath(args.query)} DB'.split()
+            subprocess.run(create_db_cmd, cwd='foldseek_intermediates')
+            lndb_cmd = f'foldseek lndb DB_h DB_ss_h'.split()
+            subprocess.run(lndb_cmd, cwd='foldseek_intermediates')
+            convert_cmd = f'foldseek convert2fasta foldseek_intermediates/DB_ss {os.path.join(args.outdir, args.name)}_ss.3di'.split()
+            subprocess.run(convert_cmd)
+            shutil.rmtree('foldseek_intermediates')
+            
+            data = Custom3DiDataset(f'{os.path.join(args.outdir, args.name)}_ss.3di')
+            dataloader = torch.utils.data.DataLoader(data, batch_size=1, shuffle=False)
+            if int(args.GPUs) == 0:
+                trainer = pl.Trainer(enable_checkpointing=False, logger=logger, num_nodes=int(args.nodes))
+            else:
+                trainer = pl.Trainer(enable_checkpointing=False, devices=int(args.GPUs), accelerator='gpu', logger=logger, num_nodes=int(args.nodes))
+            with open(os.path.join(args.outdir, f'{args.name}_ProstT5_InvFold.fasta'), 'w+') as fasta:
+                for i in range(int(args.num_return_sequences)):
+                    out = trainer.predict(model, dataloader)
+                    fasta.write(f'>{args.name}_ProstT5_InvFold_{i} \n')
+                    fasta.write(f'{out[0]}\n')
+                    fasta.flush()
+
+            
         
     elif args.command == 'lang_gen':
         if args.model == 'ProtGPT2':
@@ -951,70 +1048,116 @@ def main(args):
         run_rfdiff((f'{rfdiff_git_root}/config/inference/base.yaml'), args)
 
     elif args.command == 'fold':
-        data = esm.data.FastaBatchedDataset.from_file(args.query)
-        tokenizer = AutoTokenizer.from_pretrained("facebook/esmfold_v1")
-        if int(args.GPUs) == 0:
-            model = EsmForProteinFolding.from_pretrained('facebook/esmfold_v1', low_cpu_mem_usage=True, torch_dtype='auto')
-        else:
-            model = EsmForProteinFolding.from_pretrained('facebook/esmfold_v1', device_map='sequential', torch_dtype='auto')
-            model = model.cuda()
-            model.esm = model.esm.half()
-            model = model.cuda()
-        if args.strategy != None:
-            model.trunk.set_chunk_size(int(args.strategy))
-        fold_df = pd.DataFrame(list(data), columns = ["Entry", "Sequence"])
-        sequences = fold_df.Sequence.tolist()
-        with torch.no_grad():
-            for input_ids in tqdm(range(0, len(sequences), int(args.batch_size))):
-                i = input_ids
-                batch_input_ids = sequences[i: i + int(args.batch_size)]
-                if int(args.GPUs) == 0:
-                    if int(args.batch_size) > 1:
-                        tokenized_input = tokenizer(batch_input_ids, return_tensors="pt", add_special_tokens=False, padding=True)['input_ids']    
-                    else:
-                        tokenized_input = tokenizer(batch_input_ids, return_tensors="pt", add_special_tokens=False)['input_ids'] 
-                    tokenized_input = tokenized_input.clone().detach()
-                    prot_len = len(batch_input_ids[0])
-                    try:
-                        output = model(tokenized_input)
-                        output = {key: val.cpu() for key, val in output.items()}
-                    except RuntimeError as e:
-                            if 'out of memory' in str(e):
-                                print(f'Protein too long to fold for current hardware: {prot_len} amino acids long)')
-                                print(e)
-                            else:
-                                print(e)
-                                pass
-                else:
-                    if int(args.batch_size) > 1:
-                        tokenized_input = tokenizer(batch_input_ids, return_tensors="pt", add_special_tokens=False, padding=True)['input_ids']  
-                        prot_len = len(batch_input_ids[0])  
-                    else:
-                        tokenized_input = tokenizer(batch_input_ids, return_tensors="pt", add_special_tokens=False)['input_ids']    
+        if args.model == 'ESMFold':
+            data = esm.data.FastaBatchedDataset.from_file(args.query)
+            tokenizer = AutoTokenizer.from_pretrained("facebook/esmfold_v1")
+            if int(args.GPUs) == 0:
+                model = EsmForProteinFolding.from_pretrained('facebook/esmfold_v1', low_cpu_mem_usage=True, torch_dtype='auto')
+            else:
+                model = EsmForProteinFolding.from_pretrained('facebook/esmfold_v1', device_map='sequential', torch_dtype='auto')
+                model = model.cuda()
+                model.esm = model.esm.half()
+                model = model.cuda()
+            if args.strategy != None:
+                model.trunk.set_chunk_size(int(args.strategy))
+            fold_df = pd.DataFrame(list(data), columns = ["Entry", "Sequence"])
+            sequences = fold_df.Sequence.tolist()
+            with torch.no_grad():
+                for input_ids in tqdm(range(0, len(sequences), int(args.batch_size))):
+                    i = input_ids
+                    batch_input_ids = sequences[i: i + int(args.batch_size)]
+                    if int(args.GPUs) == 0:
+                        if int(args.batch_size) > 1:
+                            tokenized_input = tokenizer(batch_input_ids, return_tensors="pt", add_special_tokens=False, padding=True)['input_ids']    
+                        else:
+                            tokenized_input = tokenizer(batch_input_ids, return_tensors="pt", add_special_tokens=False)['input_ids'] 
+                        tokenized_input = tokenized_input.clone().detach()
                         prot_len = len(batch_input_ids[0])
-                    tokenized_input = tokenized_input.clone().detach()
-                    try:
-                        tokenized_input = tokenized_input.to(model.device)
-                        output = model(tokenized_input)
-                        output = {key: val.cpu() for key, val in output.items()}
-                    except RuntimeError as e:
-                            if 'out of memory' in str(e):
-                                print(f'Protein too long to fold for current hardware: {prot_len} amino acids long)')
-                                print(e)
-                            else:
-                                print(e)
-                                pass
-                output = convert_outputs_to_pdb(output)
-                if int(args.batch_size) > 1:
-                    start_idx = i
-                    end_idx = i + int(args.batch_size)
-                    identifier = fold_df.Entry[start_idx:end_idx].tolist()
-                else:
-                    identifier = [fold_df.Entry[i]]
-                for out, iden in zip(output, identifier):
-                    with open(os.path.join(args.outdir,f"{iden}.pdb"), "w") as f:
-                        f.write("".join(out))
+                        try:
+                            output = model(tokenized_input)
+                            output = {key: val.cpu() for key, val in output.items()}
+                        except RuntimeError as e:
+                                if 'out of memory' in str(e):
+                                    print(f'Protein too long to fold for current hardware: {prot_len} amino acids long)')
+                                    print(e)
+                                else:
+                                    print(e)
+                                    pass
+                    else:
+                        if int(args.batch_size) > 1:
+                            tokenized_input = tokenizer(batch_input_ids, return_tensors="pt", add_special_tokens=False, padding=True)['input_ids']  
+                            prot_len = len(batch_input_ids[0])  
+                        else:
+                            tokenized_input = tokenizer(batch_input_ids, return_tensors="pt", add_special_tokens=False)['input_ids']    
+                            prot_len = len(batch_input_ids[0])
+                        tokenized_input = tokenized_input.clone().detach()
+                        try:
+                            tokenized_input = tokenized_input.to(model.device)
+                            output = model(tokenized_input)
+                            output = {key: val.cpu() for key, val in output.items()}
+                        except RuntimeError as e:
+                                if 'out of memory' in str(e):
+                                    print(f'Protein too long to fold for current hardware: {prot_len} amino acids long)')
+                                    print(e)
+                                else:
+                                    print(e)
+                                    pass
+                    output = convert_outputs_to_pdb(output)
+                    if int(args.batch_size) > 1:
+                        start_idx = i
+                        end_idx = i + int(args.batch_size)
+                        identifier = fold_df.Entry[start_idx:end_idx].tolist()
+                    else:
+                        identifier = [fold_df.Entry[i]]
+                    for out, iden in zip(output, identifier):
+                        with open(os.path.join(args.outdir,f"{iden}.pdb"), "w") as f:
+                            f.write("".join(out))
 
+        elif args.model == "ProstT5":
+            model = ProstT5(args)
+            data = esm.data.FastaBatchedDataset.from_file(args.query)
+            dataloader = torch.utils.data.DataLoader(data, shuffle = False, batch_size = int(args.batch_size), num_workers=0)
+            pred_writer = CustomWriter(output_dir=args.outdir, write_interval="epoch")
+            if int(args.GPUs) == 0:
+                trainer = pl.Trainer(enable_checkpointing=False, callbacks = [pred_writer], logger=logger, num_nodes=int(args.nodes))
+            else:
+                trainer = pl.Trainer(enable_checkpointing=False, devices=int(args.GPUs), callbacks = [pred_writer], accelerator='gpu', logger=logger, num_nodes=int(args.nodes))
+
+            reps = trainer.predict(model, dataloader)
+            cwd_files = os.listdir(args.outdir)
+            pt_files = [file for file in cwd_files if 'predictions_' in file]
+            pred_embeddings = []
+            if args.batch_size == 1 or int(args.GPUs) > 1:
+                for pt in pt_files:
+                    preds = torch.load(os.path.join(args.outdir, pt))
+                    for pred in preds:
+                        for sublist in pred:
+                            if len(sublist) == 2 and args.batch_size == 1:
+                                pred_embeddings.append(tuple([sublist[0], sublist[1]]))
+                            else:
+                                processed_sublists = process_sublist(sublist)
+                                for sub in processed_sublists:
+
+                                    pred_embeddings.append(tuple([sub[0], sub[1]]))
+                embedding_df = pd.DataFrame(pred_embeddings, columns = ['3Di', 'Label'])
+                finaldf = embedding_df['3Di'].apply(pd.Series)
+                finaldf['Label'] = embedding_df['Label']
+            else:
+                embs = [] 
+                for rep in reps:
+                    inner_embeddings = [item[0] for item in rep] 
+                    inner_labels = [item[1] for item in rep]
+                    for emb_lab in zip(inner_embeddings, inner_labels):
+                        embs.append(emb_lab)
+                embedding_df = pd.DataFrame(embs, columns = ['3Di', 'Label'])
+                finaldf = embedding_df['3Di'].apply(pd.Series)
+                finaldf['Label'] = embedding_df['Label']
+
+
+            outname = os.path.join(args.outdir, f'{args.name}_{args.model}.csv')
+            finaldf.to_csv(outname, index = False, header=['3Di', 'Label'])
+            for file in pt_files:
+                os.remove(os.path.join(args.outdir,file))
 
     elif args.command == 'dock':
 
@@ -1092,7 +1235,6 @@ def main(args):
             else:
                 temstapro_models = Repo(os.path.join(cache_dir, 'TemStaPro_models'))
                 temstapro_models_root = temstapro_models.git.rev_parse("--show-toplevel")
-            # dataloader = torch.utils.data.DataLoader(data, shuffle = False, batch_size = 1, num_workers=0)
             THRESHOLDS = ["40", "45", "50", "55", "60", "65"]
             SEEDS = ["41", "42", "43", "44", "45"]
             if not args.preComputed_Embs:
@@ -1278,7 +1420,7 @@ def return_parser():
 
     embed.add_argument(
         "model",
-        help="You can choose from either 'esm2_t6_8M', 'esm2_t12_35M', 'esm2_t30_150M', 'esm2_t33_650M', 'esm2_t36_3B','esm2_t48_15B', or 'ProtT5-XL'",
+        help="You can choose from either 'esm2_t6_8M', 'esm2_t12_35M', 'esm2_t30_150M', 'esm2_t33_650M', 'esm2_t36_3B','esm2_t48_15B', 'ProtT5-XL' or 'ProstT5'",
         action="store",
         # default = 'esm2_t12_35M_UR50D',
 )
@@ -1369,7 +1511,7 @@ def return_parser():
     inv_fold.add_argument(
         "model",
         help="Choose between ESM-IF1 or ProteinMPNN to generate proteins using inverse folding.",
-        choices = ['ESM-IF1', 'ProteinMPNN']
+        choices = ['ESM-IF1', 'ProteinMPNN', 'ProstT5']
     )
 
     inv_fold.add_argument("query", 
@@ -1628,8 +1770,13 @@ def return_parser():
 )
 ##############################################################################################################
     
-    fold = subparsers.add_parser('fold', help='Predict 3D protein structures using ESMFold')
+    fold = subparsers.add_parser('fold', help='Predict 3D protein structures using ESMFold or obtain 3Di structure for use with Foldseek to perform remote homology detection')
 
+    fold.add_argument("model", 
+        help="Input fasta file", 
+        choices = ['ESMFold', 'ProstT5']
+        )
+    
     fold.add_argument("query", 
         help="Input fasta file", 
         action="store"
@@ -1691,38 +1838,58 @@ def return_parser():
         )
     
     dock.add_argument("--save_visualisation", 
-        help="Save a pdb file with all of the steps of the reverse diffusion.", 
+        help="DiffDock: Save a pdb file with all of the steps of the reverse diffusion.", 
         action="store_true",
         default=False
         )
     
     dock.add_argument("--samples_per_complex", 
-        help="Number of samples to generate.", 
+        help="DiffDock: Number of samples to generate.", 
         type = int,
         action="store",
         default=10
         )
     
     dock.add_argument("--no_final_step_noise", 
-        help="Use no noise in the final step of the reverse diffusion", 
+        help="DiffDock: Use no noise in the final step of the reverse diffusion", 
         action="store_true",
         default=False
         )
     
     dock.add_argument("--inference_steps", 
-        help="Number of denoising steps", 
+        help="DiffDock: Number of denoising steps", 
         type=int,
         action="store",
         default=20
         )
 
     dock.add_argument("--actual_steps", 
-        help="Number of denoising steps that are actually performed", 
+        help="DiffDock: Number of denoising steps that are actually performed", 
         type=int,
         action="store",
         default=None
         )
-
     
+    # dock.add_argument("--anm", 
+    #     help="LightDock: If selected, backbone flexibility is modeled using Anisotropic Network Model (via ProDy)", 
+    #     action="store_true",
+    #     default=False
+    #     )
+    
+    # dock.add_argument("--swarms", 
+    #     help="LightDock: The number of swarms of the simulations, if not provided by the user, automatically calculated depending on receptor surface area and shape", 
+    #     action="store",
+    #     type=int,
+    #     default=False
+    #     )
+    
+    # dock.add_argument("--sim_steps", 
+    #     help="LightDock: The number of steps of the simulation", 
+    #     action="store",
+    #     type=int,
+    #     default=100
+    #     )
+
+##############################################################################################################
 
     return parser

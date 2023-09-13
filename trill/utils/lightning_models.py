@@ -19,11 +19,15 @@ from utils.update_weights import weights_update
 from pytorch_lightning.loggers import TensorBoardLogger
 from pytorch_lightning.profilers import PyTorchProfiler
 from deepspeed.ops.adam import DeepSpeedCPUAdam
-from transformers import pipeline, AutoTokenizer, AutoModelForCausalLM, DataCollatorForLanguageModeling, T5EncoderModel, T5Tokenizer
+from transformers import pipeline, AutoTokenizer, AutoModelForCausalLM, DataCollatorForLanguageModeling, T5EncoderModel, T5Tokenizer, AutoModelForSeq2SeqLM
 from esm.inverse_folding.multichain_util import sample_sequence_in_complex
 # from colossalai.nn.optimizer import HybridAdam, CPUAdam
 from deepspeed.ops.adam import FusedAdam
 from tqdm import tqdm
+import re
+from pytorch_lightning.callbacks import BasePredictionWriter
+import torch
+from torch.utils.data import Dataset
 
 ESM_ALLOWED_AMINO_ACIDS = "ACDEFGHIKLMNPQRSTVWY"
 
@@ -532,13 +536,11 @@ class ProtT5(pl.LightningModule):
                 add_special_tokens=True, padding='longest')
         input_ids = torch.tensor(token_encoding['input_ids'])
         attention_mask = torch.tensor(token_encoding['attention_mask'])
-        # print(f'{input_ids}=')
-        # print(f'{input_ids.size()}=')
+
         if next(self.model.parameters()).is_cuda:
             embedding_repr = self.model(input_ids.cuda(), attention_mask=attention_mask.cuda())
         else:
             embedding_repr = self.model(input_ids, attention_mask=attention_mask)
-        # print(f'{embedding_repr.size()}=')
         emb = embedding_repr.last_hidden_state.squeeze(0)
         if len(seqs) == 1:
             protein_emb = emb.mean(dim=0)
@@ -546,13 +548,7 @@ class ProtT5(pl.LightningModule):
         else:
             protein_emb = emb.mean(dim=1)
             return list(zip(protein_emb, label))
-            # for emb, lab in zip(protein_emb, label):
-                # print(emb, lab)
-        
-        # self.reps.append(tuple((protein_emb, label)))
-        # reps = []
-        # for i in range(len(rep_numpy)):
-        #     reps.append(tuple([rep_numpy[i].mean(0), label[i]]))
+
 
     
 
@@ -575,7 +571,6 @@ class ZymCTRL(pl.LightningModule):
             self.strat = str(args.strategy)
     
     def training_step(self, batch, batch_idx):
-        # self.tokenizer.pad_token = self.tokenizer.eos_token
         sequence = batch["Labels"][0]
         separator = '<sep>'
         control_tag_length = len(self.tokenizer(self.ctrl_tag+separator)['input_ids'])
@@ -642,10 +637,161 @@ class ZymCTRL(pl.LightningModule):
         for char in char_list:
             seq = seq.replace(char, '')
         return seq
+    
+class ProstT5(pl.LightningModule):
+    def __init__(self, args):
+        super().__init__()
+        self.command = args.command
+        if self.command == 'embed':
+            if int(args.GPUs) > 1:
+                self.model = T5EncoderModel.from_pretrained("Rostlab/ProstT5", device_map="auto")
+            else:
+                self.model = T5EncoderModel.from_pretrained("Rostlab/ProstT5", low_cpu_mem_usage=True)
+        elif self.command == 'fold' or self.command == 'inv_fold_gen':
+            if int(args.GPUs) > 1:
+                self.model = AutoModelForSeq2SeqLM.from_pretrained("Rostlab/ProstT5", device_map="auto")
+            else:
+                self.model = AutoModelForSeq2SeqLM.from_pretrained("Rostlab/ProstT5", low_cpu_mem_usage=True)
+        self.tokenizer = T5Tokenizer.from_pretrained('Rostlab/ProstT5', do_lower_case=False)
+        if int(args.GPUs) >= 1:
+            self.model = self.model.half()
+    
+    def training_step(self, batch, batch_idx):
+        self.tokenizer.pad_token = self.tokenizer.eos_token
+        tokenized = self.tokenizer(
+        batch["Labels"],
+        padding=True,
+        return_special_tokens_mask=True
+    )
+        if next(self.model.parameters()).is_cuda:
+            att = torch.LongTensor(tokenized['attention_mask']).cuda()
+        else:
+            att = torch.LongTensor(tokenized['attention_mask'])
+        data_collator = DataCollatorForLanguageModeling(tokenizer = self.tokenizer, mlm=False)
+        collated = data_collator([tokenized['input_ids']])
+        if next(self.model.parameters()).is_cuda:
+            outputs = self.model(collated['input_ids'].cuda(), labels = collated['labels'].cuda(), attention_mask = att, return_dict = True)
+        else:
+            outputs = self.model(collated['input_ids'], labels = collated['labels'], attention_mask = att, return_dict = True)
+        loss = outputs[0]
+        self.log("loss", loss)
+        return(loss)
+        
+    def configure_optimizers(self):
+        if 'offload' in self.strat:
+            # print("*** CPU offloading can't currently be used with TRILL and ProtGPT2 ***")
+            # raise RuntimeError
+            optimizer = DeepSpeedCPUAdam(self.model.parameters(), lr=self.lr)
+        elif 'fsdp' in self.strat:
+            print("*** FSDP can't currently be used with TRILL and ProtGPT2 ***")
+            raise RuntimeError
+            # optimizer = torch.optim.Adam(self.trainer.model.parameters(), lr=self.lr)
+        else:
+            optimizer = torch.optim.Adam(self.model.parameters(), lr=self.lr)
+        return optimizer
+    
+    def predict_step(self, batch, batch_idx):
+        if self.command== 'embed':
+            label, _ = batch
+            seqs = [" ".join(list(re.sub(r"[UZOB]", "X", sequence))) for sequence in batch[1]]
+            seqs = [ "<AA2fold>" + " " + s if s.isupper() else "<fold2AA>" + " " + s
+                        for s in seqs
+                        ]
+            ids = self.tokenizer.batch_encode_plus(seqs, add_special_tokens=True, padding="longest",return_tensors='pt')
+            if next(self.model.parameters()).is_cuda:
+                embedding_repr = self.model(ids.input_ids.cuda(), attention_mask=ids.attention_mask.cuda())
+            else:
+                embedding_repr = self.model(ids.input_ids, attention_mask=ids.attention_mask)
+            emb = embedding_repr.last_hidden_state.squeeze(0)
+            if len(seqs) == 1:
+                protein_emb = emb.mean(dim=0)
+                return tuple((protein_emb, label[0]))
+            else:
+                protein_emb = emb.mean(dim=1)
+                return list(zip(protein_emb, label))
+        elif self.command == 'fold':
+            label, _ = batch
+            seqs = [" ".join(list(re.sub(r"[UZOB]", "X", sequence))) for sequence in batch[1]]
+            seqs = [ "<AA2fold>" + " " + s for s in seqs]
+            ids = self.tokenizer.batch_encode_plus(seqs,
+                                  add_special_tokens=True,
+                                  padding="longest",
+                                  return_tensors='pt')
+            gen_kwargs_aa2fold = {
+                  "do_sample": True,
+                  "num_beams": 3, 
+                  "top_p" : 0.95, 
+                  "temperature" : 1.2, 
+                  "top_k" : 6,
+                  "repetition_penalty" : 1.2,
+            }
+            if next(self.model.parameters()).is_cuda:
+                translations = self.model.generate( 
+                ids.input_ids.cuda(), 
+                attention_mask=ids.attention_mask.cuda(), 
+                max_length=max([ len(s) for s in seqs]),
+                min_length=min([ len(s) for s in seqs]), 
+                early_stopping=True,
+                num_return_sequences=1,
+                **gen_kwargs_aa2fold
+                )
+            else:
+                translations = self.model.generate( 
+                ids.input_ids, 
+                attention_mask=ids.attention_mask, 
+                max_length=max([ len(s) for s in seqs]),
+                min_length=min([ len(s) for s in seqs]), 
+                early_stopping=True,
+                num_return_sequences=1,
+                **gen_kwargs_aa2fold
+                )
+            decoded_translations = self.tokenizer.batch_decode(translations, skip_special_tokens=True)
+            structure_sequences = [ "".join(ts.split(" ")) for ts in decoded_translations ]
+            if len(seqs) == 1:
+                return tuple((structure_sequences, label[0]))
+            else:
+                return list(zip(structure_sequences, label))
+            
+        elif self.command == 'inv_fold_gen':
+            label, seq = batch
+            seq = seq[0].lower()
+            sequence_examples_backtranslation = [ "<fold2AA>" + " " + s for s in seq]
+            ids_backtranslation = self.tokenizer.batch_encode_plus(sequence_examples_backtranslation,
+                                  add_special_tokens=True,
+                                  padding="longest",
+                                  return_tensors='pt')
+            
+            gen_kwargs_fold2AA = {
+            "do_sample": True,
+            "top_p" : 0.90,
+            "temperature" : 1.1,
+            "top_k" : 6,
+            "repetition_penalty" : 1.2,
+            }
+            if next(self.model.parameters()).is_cuda:
+                backtranslations = self.model.generate( 
+                ids_backtranslation.input_ids.cuda(), 
+                attention_mask=ids_backtranslation.attention_mask.cuda(), 
+                max_length=max([ len(s) for s in seq]),
+                min_length=min([ len(s) for s in seq]), 
+                early_stopping=True,
+                num_return_sequences=1,
+                **gen_kwargs_fold2AA
+                )
+            else:
+                backtranslations = self.model.generate( 
+                ids_backtranslation.input_ids, 
+                attention_mask=ids_backtranslation.attention_mask, 
+                max_length=max([ len(s) for s in seq]),
+                min_length=min([ len(s) for s in seq]), 
+                early_stopping=True,
+                num_return_sequences=1,
+                **gen_kwargs_fold2AA
+                )
 
-
-
-from pytorch_lightning.callbacks import BasePredictionWriter
+            decoded_backtranslations = self.tokenizer.batch_decode(backtranslations, skip_special_tokens=True)
+            aminoAcid_sequences = "".join(decoded_backtranslations)
+            return aminoAcid_sequences
 
 class CustomWriter(BasePredictionWriter):
 
@@ -657,3 +803,23 @@ class CustomWriter(BasePredictionWriter):
         # this will create N (num processes) files in `output_dir` each containing
         # the predictions of it's respective rank
         torch.save(predictions, os.path.join(self.output_dir, f"predictions_{trainer.global_rank}.pt"))
+
+
+class Custom3DiDataset(Dataset):
+    def __init__(self, file_path):
+        self.sequences = []
+        self.labels = []
+        with open(file_path, 'r') as f:
+            for line in f:
+                if line.startswith('>'):
+                    self.labels.append(line.strip())
+                else:
+                    self.sequences.append(line.strip())
+
+    def __len__(self):
+        return len(self.sequences)
+
+    def __getitem__(self, index):
+        sequence = self.sequences[index]
+        label = self.labels[index]
+        return label, sequence

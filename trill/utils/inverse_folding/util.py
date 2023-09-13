@@ -36,7 +36,7 @@ def load_structure(fpath, chain=None):
         with open(fpath) as fin:
             pdbxf = pdbx.PDBxFile.read(fin)
         structure = pdbx.get_structure(pdbxf, model=1)
-    elif fpath.endswith('pdb'):
+    elif fpath.endswith('pdb') or fpath.endswith('3di'):
         with open(fpath) as fin:
             pdbf = pdb.PDBFile.read(fin)
         structure = pdb.get_structure(pdbf, model=1)
