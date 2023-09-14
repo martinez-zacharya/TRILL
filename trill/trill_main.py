@@ -1015,7 +1015,7 @@ def main(args):
                     fasta.flush()
                     
     elif args.command == 'diff_gen':
-        command = "conda install -c dglteam dgl-cuda11.7 -y -S -q".split(' ')
+        # command = "conda install -c dglteam dgl-cuda11.7 -y -S -q".split(' ')
         subprocess.run(command, check = True)
         print('Finding RFDiffusion weights... \n')
         if not os.path.exists((os.path.join(cache_dir, 'RFDiffusion_weights'))):
