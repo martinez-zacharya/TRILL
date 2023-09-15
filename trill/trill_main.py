@@ -973,6 +973,9 @@ def main(args):
                         fasta.flush()
 
         elif args.model == 'ESM2':
+            if int(args.GPUs) >= 1:
+                print("*** Gibbs sampling on GPUs is currently down. For some reason, TRILL doesn't use generate different proteins regardless if a finetuned model is passed, but it works correctly on CPU... ***")
+                raise RuntimeError
             model_import_name = f'esm.pretrained.{args.esm2_arch}()'
             with open(os.path.join(args.outdir, f'{args.name}_{args.esm2_arch}_Gibbs.fasta'), 'w+') as fasta:
                 if args.finetuned != False:
@@ -1015,8 +1018,8 @@ def main(args):
                     fasta.flush()
                     
     elif args.command == 'diff_gen':
-        command = "conda install -c dglteam dgl-cuda11.7 -y -S -q".split(' ')
-        subprocess.run(command, check = True)
+        # command = "conda install -c dglteam dgl-cuda11.7 -y -S -q".split(' ')
+        # subprocess.run(command, check = True)
         print('Finding RFDiffusion weights... \n')
         if not os.path.exists((os.path.join(cache_dir, 'RFDiffusion_weights'))):
             os.makedirs(os.path.join(cache_dir, 'RFDiffusion_weights'))
