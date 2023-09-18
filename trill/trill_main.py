@@ -41,7 +41,9 @@ from trill.utils.visualize import reduce_dims, viz
 from trill.utils.MLP import MLP_C2H2, inference_epoch
 from sklearn.ensemble import IsolationForest
 import skops.io as sio
+from sklearn.preprocessing import LabelEncoder
 import trill.utils.ephod_utils as eu
+from trill.utils.classify_utils import generate_class_key_csv
 import logging
 from pyfiglet import Figlet
 import bokeh
@@ -439,8 +441,8 @@ def main(args):
 
     classify.add_argument(
         "classifier",
-        help="Predict thermostability using TemStaPro or choose custom to train/use your own XGBoost based binary classifier. Note for training a custom_binary, you need to submit roughly equal amounts of both binary classes as part of your query.",
-        choices = ['TemStaPro', 'EpHod', 'custom_binary', 'iForest']
+        help="Predict thermostability using TemStaPro or choose custom to train/use your own XGBoost or Isolation Forest classifier. Note for training XGBoost, you need to submit roughly equal amounts of each class as part of your query.",
+        choices = ['TemStaPro', 'EpHod', 'XGBoost', 'iForest']
 )
     classify.add_argument(
         "query",
@@ -449,7 +451,7 @@ def main(args):
 )
     classify.add_argument(
         "--key",
-        help="String that allows for the unique identification of your binary classes from the input fasta headers. For example, --key positive_hits would group all sequences that have 'positive_hits' in the fasta header as one class and the rest as the other class",
+        help="Input a CSV, with your class mappings for your embeddings where the first column is the label and the second column is the class.",
         action="store"
 )
     classify.add_argument(
@@ -484,9 +486,57 @@ def main(args):
 
     classify.add_argument(
         "--batch_size",
-        help="Sets batch_size for embedding with ESM1v when using EpHod.",
+        help="EpHod: Sets batch_size for embedding with ESM1v.",
         action="store",
         default=1
+)
+
+    classify.add_argument(
+        "--xg_gamma",
+        help="XGBoost: sets gamma for XGBoost, which is a hyperparameter that sets 'Minimum loss reduction required to make a further partition on a leaf node of the tree.'",
+        action="store",
+        default=0.4
+)
+
+    classify.add_argument(
+        "--xg_lr",
+        help="XGBoost: Sets the learning rate for XGBoost",
+        action="store",
+        default=0.2
+)
+
+    classify.add_argument(
+        "--xg_max_depth",
+        help="XGBoost: Sets the maximum tree depth",
+        action="store",
+        default=8
+)
+
+
+    classify.add_argument(
+        "--xg_reg_alpha",
+        help="XGBoost: L1 regularization term on weights",
+        action="store",
+        default=0.8
+)
+
+    classify.add_argument(
+        "--xg_reg_lambda",
+        help="XGBoost: L2 regularization term on weights",
+        action="store",
+        default=0.1
+)
+    classify.add_argument(
+        "--if_contamination",
+        help="iForest: The amount of outliers in the data. Default is automatically determined, but you can set it between (0 , 0.5])",
+        action="store",
+        default='auto'
+)
+    classify.add_argument(
+        "--n_estimators",
+        help="XGBoost/iForest: Number of boosting rounds",
+        action="store",
+        default=115
 )
 ##############################################################################################################
     
@@ -612,7 +662,26 @@ def main(args):
 
 ##############################################################################################################
 
+    utils = subparsers.add_parser('utils', help='Various utilities')
+
+    utils.add_argument(
+        "tool",
+        help="Pepare a csv for use with the classify command. Takes a directory or text file with list of paths for fasta files. Each file will be a unique class, so if your directory contains 5 fasta files, there will be 5 classes in the output key csv.",
+        choices = ['prepare_class_key']
+)
+
+    utils.add_argument(
+        "--dir",
+        help="Directory to be used for creating a class key csv for classification.",
+        action="store",
+)
+    utils.add_argument(
+        "--fasta_paths_txt",
+        help="Text file with absolute paths of fasta files to be used for creating the class key. Each unique path will be treated as a unique class, and all the sequences in that file will be in the same class.",
+        action="store",
+)
     
+##############################################################################################################
 
     
 
@@ -1355,39 +1424,138 @@ def main(args):
             all_ypred.to_csv(phout_file, index=False)
 
 
-        elif args.classifier == 'custom_binary':
-            if not args.preComputed_Embs:
-                embed_command = f"trill {args.name} {args.GPUs} --outdir {args.outdir} embed {args.emb_model} {args.query}".split(' ')
-                subprocess.run(embed_command, check=True)
-                df = pd.read_csv(os.path.join(args.outdir, f'{args.name}_{args.emb_model}.csv'))
-            else:
-                df = pd.read_csv(args.preComputed_Embs)
-            if args.train_split is not None:
-                df['NewLab'] = np.where(df['Label'].str.contains(args.key) == 1, 1, 0)
-                df = df.sample(frac = 1)
-                train_df, test_df = train_test_split(df, test_size = float(args.train_split), stratify = df['NewLab'])
-                model = xgb.XGBClassifier(gamma= 0.4, learning_rate = 0.2,  max_depth = 8, n_estimators = 115, reg_alpha = 0.8, reg_lambda = 0.1)
-                model.fit(train_df.iloc[:,:-2], train_df['NewLab'])
-                test_preds = model.predict(test_df.iloc[:,:-2])
-                precision, recall, fscore, support = precision_recall_fscore_support(test_df['NewLab'], test_preds, average = 'binary')
-                print(f'{precision=}')
-                print(f'{recall=}')
-                print(f'{fscore=}')
+        elif args.classifier == 'XGBoost':
+                if not args.preComputed_Embs:
+                    embed_command = f"trill {args.name} {args.GPUs} --outdir {args.outdir} embed {args.emb_model} {args.query}"
+                    subprocess.run(embed_command.split(' '), check=True)
+                    df = pd.read_csv(os.path.join(args.outdir, f'{args.name}_{args.emb_model}.csv'))
+                else:
+                    df = pd.read_csv(args.preComputed_Embs)
 
-                if not args.save_emb and not args.preComputed_embs:
-                    os.remove(os.path.join(args.outdir, f'{args.name}_{args.emb_model}.csv'))
-                model.save_model(os.path.join(args.outdir, f'{args.name}_XGBoost_binary_{len(test_df.columns)-2}.json'))
-            else:
-                model = xgb.Booster()
-                model.load_model(args.preTrained)
-                data = xgb.DMatrix(df.iloc[:,:-1])
-                test_preds = model.predict(data)
-                binary_scores = test_preds.round()
-                df['Predicted_Class'] = binary_scores.astype(int)
-                out_df = df[['Label', 'Predicted_Class']]
-                out_df.to_csv(os.path.join(args.outdir, f'{args.name}_predictions.csv'), index = False)
-                if not args.save_emb:
-                    os.remove(os.path.join(args.outdir, f'{args.name}_{args.emb_model}.csv'))
+                if args.train_split is not None:
+                    if args.key == None:
+                        print('Training an XGBoost classifier requires a class key CSV!')
+                        raise RuntimeError
+                    with open(os.path.join(args.outdir, f'{args.name}_XGBoost.out'), 'w+') as out:
+                        command_line_args = sys.argv
+                        command_line_str = ' '.join(command_line_args)
+                        out.write('TRILL command used: ' + command_line_str+'\n\n')
+                        if not args.preComputed_Embs:
+                            out.write('TRILL embed command: ' +embed_command+'\n\n')
+
+                        key_df = pd.read_csv(args.key)
+                        n_classes = key_df['Class'].nunique()
+
+                        for cls in key_df['Class'].unique():
+                            condition = key_df[key_df['Class'] == cls]['Label'].tolist()
+                            df.loc[df['Label'].str.contains('|'.join(condition)), 'NewLab'] = cls
+                        df = df.sample(frac=1)
+                        train_df, test_df = train_test_split(df, test_size=float(args.train_split), stratify=df['NewLab'])
+
+                        # Initialize and train the XGBoost multi-class classifier
+                        model = xgb.XGBClassifier(objective = 'multi:softprob', num_class=n_classes, gamma = args.xg_gamma, learning_rate = args.xg_lr,  max_depth = args.xg_max_depth, n_estimators = args.n_estimators, reg_alpha = args.xg_reg_alpha, reg_lambda = args.xg_reg_lambda, random_state = args.RNG_seed)
+                        le = LabelEncoder()
+
+                        # Encode 'NewLab' column to integers
+                        train_df['NewLab'] = le.fit_transform(train_df['NewLab'])
+                        test_df['NewLab'] = le.transform(test_df['NewLab'])
+                        classes = le.inverse_transform(range(n_classes))
+
+                        model.fit(train_df.iloc[:, :-2], train_df['NewLab'])
+
+                        # Make predictions on the test set to get probabilities
+                        test_preds_proba = model.predict_proba(test_df.iloc[:, :-2])
+                        
+                        proba_df = pd.DataFrame(test_preds_proba, columns=classes)
+                        proba_df.to_csv(os.path.join(args.outdir, f'{args.name}_XGBoost_class_probs.csv'), index=False)
+
+                        # Use argmax to get the most probable class
+                        test_preds = np.argmax(test_preds_proba, axis=1)
+
+                        # Convert integer labels back to original string labels
+                        test_preds = le.inverse_transform(test_preds)
+
+                        y_true_transformed = le.inverse_transform(test_df['NewLab'])
+                        # Compute precision, recall, fscore, and support without averaging
+                        precision, recall, fscore, support = precision_recall_fscore_support(
+                            y_true_transformed, test_preds, average=None, labels=np.unique(y_true_transformed)
+                        )
+
+                        # Print and write metrics for each class
+                        unique_classes = np.unique(y_true_transformed)
+                        out.write("Classification Metrics Per Class:\n")
+                        print("Classification Metrics Per Class:")
+
+                        for i, label in enumerate(unique_classes):
+                            out.write(f"\nClass: {label}\n")
+                            print(f"\nClass: {label}")
+                            
+                            out.write(f"\tPrecision: {precision[i]:.4f}\n")
+                            print(f"\tPrecision: {precision[i]:.4f}")
+                            
+                            out.write(f"\tRecall: {recall[i]:.4f}\n")
+                            print(f"\tRecall: {recall[i]:.4f}")
+                            
+                            out.write(f"\tF-score: {fscore[i]:.4f}\n")
+                            print(f"\tF-score: {fscore[i]:.4f}")
+
+                            out.write(f"\tSupport: {support[i]}\n")
+                            print(f"\tSupport: {support[i]}")
+
+                        # Compute and display average metrics
+                        avg_precision = np.mean(precision)
+                        avg_recall = np.mean(recall)
+                        avg_fscore = np.mean(fscore)
+
+                        out.write("\nAverage Metrics:\n")
+                        print("\nAverage Metrics:")
+
+                        out.write(f"\tAverage Precision: {avg_precision:.4f}\n")
+                        print(f"\tAverage Precision: {avg_precision:.4f}")
+
+                        out.write(f"\tAverage Recall: {avg_recall:.4f}\n")
+                        print(f"\tAverage Recall: {avg_recall:.4f}")
+
+                        out.write(f"\tAverage F-score: {avg_fscore:.4f}\n")
+                        print(f"\tAverage F-score: {avg_fscore:.4f}")
+
+                        if not args.save_emb and not args.preComputed_Embs:
+                            os.remove(os.path.join(args.outdir, f'{args.name}_{args.emb_model}.csv'))
+                        model.save_model(os.path.join(args.outdir, f'{args.name}_XGBoost_{len(test_df.columns)-2}.json'))
+
+                else:
+                    if not args.preTrained:
+                        print('You need to provide a model with --args.preTrained to perform inference!')
+                        raise RuntimeError
+                    else:
+                        # Load the pre-trained XGBoost model
+                        model = xgb.Booster()
+                        model.load_model(args.preTrained)
+                        
+                        # Prepare the data
+                        data = xgb.DMatrix(df.iloc[:,:-1])
+                        
+                        # Make predictions
+                        test_preds_proba = model.predict(data)
+                        # If binary, round the scores
+                        if test_preds_proba.shape[1] == 2:
+                            test_preds = test_preds_proba[:, 1].round()
+                        else:  # Else, take the argmax for multi-class
+                            test_preds = np.argmax(test_preds_proba, axis=1)
+                            
+                        # Save class probabilities
+                        proba_df = pd.DataFrame(test_preds_proba)
+                        proba_df.to_csv(os.path.join(args.outdir, f'{args.name}_XGBoost_class_probs.csv'), index=False)      
+
+                        # Add the predictions to the DataFrame
+                        df['Predicted_Class'] = test_preds.astype(int)
+                        
+                        # Save the predictions to a CSV file
+                        out_df = df[['Label', 'Predicted_Class']]
+                        out_df.to_csv(os.path.join(args.outdir, f'{args.name}_XGBoost_predictions.csv'), index=False)
+                        
+                        if not args.save_emb:
+                            os.remove(os.path.join(args.outdir, f'{args.name}_{args.emb_model}.csv'))
 
         elif args.classifier == 'iForest':
             if not args.preComputed_Embs:
@@ -1397,19 +1565,21 @@ def main(args):
             else:
                 df = pd.read_csv(args.preComputed_Embs)
             
-            if args.train_split is not None:
-                model = IsolationForest(random_state=int(args.RNG_seed), verbose=True).fit(df.iloc[:,:-1])
+            if not args.preTrained:
+                model = IsolationForest(random_state=int(args.RNG_seed), verbose=True, n_estimators=args.n_estimators, contamination=args.if_contamination).fit(df.iloc[:,:-1])
                 obj = sio.dump(model, os.path.join(args.outdir, f'{args.name}_iForest.skops'))
             else:
                 model = sio.load(args.preTrained)
                 preds = model.predict(df.iloc[:,:-1])
                 df['Predicted_Class'] = preds
                 out_df = df[['Label', 'Predicted_Class']]
-                out_df.to_csv(os.path.join(args.outdir, f'{args.name}_predictions.csv'), index = False)
+                out_df.to_csv(os.path.join(args.outdir, f'{args.name}_iForest_predictions.csv'), index = False)
                 if not args.save_emb:
                     os.remove(os.path.join(args.outdir, f'{args.name}_{args.emb_model}.csv'))
 
-
+    elif args.command == 'utils':
+        if args.tool == 'prepare_class_key':
+            generate_class_key_csv(args)
 
 
 
@@ -1808,8 +1978,8 @@ def return_parser():
 
     classify.add_argument(
         "classifier",
-        help="Predict thermostability using TemStaPro or choose custom to train/use your own XGBoost based binary classifier. Note for training a custom_binary, you need to submit roughly equal amounts of both binary classes as part of your query.",
-        choices = ['TemStaPro', 'EpHod', 'custom_binary', 'iForest']
+        help="Predict thermostability using TemStaPro or choose custom to train/use your own XGBoost or Isolation Forest classifier. Note for training XGBoost, you need to submit roughly equal amounts of each class as part of your query.",
+        choices = ['TemStaPro', 'EpHod', 'XGBoost', 'iForest']
 )
     classify.add_argument(
         "query",
@@ -1818,7 +1988,7 @@ def return_parser():
 )
     classify.add_argument(
         "--key",
-        help="String that allows for the unique identification of your binary classes from the input fasta headers. For example, --key positive_hits would group all sequences that have 'positive_hits' in the fasta header as one class and the rest as the other class",
+        help="Input a CSV, with your class mappings for your embeddings where the first column is the label and the second column is the class.",
         action="store"
 )
     classify.add_argument(
@@ -1853,9 +2023,57 @@ def return_parser():
 
     classify.add_argument(
         "--batch_size",
-        help="Sets batch_size for embedding with ESM1v when using EpHod.",
+        help="EpHod: Sets batch_size for embedding with ESM1v.",
         action="store",
         default=1
+)
+
+    classify.add_argument(
+        "--xg_gamma",
+        help="XGBoost: sets gamma for XGBoost, which is a hyperparameter that sets 'Minimum loss reduction required to make a further partition on a leaf node of the tree.'",
+        action="store",
+        default=0.4
+)
+
+    classify.add_argument(
+        "--xg_lr",
+        help="XGBoost: Sets the learning rate for XGBoost",
+        action="store",
+        default=0.2
+)
+
+    classify.add_argument(
+        "--xg_max_depth",
+        help="XGBoost: Sets the maximum tree depth",
+        action="store",
+        default=8
+)
+
+
+    classify.add_argument(
+        "--xg_reg_alpha",
+        help="XGBoost: L1 regularization term on weights",
+        action="store",
+        default=0.8
+)
+
+    classify.add_argument(
+        "--xg_reg_lambda",
+        help="XGBoost: L2 regularization term on weights",
+        action="store",
+        default=0.1
+)
+    classify.add_argument(
+        "--if_contamination",
+        help="iForest: The amount of outliers in the data. Default is automatically determined, but you can set it between (0 , 0.5])",
+        action="store",
+        default='auto'
+)
+    classify.add_argument(
+        "--n_estimators",
+        help="XGBoost/iForest: Number of boosting rounds",
+        action="store",
+        default=115
 )
 ##############################################################################################################
     
@@ -1978,6 +2196,29 @@ def return_parser():
     #     type=int,
     #     default=100
     #     )
+
 ##############################################################################################################
+
+    utils = subparsers.add_parser('utils', help='Various utilities')
+
+    utils.add_argument(
+        "tool",
+        help="Pepare a csv for use with the classify command. Takes a directory or text file with list of paths for fasta files. Each file will be a unique class, so if your directory contains 5 fasta files, there will be 5 classes in the output key csv.",
+        choices = ['prepare_class_key']
+)
+
+    utils.add_argument(
+        "--dir",
+        help="Directory to be used for creating a class key csv for classification.",
+        action="store",
+)
+    utils.add_argument(
+        "--fasta_paths_txt",
+        help="Text file with absolute paths of fasta files to be used for creating the class key. Each unique path will be treated as a unique class, and all the sequences in that file will be in the same class.",
+        action="store",
+)
+    
+##############################################################################################################
+
 
     return parser
