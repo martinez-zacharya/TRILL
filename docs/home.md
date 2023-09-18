@@ -29,19 +29,14 @@ TRILL (**TR**aining and **I**nference using the **L**anguage of **L**ife) is a s
 
 
 ## Set-Up
-1. I recommend using a virtual environment with conda. If you don't have conda installed, follow these steps
+1. I recommend using micromamba or mamba. If you don't have mamba installed, use this command
 ```shell
-wget https://repo.anaconda.com/miniconda/Miniconda3-latest-Linux-x86_64.sh
-sh ./Miniconda3-latest-Linux-x86_64.sh
+"${SHELL}" <(curl -L micro.mamba.pm/install.sh)
 ```
-2. Once conda is set up, create a new environment with
+2. Once micromamba is set up, create a new environment with
 ```shell
-conda create -n TRILL python=3.10 ; conda activate TRILL
-conda install mamba -c conda-forge
-mamba install pytorch==1.13.1 pytorch-cuda=11.7 -c pytorch -c nvidia
-mamba install -c conda-forge openbabel smina fpocket
-mamba install -c conda-forge -c bioconda foldseek
-pip install pyg-lib torch-scatter torch-sparse torch-cluster torch-spline-conv torch-geometric -f https://data.pyg.org/whl/torch-1.13.1+cu117.html
+micromamba create -n TRILL python=3.10 ; micromamba activate TRILL
+micromamba install pytorch==1.13.1 pytorch-cuda=11.7 -c pytorch -c nvidia -c conda-forge openbabel smina fpocket -c bioconda foldseek -c pyg pyg=2.3.1=py310_torch_1.13.0_cu117 pytorch-cluster=1.6.1=py310_torch_1.13.0_cu117 pytorch-sparse=0.6.17=py310_torch_1.13.0_cu117 pytorch-scatter=2.1.1=py310_torch_1.13.0_cu117
 ```
 3. Next, simply install TRILL!
 ```shell
