@@ -51,6 +51,9 @@ chardet = "^5.1.0"
 cchardet = "^2.1.7"
 xgboost = "^1.7.5"
 skops = "^0.6.0"
+lightdock = "^0.9.4"
+vina = "^1.2.5"
+biobb_vs = "^4.1.1"
 
 
 [tool.poetry.scripts]

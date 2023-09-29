@@ -36,7 +36,7 @@ TRILL (**TR**aining and **I**nference using the **L**anguage of **L**ife) is a s
 2. Once micromamba is set up, create a new environment with
 ```shell
 micromamba create -n TRILL python=3.10 ; micromamba activate TRILL
-micromamba install pytorch==1.13.1 pytorch-cuda=11.7 -c pytorch -c nvidia -c conda-forge openbabel smina fpocket -c bioconda foldseek -c pyg pyg=2.3.1=py310_torch_1.13.0_cu117 pytorch-cluster=1.6.1=py310_torch_1.13.0_cu117 pytorch-sparse=0.6.17=py310_torch_1.13.0_cu117 pytorch-scatter=2.1.1=py310_torch_1.13.0_cu117
+micromamba install pytorch==1.13.1 pytorch-cuda=11.7 -c pytorch -c nvidia -c conda-forge openmm swig pdbfixer openbabel smina fpocket -c bioconda foldseek -c pyg pyg=2.3.1=py310_torch_1.13.0_cu117 pytorch-cluster=1.6.1=py310_torch_1.13.0_cu117 pytorch-sparse=0.6.17=py310_torch_1.13.0_cu117 pytorch-scatter=2.1.1=py310_torch_1.13.0_cu117
 ```
 3. Next, simply install TRILL!
 ```shell

@@ -979,7 +979,6 @@ def main(args):
             cwd_files = os.listdir(args.outdir)
             pt_files = [file for file in cwd_files if 'predictions_' in file]
             for file in pt_files:
-                print(file)
                 os.remove(os.path.join(args.outdir, file))
 
     
