@@ -43,6 +43,8 @@ class ESM(pl.LightningModule):
         else:
             self.strat = None
         self.sample_seqs = []
+        self.per_AA = args.per_AA
+        self.avg = args.avg
  
 
     def training_step(self, batch, batch_idx):
@@ -70,15 +72,19 @@ class ESM(pl.LightningModule):
         pred = self.esm(toks, repr_layers=self.repr_layers, return_contacts=False)
         representations = {layer: t.to(device="cpu") for layer, t in pred["representations"].items()}
         rep_numpy = representations[self.repr_layers[0]].cpu().detach().numpy()
-        reps = []
+        aa_reps = []
+        avg_reps = []
         for i in range(len(rep_numpy)):
+            if self.avg:
             # self.reps.append(tuple([rep_numpy[i].mean(0), labels[i]]))
-            reps.append(tuple([rep_numpy[i].mean(0), labels[i]]))
+                avg_reps.append(tuple([rep_numpy[i].mean(0), labels[i]]))
+            if self.per_AA:
+                aa_reps.append(tuple([rep_numpy[i], labels[i]]))
         # newdf = pd.DataFrame(reps, columns = ['Embeddings', 'Label'])
         # finaldf = newdf['Embeddings'].apply(pd.Series)
         # finaldf['Label'] = newdf['Label']
         # return finaldf
-        return reps
+        return aa_reps, avg_reps
     
 class ProtGPT2(pl.LightningModule):
     def __init__(self, args):
@@ -504,6 +510,12 @@ class ProtT5(pl.LightningModule):
             self.model = T5EncoderModel.from_pretrained('Rostlab/prot_t5_xl_half_uniref50-enc', device_map=device_map)
         self.tokenizer = T5Tokenizer.from_pretrained('Rostlab/prot_t5_xl_half_uniref50-enc', do_lower_case=False)
         self.reps = []
+        if args.command == 'embed':
+            self.per_AA = args.per_AA
+            self.avg = args.avg
+        else:
+            self.avg = True
+            self.per_AA = False
 
 
     def training_step(self, batch, batch_idx):
@@ -516,21 +528,14 @@ class ProtT5(pl.LightningModule):
         return [optimizer], [lr_scheduler]
     
     def predict_step(self, batch, batch_idx):
+        aa_reps = []
+        avg_reps = []
         label, seqs = batch
-        if len(seqs) == 1:
-            modded_seqs = ''
-            for seq in seqs[0]:
-                modded_seqs += seq
-                modded_seqs += ' '
-            modded_seqs = (modded_seqs[:-1],)
-        else:
-            modded_seqs = []
-            for seq in seqs:
-                temp_prot = ''
-                for aa in seq:
-                    temp_prot += aa
-                    temp_prot += ' '
-                modded_seqs.append(temp_prot)
+        
+        modded_seqs = [' '.join(seq) for seq in seqs]
+
+        # Get lengths of each sequence to slice embeddings later
+        seq_lengths = [len(seq) for seq in seqs]
 
         token_encoding = self.tokenizer.batch_encode_plus(modded_seqs, 
                 add_special_tokens=True, padding='longest')
@@ -541,14 +546,20 @@ class ProtT5(pl.LightningModule):
             embedding_repr = self.model(input_ids.cuda(), attention_mask=attention_mask.cuda())
         else:
             embedding_repr = self.model(input_ids, attention_mask=attention_mask)
-        emb = embedding_repr.last_hidden_state.squeeze(0)
-        if len(seqs) == 1:
-            protein_emb = emb.mean(dim=0)
-            return tuple((protein_emb, label[0]))
-        else:
-            protein_emb = emb.mean(dim=1)
-            return list(zip(protein_emb, label))
+            
+        embs = embedding_repr.last_hidden_state
 
+        for i, (emb, lab) in enumerate(zip(embs, label)):
+            actual_len = seq_lengths[i]  # Length of the actual sequence without padding
+
+            # Remove padding from embeddings
+            emb = emb[:actual_len]
+            if self.avg:
+                avg_reps.append((emb.mean(dim=0), lab))
+            if self.per_AA:
+                aa_reps.append((emb, lab))
+
+        return aa_reps, avg_reps
 
     
 
@@ -643,6 +654,8 @@ class ProstT5(pl.LightningModule):
         super().__init__()
         self.command = args.command
         if self.command == 'embed':
+            self.per_AA = args.per_AA
+            self.avg = args.avg
             if int(args.GPUs) > 1:
                 self.model = T5EncoderModel.from_pretrained("Rostlab/ProstT5", device_map="auto")
             else:
@@ -655,6 +668,7 @@ class ProstT5(pl.LightningModule):
         self.tokenizer = T5Tokenizer.from_pretrained('Rostlab/ProstT5', do_lower_case=False)
         if int(args.GPUs) >= 1:
             self.model = self.model.half()
+
     
     def training_step(self, batch, batch_idx):
         self.tokenizer.pad_token = self.tokenizer.eos_token
@@ -692,23 +706,38 @@ class ProstT5(pl.LightningModule):
     
     def predict_step(self, batch, batch_idx):
         if self.command== 'embed':
+            aa_reps = []
+            avg_reps = []
             label, _ = batch
+            seq_lengths = [len(seq) for seq in batch[1]]
             seqs = [" ".join(list(re.sub(r"[UZOB]", "X", sequence))) for sequence in batch[1]]
             seqs = [ "<AA2fold>" + " " + s if s.isupper() else "<fold2AA>" + " " + s
                         for s in seqs
                         ]
+            
             ids = self.tokenizer.batch_encode_plus(seqs, add_special_tokens=True, padding="longest",return_tensors='pt')
             if next(self.model.parameters()).is_cuda:
                 embedding_repr = self.model(ids.input_ids.cuda(), attention_mask=ids.attention_mask.cuda())
             else:
                 embedding_repr = self.model(ids.input_ids, attention_mask=ids.attention_mask)
-            emb = embedding_repr.last_hidden_state.squeeze(0)
-            if len(seqs) == 1:
-                protein_emb = emb.mean(dim=0)
-                return tuple((protein_emb, label[0]))
-            else:
-                protein_emb = emb.mean(dim=1)
-                return list(zip(protein_emb, label))
+            embs = embedding_repr.last_hidden_state.squeeze(0)
+            for i, (emb, lab) in enumerate(zip(embs, label)):
+                actual_len = seq_lengths[i]  # Length of the actual sequence without padding
+
+                # Remove padding from embeddings
+                emb = emb[:actual_len]
+                if self.avg:
+                    avg_reps.append((emb.mean(dim=0), lab))
+                if self.per_AA:
+                    aa_reps.append((emb, lab))
+
+            return aa_reps, avg_reps
+            # if len(seqs) == 1:
+            #     protein_emb = emb.mean(dim=0)
+            #     return tuple((protein_emb, label[0]))
+            # else:
+            #     protein_emb = emb.mean(dim=1)
+            #     return list(zip(protein_emb, label))
         elif self.command == 'fold':
             label, _ = batch
             seqs = [" ".join(list(re.sub(r"[UZOB]", "X", sequence))) for sequence in batch[1]]

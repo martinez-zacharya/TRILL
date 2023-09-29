@@ -17,26 +17,24 @@ import pandas as pd
 import requests
 from pytorch_lightning.loggers import TensorBoardLogger
 from pytorch_lightning.profilers import PyTorchProfiler
-from pytorch_lightning.strategies import DeepSpeedStrategy
-import yaml
 import shutil
-import re
 from sklearn.metrics import precision_recall_fscore_support
 from tqdm import tqdm
 import numpy as np
 from rdkit import Chem
-from fairscale.nn.data_parallel import FullyShardedDataParallel as FSDP
-from fairscale.nn.wrap import enable_wrap, wrap
+# from fairscale.nn.data_parallel import FullyShardedDataParallel as FSDP
+# from fairscale.nn.wrap import enable_wrap, wrap
 import builtins
 from pytorch_lightning.utilities.deepspeed import convert_zero_checkpoint_to_fp32_state_dict
 from trill.utils.lightning_models import ESM, ProtGPT2, CustomWriter, ESM_Gibbs, ProtT5, ZymCTRL, ProstT5, Custom3DiDataset
 from trill.utils.update_weights import weights_update
-from trill.utils.dock_utils import perform_docking
+from trill.utils.dock_utils import perform_docking, fixer_of_pdbs, write_docking_results_to_file
+from trill.utils.simulation_utils import relax_structure, run_simulation
 from transformers import AutoTokenizer, EsmForProteinFolding, set_seed
 from pytorch_lightning.callbacks import ModelCheckpoint
 # from trill.utils.strategy_tuner import tune_esm_inference, tune_esm_train
 from trill.utils.protgpt2_utils import ProtGPT2_wrangle
-from trill.utils.esm_utils import ESM_IF1_Wrangle, ESM_IF1, convert_outputs_to_pdb
+from trill.utils.esm_utils import ESM_IF1_Wrangle, ESM_IF1, convert_outputs_to_pdb, parse_and_save_all_predictions
 from trill.utils.visualize import reduce_dims, viz
 from trill.utils.MLP import MLP_C2H2, inference_epoch
 from sklearn.ensemble import IsolationForest
@@ -119,12 +117,12 @@ def main(args):
         default = '.'
 )
 
-#     parser.add_argument(
-#         "--n_workers",
-#         help="Change number of CPU cores/'workers' TRILL uses",
-#         action="store",
-#         default = 1
-# )
+    parser.add_argument(
+        "--n_workers",
+        help="Change number of CPU cores/'workers' TRILL uses",
+        action="store",
+        default = 1
+)
 
 
 ##############################################################################################################
@@ -158,6 +156,18 @@ def main(args):
         action="store",
         default = False,
         dest="finetuned",
+)
+    embed.add_argument(
+        "--per_AA",
+        help="Add this flag to return the per amino acid representations.",
+        action="store_true",
+        default = False,
+)
+    embed.add_argument(
+        "--avg",
+        help="Add this flag to return the average, whole sequence representation.",
+        action="store_true",
+        default = False,
 )
 ##############################################################################################################
 
@@ -577,18 +587,149 @@ def main(args):
         action="store",
         default="PCA"
         )
-    visualize.add_argument("--group", 
+    visualize.add_argument("--key", 
         help="Grouping for color scheme of output scatterplot. Choose this option if the labels in your embedding csv are grouped by the last pattern separated by an underscore. For example, 'Protein1_group1', 'Protein2_group1', 'Protein3_group2'. By default, all points are treated as same group.", 
-        action="store_true",
+        action="store",
         default=False
         )
     
 ##############################################################################################################
+    simulate = subparsers.add_parser('simulate', help='Use MD to simulate proteins, small-molecules, etc.')
+
+    simulate.add_argument(
+        "receptor",
+        help="Receptor of interest to be simulated.",
+        action="store",
+)
+
+    simulate.add_argument("--ligand", 
+        help="Ligand of interest to be simulated with input receptor", 
+        action="store",
+        )
+    
+    simulate.add_argument(
+        "--constraints",
+        help="Specifies which bonds and angles should be implemented with constraints. Allowed values are None, HBonds, AllBonds, or HAngles.",
+        choices=["None", "HBonds", "AllBonds", "HAngles"],
+        default="None",
+        action="store",
+    )
+
+    simulate.add_argument(
+        "--rigidWater",
+        help="If true, water molecules will be fully rigid regardless of the value passed for the constraints argument.",
+        default=None,
+        action="store_true",
+    )
+
+    simulate.add_argument(
+        '--forcefield', 
+        type=str, 
+        default='amber14-all.xml', 
+        help='Main force field to use'
+    )
+    
+    simulate.add_argument(
+        '--solvent', 
+        type=str, 
+        default='amber14/tip3pfb.xml', 
+        help='Solvent model to use'
+    )
+    simulate.add_argument(
+        '--solvate', 
+        default=False, 
+        help='Add to solvate your simulation',
+        action='store_true'
+    )
+
+    simulate.add_argument(
+        '--step_size',
+        help='Step size in picoseconds. Default is 0.002',
+        type=float,
+        default=0.002, 
+        action="store",
+    )
+    simulate.add_argument(
+        '--num_steps',
+        type=int,
+        default=5000,
+        help='Number of simulation steps'
+    )
+
+    simulate.add_argument(
+        '--reporting_interval',
+        type=int,
+        default=1000,
+        help='Reporting interval for simulation'
+    )
+
+    simulate.add_argument(
+        '--output_traj_dcd',
+        type=str,
+        default='trajectory.dcd',
+        help='Output trajectory DCD file'
+    )
+
+    simulate.add_argument(
+        '--apply-harmonic-force',
+        help='Whether to apply a harmonic force to pull the molecule.',
+        type=bool,
+        default=False,
+        action="store",
+    )
+
+    simulate.add_argument(
+        '--force-constant',
+        help='Force constant for the harmonic force in kJ/mol/nm^2.',
+        type=float,
+        default=None,
+        action="store",
+    )
+
+    simulate.add_argument(
+        '--z0',
+        help='The z-coordinate to pull towards in nm.',
+        type=float,
+        default=None,
+        action="store",
+    )
+
+    simulate.add_argument(
+        '--molecule-atom-indices',
+        help='Comma-separated list of atom indices to which the harmonic force will be applied.',
+        type=str,
+        default="0,1,2",  # Replace with your default indices
+        action="store",
+    )
+
+    simulate.add_argument(
+        '--equilibration_steps',
+        help='Steps you want to take for NVT and NPT equilibration. Each step is 0.002 picoseconds',
+        type=int,
+        default=300, 
+        action="store",
+    )
+
+    simulate.add_argument(
+        '--periodic_box',
+        help='Give, in nm, one of the dimensions to build the periodic boundary.',
+        type=int,
+        default=10, 
+        action="store",
+    )
+    simulate.add_argument(
+        '--just_relax',
+        help='Just relaxes the input structure(s) and outputs the fixed, relaxed structure.',
+        action="store_true",
+        default=False,
+    )
+
+##############################################################################################################
     dock = subparsers.add_parser('dock', help='Dock proteins and small molecule ligands with DiffDock or Smina')
 
     dock.add_argument("algorithm",
-        help="Choose between DiffDock and Smina. Note that while Smina can dock small-molecule and protein ligands, DiffDock can only do small-molecules.",
-        choices = ['DiffDock', 'Smina']
+        help="Choose between DiffDock and Smina. Note that while Smina can dock small-molecule and protein ligands, DiffDock and Vina can only do small-molecules.",
+        choices = ['DiffDock', 'Vina', 'Smina', 'LightDock']
     )
 
     dock.add_argument("protein", 
@@ -639,27 +780,63 @@ def main(args):
         action="store",
         default=None
         )
-    
-    # dock.add_argument("--anm", 
-    #     help="LightDock: If selected, backbone flexibility is modeled using Anisotropic Network Model (via ProDy)", 
-    #     action="store_true",
-    #     default=False
-    #     )
-    
-    # dock.add_argument("--swarms", 
-    #     help="LightDock: The number of swarms of the simulations, if not provided by the user, automatically calculated depending on receptor surface area and shape", 
-    #     action="store",
-    #     type=int,
-    #     default=False
-    #     )
-    
-    # dock.add_argument("--sim_steps", 
-    #     help="LightDock: The number of steps of the simulation", 
-    #     action="store",
-    #     type=int,
-    #     default=100
-    #     )
+    dock.add_argument("--min_radius", 
+        help="Smina/Fpocket: Minimum radius of alpha spheres in a pocket. Default is 3Å.", 
+        type=float,
+        action="store",
+        default=3.0
+        )
 
+    dock.add_argument("--max_radius", 
+        help="Smina/Fpocket: Maximum radius of alpha spheres in a pocket. Default is 6Å.", 
+        type=float,
+        action="store",
+        default=6.0
+        )
+
+    dock.add_argument("--min_alpha_spheres", 
+        help="Smina/Fpocket: Minimum number of alpha spheres a pocket must contain to be considered. Default is 35.", 
+        type=int,
+        action="store",
+        default=35
+        )
+    
+    dock.add_argument("--exhaustiveness", 
+        help="Smina/Vina: Change computational effort.", 
+        type=int,
+        action="store",
+        default=8
+        )
+    
+    dock.add_argument("--blind", 
+        help="Smina/Vina: Perform blind docking and skip binding pocket prediction with fpocket", 
+        action="store_true",
+        default=False
+        )
+    dock.add_argument("--anm", 
+        help="LightDock: If selected, backbone flexibility is modeled using Anisotropic Network Model (via ProDy)", 
+        action="store_true",
+        default=False
+        )
+    
+    dock.add_argument("--swarms", 
+        help="LightDock: The number of swarms of the simulations, if not provided by the user, automatically calculated depending on receptor surface area and shape", 
+        action="store",
+        type=int,
+        default=100
+        )
+    
+    dock.add_argument("--sim_steps", 
+        help="LightDock: The number of steps of the simulation", 
+        action="store",
+        type=int,
+        default=100
+        )
+    dock.add_argument("--restraints", 
+        help="LightDock: If restraints_file is provided, residue restraints will be considered during the setup and the simulation", 
+        action="store",
+        default=None
+        )
 ##############################################################################################################
 
     utils = subparsers.add_parser('utils', help='Various utilities')
@@ -672,12 +849,19 @@ def main(args):
 
     utils.add_argument(
         "--dir",
-        help="Directory to be used for creating a class key csv for classification.",
+        help="Directory to be used for creating a class key csv for classification or for bulk-relaxation of protein structures.",
         action="store",
 )
+
     utils.add_argument(
         "--fasta_paths_txt",
         help="Text file with absolute paths of fasta files to be used for creating the class key. Each unique path will be treated as a unique class, and all the sequences in that file will be in the same class.",
+        action="store",
+)
+
+    utils.add_argument(
+        "--structure",
+        help="Input a single protein structure in the PDB format.",
         action="store",
 )
     
@@ -694,6 +878,9 @@ def main(args):
 
     pl.seed_everything(int(args.RNG_seed))
     set_seed(int(args.RNG_seed))
+
+    if not os.path.exists(args.outdir):
+        os.mkdir(args.outdir)
     
     
     torch.backends.cuda.matmul.allow_tf32 = True
@@ -725,7 +912,7 @@ def main(args):
         return []
     if args.command == 'visualize':
         reduced_df, incsv = reduce_dims(args.name, args.embeddings, args.method)
-        layout = viz(reduced_df, args.name, args.group)
+        layout = viz(reduced_df, args)
         bokeh.io.output_file(filename=os.path.join(args.outdir, f'{args.name}_{args.method}_{incsv}.html'), title=args.name) 
         bokeh.io.save(layout, filename=os.path.join(args.outdir, f'{args.name}_{args.method}_{incsv}.html'), title = args.name)
 
@@ -735,6 +922,9 @@ def main(args):
         if args.query.endswith(('.fasta', '.faa', '.fa')) == False:
             raise Exception(f'Input query file - {args.query} is not a valid file format.\
             File needs to be a protein fasta (.fa, .fasta, .faa)')
+        if not args.avg and not args.per_AA:
+                print('You need to select whether you want the average sequence embeddings or the per AA embeddings, or both!')
+                raise RuntimeError
         if args.model == "ProtT5-XL":
             model = ProtT5(args)
             data = esm.data.FastaBatchedDataset.from_file(args.query)
@@ -747,36 +937,8 @@ def main(args):
             reps = trainer.predict(model, dataloader)
             cwd_files = os.listdir(args.outdir)
             pt_files = [file for file in cwd_files if 'predictions_' in file]
-            pred_embeddings = []
-            if args.batch_size == 1 or int(args.GPUs) > 1:
-                for pt in pt_files:
-                    preds = torch.load(os.path.join(args.outdir, pt))
-                    for pred in preds:
-                        for sublist in pred:
-                            if len(sublist) == 2 and args.batch_size == 1:
-                                pred_embeddings.append(tuple([sublist[0], sublist[1]]))
-                            else:
-                                processed_sublists = process_sublist(sublist)
-                                for sub in processed_sublists:
+            parse_and_save_all_predictions(args)
 
-                                    pred_embeddings.append(tuple([sub[0], sub[1]]))
-                embedding_df = pd.DataFrame(pred_embeddings, columns = ['Embeddings', 'Label'])
-                finaldf = embedding_df['Embeddings'].apply(pd.Series)
-                finaldf['Label'] = embedding_df['Label']
-            else:
-                embs = [] 
-                for rep in reps:
-                    inner_embeddings = [item[0].numpy() for item in rep] 
-                    inner_labels = [item[1] for item in rep]
-                    for emb_lab in zip(inner_embeddings, inner_labels):
-                        embs.append(emb_lab)
-                embedding_df = pd.DataFrame(embs, columns = ['Embeddings', 'Label'])
-                finaldf = embedding_df['Embeddings'].apply(pd.Series)
-                finaldf['Label'] = embedding_df['Label']
-
-
-            outname = os.path.join(args.outdir, f'{args.name}_{args.model}.csv')
-            finaldf.to_csv(outname, index = False)
             for file in pt_files:
                 os.remove(os.path.join(args.outdir,file))
 
@@ -790,39 +952,10 @@ def main(args):
             else:
                 trainer = pl.Trainer(enable_checkpointing=False, devices=int(args.GPUs), callbacks = [pred_writer], accelerator='gpu', logger=logger, num_nodes=int(args.nodes))
 
-            reps = trainer.predict(model, dataloader, args)
+            reps = trainer.predict(model, dataloader)
             cwd_files = os.listdir(args.outdir)
             pt_files = [file for file in cwd_files if 'predictions_' in file]
-            pred_embeddings = []
-            if args.batch_size == 1 or int(args.GPUs) > 1:
-                for pt in pt_files:
-                    preds = torch.load(os.path.join(args.outdir, pt))
-                    for pred in preds:
-                        for sublist in pred:
-                            if len(sublist) == 2 and args.batch_size == 1:
-                                pred_embeddings.append(tuple([sublist[0], sublist[1]]))
-                            else:
-                                processed_sublists = process_sublist(sublist)
-                                for sub in processed_sublists:
-
-                                    pred_embeddings.append(tuple([sub[0], sub[1]]))
-                embedding_df = pd.DataFrame(pred_embeddings, columns = ['Embeddings', 'Label'])
-                finaldf = embedding_df['Embeddings'].apply(pd.Series)
-                finaldf['Label'] = embedding_df['Label']
-            else:
-                embs = [] 
-                for rep in reps:
-                    inner_embeddings = [item[0].numpy() for item in rep] 
-                    inner_labels = [item[1] for item in rep]
-                    for emb_lab in zip(inner_embeddings, inner_labels):
-                        embs.append(emb_lab)
-                embedding_df = pd.DataFrame(embs, columns = ['Embeddings', 'Label'])
-                finaldf = embedding_df['Embeddings'].apply(pd.Series)
-                finaldf['Label'] = embedding_df['Label']
-
-
-            outname = os.path.join(args.outdir, f'{args.name}_{args.model}.csv')
-            finaldf.to_csv(outname, index = False)
+            parse_and_save_all_predictions(args)
             for file in pt_files:
                 os.remove(os.path.join(args.outdir,file))
             
@@ -839,22 +972,14 @@ def main(args):
             if args.finetuned:
                 model = weights_update(model = ESM(eval(model_import_name), 0.0001, args), checkpoint = torch.load(args.finetuned))
             trainer.predict(model, dataloader)
+
+            parse_and_save_all_predictions(args)
+
+
             cwd_files = os.listdir(args.outdir)
             pt_files = [file for file in cwd_files if 'predictions_' in file]
-            pred_embeddings = []
-            for pt in pt_files:
-                preds = torch.load(os.path.join(args.outdir, pt))
-                for pred in preds:
-                    for sublist in pred:
-                        processed_sublists = process_sublist(sublist)
-                        for item in processed_sublists:
-                            pred_embeddings.append(tuple(item))
-            embedding_df = pd.DataFrame(pred_embeddings, columns=['Embeddings', 'Label'])
-            finaldf = embedding_df['Embeddings'].apply(pd.Series)
-            finaldf['Label'] = embedding_df['Label']
-            outname = os.path.join(args.outdir, f'{args.name}_{args.model}.csv')
-            finaldf.to_csv(outname, index=False)
             for file in pt_files:
+                print(file)
                 os.remove(os.path.join(args.outdir, file))
 
     
@@ -1242,8 +1367,27 @@ def main(args):
                 os.remove(os.path.join(args.outdir,file))
 
     elif args.command == 'dock':
+        ligands = []
+        if args.ligand.endswith('.txt'):
+            with open(args.ligand, 'r') as infile:
+                for path in infile:
+                    path = path.strip()
+                    if not path:
+                        continue
+                    ligands.append(path)
+        else:
+            ligands.append(args.ligand)
+        
+        protein_name = os.path.splitext(os.path.basename(args.protein))[0]
 
-        if args.algorithm == 'DiffDock':
+
+        if args.algorithm == 'Smina' or args.algorithm == 'Vina':
+            docking_results = perform_docking(args, ligands)
+            write_docking_results_to_file(docking_results, args, protein_name, args.algorithm)
+        elif args.algorithm == 'LightDock':
+            perform_docking(args, ligands)
+            print(f"LightDock run complete! Output files are in {args.outdir}")
+        elif args.algorithm == 'DiffDock':
             if not os.path.exists(os.path.join(cache_dir, 'DiffDock')):
                 print('Cloning forked DiffDock')
                 os.makedirs(os.path.join(cache_dir, 'DiffDock'))
@@ -1258,37 +1402,24 @@ def main(args):
             from inference import run_diffdock
             run_diffdock(args, diffdock_root)
 
-            # out_dir = os.path.join(args.outdir, f'{args.name}_DiffDock_out')
-            # rec = args.protein.split('.')[-2]
-            # out_rec = rec.split('/')[-1]
-            # convert_rec = f'obabel {rec}.pdb -O {out_rec}.pdbqt'.split(' ')
-            # subprocess.run(convert_rec, stdout=subprocess.DEVNULL)
-            # for file in os.listdir(out_dir):
-            #     if 'confidence' in file:
-            #         file_pre = file.split('.sdf')[-2]
-            #         convert_lig = f'obabel {out_dir}/{file} -O {file_pre}.pdbqt'.split(' ')
-            #         subprocess.run(convert_lig, stdout=subprocess.DEVNULL)
+                # out_dir = os.path.join(args.outdir, f'{args.name}_DiffDock_out')
+                # rec = args.protein.split('.')[-2]
+                # out_rec = rec.split('/')[-1]
+                # convert_rec = f'obabel {rec}.pdb -O {out_rec}.pdbqt'.split(' ')
+                # subprocess.run(convert_rec, stdout=subprocess.DEVNULL)
+                # for file in os.listdir(out_dir):
+                #     if 'confidence' in file:
+                #         file_pre = file.split('.sdf')[-2]
+                #         convert_lig = f'obabel {out_dir}/{file} -O {file_pre}.pdbqt'.split(' ')
+                #         subprocess.run(convert_lig, stdout=subprocess.DEVNULL)
 
-            #         smina_cmd = f'smina --score_only -r {out_rec}.pdbqt -l {file_pre}.pdbqt'.split(' ')
-            #         result = subprocess.run(smina_cmd, stdout=subprocess.PIPE)
+                #         smina_cmd = f'smina --score_only -r {out_rec}.pdbqt -l {file_pre}.pdbqt'.split(' ')
+                #         result = subprocess.run(smina_cmd, stdout=subprocess.PIPE)
 
-            #         result = re.search("Affinity: \w+.\w+", result.stdout.decode('utf-8'))
-            #         affinity = result.group()
-            #         affinity = re.search('\d+\.\d+', affinity).group()
+                #         result = re.search("Affinity: \w+.\w+", result.stdout.decode('utf-8'))
+                #         affinity = result.group()
+                #         affinity = re.search('\d+\.\d+', affinity).group()
 
-            
-        elif args.algorithm == 'Smina':
-            docking_results = perform_docking(args)
-            protein_file = os.path.abspath(args.protein)
-            protein_name = os.path.basename(protein_file).split('.')[0]
-
-            with open(os.path.join(args.outdir, f'{args.name}_smina.out'), 'w+') as out:
-                for num, res in docking_results:
-                    res_out = res.decode('utf-8')
-                    out.write(f'{protein_name}_pocket{num}: \n')
-                    out.write(res_out)
-                    out.write('\n')
-                    out.write('-------------------------------------------------------------------------------------------------- \n')
 
     elif args.command == 'classify':
         if args.classifier == 'TemStaPro':
@@ -1301,16 +1432,7 @@ def main(args):
                 else:
                     trainer = pl.Trainer(enable_checkpointing=False, logger=logger, num_nodes=int(args.nodes))
                 reps = trainer.predict(model, dataloader)
-                if args.save_emb:
-                    emb_4export = []
-                    for rep in reps:
-                        intermed = []
-                        for i in range(len(rep[0])):
-                            intermed.append(rep[0][i].cpu().numpy())
-                        intermed.append(rep[1])
-                        emb_4export.append(intermed)
-                    emb_df = pd.DataFrame(emb_4export)
-                    emb_df.to_csv(os.path.join(args.outdir, f'{args.name}_ProtT5-XL_embeddings.csv'), index=False)
+                parse_and_save_all_predictions(args)
             if not os.path.exists(os.path.join(cache_dir, 'TemStaPro_models')):
                 temstapro_models = Repo.clone_from('https://github.com/martinez-zacharya/TemStaPro_models', os.path.join(cache_dir, 'TemStaPro_models'))
                 temstapro_models_root = temstapro_models.git.rev_parse("--show-toplevel")
@@ -1320,15 +1442,15 @@ def main(args):
             THRESHOLDS = ["40", "45", "50", "55", "60", "65"]
             SEEDS = ["41", "42", "43", "44", "45"]
             if not args.preComputed_Embs:
-                emb_loader = torch.utils.data.DataLoader(reps, shuffle = False, batch_size = 1, num_workers = 0)
+                emb_df = pd.read_csv(os.path.join(args.outdir, f'{args.name}_ProtT5_AVG.csv'))
             else:
                 emb_df = pd.read_csv(args.preComputed_Embs)
-                embs = emb_df[emb_df.columns[:-1]].applymap(lambda x: torch.tensor(x)).values.tolist()
-                labels = emb_df.iloc[:,-1]
-                list_of_tensors = [torch.tensor(l) for l in embs]
-                input_data = list(zip(list_of_tensors, labels))
-                custom_dataset = CustomDataset(input_data)
-                emb_loader = torch.utils.data.DataLoader(custom_dataset, shuffle=False, batch_size=1, num_workers = 0)
+            embs = emb_df[emb_df.columns[:-1]].applymap(lambda x: torch.tensor(x)).values.tolist()
+            labels = emb_df.iloc[:,-1]
+            list_of_tensors = [torch.tensor(l) for l in embs]
+            input_data = list(zip(list_of_tensors, labels))
+            custom_dataset = CustomDataset(input_data)
+            emb_loader = torch.utils.data.DataLoader(custom_dataset, shuffle=False, batch_size=1, num_workers = 0)
             inferences = {}
             for thresh in THRESHOLDS:
                 threshold_inferences = {}
@@ -1355,8 +1477,9 @@ def main(args):
             inference_df = inference_df.drop(columns='RawLab')
             inference_df = inference_df[['Protein', 'Threshold', 'Mean_Pred', 'Binary_Pred']]
             inference_df.to_csv(os.path.join(args.outdir, f'{args.name}_TemStaPro_preds.csv'), index = False)
+            if not args.save_emb:
+                os.remove(os.path.join(args.outdir, f'{args.name}_ProtT5_AVG.csv'))
 
-        
         elif args.classifier == 'EpHod':
             logging.getLogger("pytorch_lightning.utilities.rank_zero").addHandler(logging.NullHandler())
             logging.getLogger("pytorch_lightning.accelerators.cuda").addHandler(logging.NullHandler())
@@ -1580,6 +1703,23 @@ def main(args):
     elif args.command == 'utils':
         if args.tool == 'prepare_class_key':
             generate_class_key_csv(args)
+        # elif args.tool == 'relax':
+        #     fixed_pdb_files = fixer_of_pdbs(args)
+        #     relax_structure(args, fixed_pdb_files)
+        
+    elif args.command == 'simulate':
+        if args.just_relax:
+            fixed_pdb_files = fixer_of_pdbs(args)
+            relax_structure(args, fixed_pdb_files)
+        else:
+            fixed_pdb_files = fixer_of_pdbs(args)
+            
+            args.output_traj_dcd = os.path.join(args.outdir, args.output_traj_dcd)
+            
+            # Run the simulation on the combined PDB file
+            args.protein = fixed_pdb_files[0]
+            args.ligand = fixed_pdb_files[1]
+            run_simulation(args, fixed_pdb_files)
 
 
 
@@ -2114,9 +2254,9 @@ def return_parser():
         action="store",
         default="PCA"
         )
-    visualize.add_argument("--group", 
-        help="Grouping for color scheme of output scatterplot. Choose this option if the labels in your embedding csv are grouped by the last pattern separated by an underscore. For example, 'Protein1_group1', 'Protein2_group1', 'Protein3_group2'. By default, all points are treated as same group.", 
-        action="store_true",
+    visualize.add_argument("--key", 
+        help="Input a CSV, with your class mappings for your embeddings where the first column is the label and the second column is the grouping.", 
+        action="store",
         default=False
         )
     
