@@ -6,10 +6,7 @@ HOME
    home
    cmd_main
    viz_example
-   
-These are some benchmarks using the free Tesla T4 GPU on Google Colab. All generative models should be able to work on colab as long as they aren't over 650M parameters. Check back for any updates/improvements!
 
-.. csv-table:: Colab Benchmarks
-   :file: colab_tuned.csv
-   :widths: 50, 30, 30, 20
-   :header-rows: 1
+.. _repo: https://github.com/martinez-zacharya/TRILL
+
+TRILL is under heavy development, I apologize for the mess! Feel free to submit issues, ideas or discussion points on the `repo`_

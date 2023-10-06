@@ -352,7 +352,7 @@ def main(args):
 )
     lang_gen.add_argument(
         "--max_length",
-        help="Max length of proteins generated, defautl is 100",
+        help="Max length of proteins generated, default is 100",
         default=100,
         type=int
 )
@@ -464,11 +464,11 @@ def main(args):
     #     )
 
 ##############################################################################################################
-    classify = subparsers.add_parser('classify', help='Classify proteins based on thermostability predicted through TemStaPro')
+    classify = subparsers.add_parser('classify', help='Classify proteins using either pretrained classifiers or train/test your own.')
 
     classify.add_argument(
         "classifier",
-        help="Predict thermostability using TemStaPro or choose custom to train/use your own XGBoost or Isolation Forest classifier. Note for training XGBoost, you need to submit roughly equal amounts of each class as part of your query.",
+        help="Predict thermostability/optimal enzymatic pH using TemStaPro/EpHod or choose custom to train/use your own XGBoost or Isolation Forest classifier. Note for training XGBoost, you need to submit roughly equal amounts of each class as part of your query.",
         choices = ['TemStaPro', 'EpHod', 'XGBoost', 'iForest']
 )
     classify.add_argument(
@@ -754,7 +754,7 @@ def main(args):
     dock = subparsers.add_parser('dock', help='Perform molecular docking with proteins and ligands. Note that you should relax your protein receptor with Simulate or another method before docking.')
 
     dock.add_argument("algorithm",
-        help="Note that while Smina and LightDock can dock small-molecule and protein ligands, DiffDock and Vina can only do small-molecules.",
+        help="Note that while Smina and LightDock can dock protein ligands, DiffDock and Vina can only do small-molecules.",
         choices = ['DiffDock', 'Vina', 'Smina', 'LightDock']
     )
 
@@ -847,10 +847,10 @@ def main(args):
         )
     
     dock.add_argument("--swarms", 
-        help="LightDock: The number of swarms of the simulations, if not provided by the user, automatically calculated depending on receptor surface area and shape. Default is 100", 
+        help="LightDock: The number of swarms of the simulations, default is 25", 
         action="store",
         type=int,
-        default=100
+        default=25
         )
     
     dock.add_argument("--sim_steps", 
@@ -876,7 +876,7 @@ def main(args):
 
     utils.add_argument(
         "--dir",
-        help="Directory to be used for creating a class key csv for classification or for bulk-relaxation of protein structures.",
+        help="Directory to be used for creating a class key csv for classification.",
         action="store",
 )
 
@@ -1024,13 +1024,14 @@ def main(args):
                 if int(args.GPUs) == 0:
                     trainer = pl.Trainer(profiler=profiler, max_epochs=int(args.epochs), logger = logger, num_nodes = int(args.nodes), enable_checkpointing=False)
                 else:
-                    trainer = pl.Trainer(devices=int(args.GPUs), profiler=profiler, accelerator='gpu', default_root_dir=f'{os.path.join(args.outdir, args.name)}_ckpt', max_epochs=int(args.epochs), logger = logger, num_nodes = int(args.nodes), precision = 16, strategy = args.strategy)
+                    trainer = pl.Trainer(devices=int(args.GPUs), profiler=profiler, accelerator='gpu', default_root_dir=f'{os.path.join(args.outdir, args.name)}_ckpt', max_epochs=int(args.epochs), logger = logger, num_nodes = int(args.nodes), precision = 16, strategy = args.strategy, enable_checkpointing=False)
             trainer.fit(model=model, train_dataloaders = dataloader)
             if 'deepspeed' in str(args.strategy):
                 save_path = os.path.join(os.getcwd(), f"{os.path.join(args.outdir, args.name)}_ckpt/checkpoints/epoch={int(args.epochs) - 1}-step={len_data*int(args.epochs)}.ckpt")
                 output_path = os.path.join(args.outdir, f"{args.name}_ProtGPT2_{args.epochs}.pt")
+                trainer.save_checkpoint(output_path)
                 try:
-                    convert_zero_checkpoint_to_fp32_state_dict(save_path, output_path)
+                    convert_zero_checkpoint_to_fp32_state_dict(output_path, f'{output_path[0:-3]}_fp32.pt')
                 except Exception as e:
                     print(f'Exception {e} has occured on attempted save of your deepspeed trained model. If this has to do with CPU RAM, please try pytorch_lightning.utilities.deepspeedconvert_zero_checkpoint_to_fp32_state_dict(your_checkpoint.ckpt, full_model.pt')
             elif str(args.strategy) in ['fsdp', 'FSDP', 'FullyShardedDataParallel']:
@@ -1053,13 +1054,14 @@ def main(args):
                 if int(args.GPUs) == 0:
                     trainer = pl.Trainer(profiler=profiler, max_epochs=int(args.epochs), logger = logger, num_nodes = int(args.nodes), enable_checkpointing=False)
                 else:
-                    trainer = pl.Trainer(devices=int(args.GPUs), profiler=profiler, accelerator='gpu', default_root_dir=f'{os.path.join(args.outdir, args.name)}_ckpt', max_epochs=int(args.epochs), logger = logger, num_nodes = int(args.nodes), precision = 16, strategy = args.strategy)
+                    trainer = pl.Trainer(devices=int(args.GPUs), profiler=profiler, accelerator='gpu', default_root_dir=f'{os.path.join(args.outdir, args.name)}_ckpt', max_epochs=int(args.epochs), logger = logger, num_nodes = int(args.nodes), precision = 16, strategy = args.strategy, enable_checkpointing=False)
             trainer.fit(model=model, train_dataloaders = dataloader)
             if 'deepspeed' in str(args.strategy):
                 save_path = os.path.join(args.outdir, f"{args.name}_ckpt/checkpoints/epoch={int(args.epochs) - 1}-step={len_data*int(args.epochs)}.ckpt")
                 output_path = os.path.join(args.outdir, f"{args.name}_ZymCTRL_{args.epochs}.pt")
+                trainer.save_checkpoint(output_path)
                 try:
-                    convert_zero_checkpoint_to_fp32_state_dict(save_path, output_path)
+                    convert_zero_checkpoint_to_fp32_state_dict(output_path, f'{output_path[0:-3]}_fp32.pt')
                 except Exception as e:
                     print(f'Exception {e} has occured on attempted save of your deepspeed trained model. If this has to do with CPU RAM, please try pytorch_lightning.utilities.deepspeedconvert_zero_checkpoint_to_fp32_state_dict(your_checkpoint.ckpt, full_model.pt')
             elif str(args.strategy) in ['fsdp', 'FSDP', 'FullyShardedDataParallel']:
@@ -1081,11 +1083,11 @@ def main(args):
                     checkpoint_callback = ModelCheckpoint(every_n_epochs=1, save_top_k = -1)
                     trainer = pl.Trainer(devices=int(args.GPUs), profiler = profiler, callbacks=[checkpoint_callback], default_root_dir=f'{os.path.join(args.outdir, args.name)}_ckpt', accelerator='gpu', strategy = args.strategy, max_epochs=int(args.epochs), logger=logger, num_nodes=int(args.nodes), precision = 16)        
                 else:
-                    trainer = pl.Trainer(devices=int(args.GPUs), profiler = profiler, callbacks=[checkpoint_callback], default_root_dir=f'{os.path.join(args.outdir, args.name)}_ckpt', accelerator='gpu', strategy = args.strategy, max_epochs=int(args.epochs), logger=logger, num_nodes=int(args.nodes), precision = 16)        
+                    trainer = pl.Trainer(devices=int(args.GPUs), profiler = profiler, default_root_dir=f'{os.path.join(args.outdir, args.name)}_ckpt', accelerator='gpu', strategy = args.strategy, max_epochs=int(args.epochs), logger=logger, num_nodes=int(args.nodes), precision = 16, enable_checkpointing=False)        
                 trainer.fit(model=model, train_dataloaders=dataloader)
-                trainer.save_checkpoint(os.path.join(args.outdir, f"{args.name}_{args.model}_{args.epochs}.pt"))
+                trainer.save_checkpoint(output_path)
                 try:
-                    convert_zero_checkpoint_to_fp32_state_dict(os.path.join(args.outdir, f"{args.name}_{args.model}_{args.epochs}.pt", output_path))
+                    convert_zero_checkpoint_to_fp32_state_dict(output_path, f'{output_path[0:-3]}_fp32.pt')
                 except Exception as e:
                     print(f'Exception {e} has occured on attempted save of your deepspeed trained model. If this has to do with CPU RAM, please try pytorch_lightning.utilities.deepspeedconvert_zero_checkpoint_to_fp32_state_dict(your_checkpoint.ckpt, full_model.pt')       
             else:
@@ -1094,12 +1096,12 @@ def main(args):
                     if int(args.GPUs) == 0:
                         trainer = pl.Trainer(profiler = profiler, max_epochs=int(args.epochs), callbacks=[checkpoint_callback], default_root_dir=f'{os.path.join(args.outdir, args.name)}_ckpt', logger=logger, num_nodes=int(args.nodes)) 
                     else:
-                        trainer = pl.Trainer(devices=int(args.GPUs), profiler = profiler, accelerator='gpu', callbacks=[checkpoint_callback], default_root_dir=f'{os.path.join(args.outdir, args.name)}_ckpt',strategy = args.strategy, max_epochs=int(args.epochs), logger=logger, num_nodes=int(args.nodes), precision = 16, amp_backend='native')        
+                        trainer = pl.Trainer(devices=int(args.GPUs), profiler = profiler, accelerator='gpu', callbacks=[checkpoint_callback], default_root_dir=f'{os.path.join(args.outdir, args.name)}_ckpt',strategy = args.strategy, max_epochs=int(args.epochs), logger=logger, num_nodes=int(args.nodes), precision = 16)        
                 else:
                     if int(args.GPUs) == 0:
                         trainer = pl.Trainer(profiler = profiler, max_epochs=int(args.epochs), logger=logger, num_nodes=int(args.nodes), enable_checkpointing=False) 
                     else:
-                        trainer = pl.Trainer(devices=int(args.GPUs), profiler = profiler, accelerator='gpu', strategy = args.strategy, max_epochs=int(args.epochs), logger=logger, num_nodes=int(args.nodes), precision = 16, amp_backend='native', enable_checkpointing=False)     
+                        trainer = pl.Trainer(devices=int(args.GPUs), profiler = profiler, accelerator='gpu', strategy = args.strategy, max_epochs=int(args.epochs), logger=logger, num_nodes=int(args.nodes), precision = 16, enable_checkpointing=False)     
                 trainer.fit(model=model, train_dataloaders=dataloader)
                 trainer.save_checkpoint(os.path.join(args.outdir, f"{args.name}_{args.model}_{args.epochs}.pt"))
 
@@ -2081,7 +2083,7 @@ def return_parser():
 )
     lang_gen.add_argument(
         "--max_length",
-        help="Max length of proteins generated, defautl is 100",
+        help="Max length of proteins generated, default is 100",
         default=100,
         type=int
 )
@@ -2193,11 +2195,11 @@ def return_parser():
     #     )
 
 ##############################################################################################################
-    classify = subparsers.add_parser('classify', help='Classify proteins based on thermostability predicted through TemStaPro')
+    classify = subparsers.add_parser('classify', help='Classify proteins using either pretrained classifiers or train/test your own.')
 
     classify.add_argument(
         "classifier",
-        help="Predict thermostability using TemStaPro or choose custom to train/use your own XGBoost or Isolation Forest classifier. Note for training XGBoost, you need to submit roughly equal amounts of each class as part of your query.",
+        help="Predict thermostability/optimal enzymatic pH using TemStaPro/EpHod or choose custom to train/use your own XGBoost or Isolation Forest classifier. Note for training XGBoost, you need to submit roughly equal amounts of each class as part of your query.",
         choices = ['TemStaPro', 'EpHod', 'XGBoost', 'iForest']
 )
     classify.add_argument(
@@ -2483,7 +2485,7 @@ def return_parser():
     dock = subparsers.add_parser('dock', help='Perform molecular docking with proteins and ligands. Note that you should relax your protein receptor with Simulate or another method before docking.')
 
     dock.add_argument("algorithm",
-        help="Note that while Smina and LightDock can dock small-molecule and protein ligands, DiffDock and Vina can only do small-molecules.",
+        help="Note that while Smina and LightDock can dock protein ligands, DiffDock and Vina can only do small-molecules.",
         choices = ['DiffDock', 'Vina', 'Smina', 'LightDock']
     )
 
@@ -2576,10 +2578,10 @@ def return_parser():
         )
     
     dock.add_argument("--swarms", 
-        help="LightDock: The number of swarms of the simulations, if not provided by the user, automatically calculated depending on receptor surface area and shape. Default is 100", 
+        help="LightDock: The number of swarms of the simulations, default is 25", 
         action="store",
         type=int,
-        default=100
+        default=25
         )
     
     dock.add_argument("--sim_steps", 
@@ -2605,7 +2607,7 @@ def return_parser():
 
     utils.add_argument(
         "--dir",
-        help="Directory to be used for creating a class key csv for classification or for bulk-relaxation of protein structures.",
+        help="Directory to be used for creating a class key csv for classification.",
         action="store",
 )
 

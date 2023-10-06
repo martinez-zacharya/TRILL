@@ -43,8 +43,9 @@ class ESM(pl.LightningModule):
         else:
             self.strat = None
         self.sample_seqs = []
-        self.per_AA = args.per_AA
-        self.avg = args.avg
+        if args.command == 'embed':
+            self.per_AA = args.per_AA
+            self.avg = args.avg
  
 
     def training_step(self, batch, batch_idx):
@@ -700,8 +701,6 @@ class ProstT5(pl.LightningModule):
         
     def configure_optimizers(self):
         if 'offload' in self.strat:
-            # print("*** CPU offloading can't currently be used with TRILL and ProtGPT2 ***")
-            # raise RuntimeError
             optimizer = DeepSpeedCPUAdam(self.model.parameters(), lr=self.lr)
         elif 'fsdp' in self.strat:
             print("*** FSDP can't currently be used with TRILL and ProtGPT2 ***")

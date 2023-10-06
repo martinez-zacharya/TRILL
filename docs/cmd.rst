@@ -10,6 +10,8 @@ Home
    cmd_lang_gen
    cmd_inv_fold_gen
    cmd_diff_gen
-   cmd_classify
+   classify
    cmd_fold
    cmd_visualize
+   cmd_simulate
+   cmd_utils
