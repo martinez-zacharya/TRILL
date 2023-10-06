@@ -5,8 +5,8 @@ build:
 
 python:
   version: 3.8
-  install:
-    - path: TRILL/.environment.yml
+conda:
+  environment: .environment.yml 
 
 sphinx:
   configuration: docs/conf.py
