@@ -2,12 +2,17 @@ name: TRILL_RTD
 channels:
   - conda-forge
   - defaults
+  - pyg
 dependencies:
   - python=3.8
   - openmm
   - swig
   - pdbfixer
   - pytorch=1.13.1
+  - pyg=2.3.1=py310_torch_1.13.0_cpu 
+  - pytorch-cluster=1.6.1=py310_torch_1.13.0_cpu 
+  - pytorch-sparse=0.6.17=py310_torch_1.13.0_cpu 
+  - pytorch-scatter=2.1.1=py310_torch_1.13.0_cpu
   - pip:
     - pytorch-lightning
     - transformers
@@ -33,9 +38,3 @@ dependencies:
     - skops
     - fairscale
     - deepspeed
-    - torch-geometric
-    - torch-scatter -f https://data.pyg.org/whl/torch-1.13.1+cpu.html
-    - torch-sparse -f https://data.pyg.org/whl/torch-1.13.1+cpu.html
-    - torch-cluster -f https://data.pyg.org/whl/torch-1.13.1+cpu.html
-    - torch-spline-conv -f https://data.pyg.org/whl/torch-1.13.1+cpu.html
-    - torch-geometric -f https://data.pyg.org/whl/torch-1.13.1+cpu.html
