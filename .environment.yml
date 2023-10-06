@@ -2,6 +2,7 @@ name: TRILL_RTD
 channels:
   - conda-forge
   - defaults
+  - pytorch
   - pyg
 dependencies:
   - python=3.8
@@ -10,6 +11,7 @@ dependencies:
   - swig
   - pdbfixer
   - pytorch=1.13.1
+  - cpuonly
   - pyg=2.3.1=py38_torch_1.13.0_cpu 
   - pytorch-cluster=1.6.1=py38_torch_1.13.0_cpu 
   - pytorch-sparse=0.6.17=py38_torch_1.13.0_cpu 
