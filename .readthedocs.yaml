@@ -7,7 +7,7 @@ python:
   version: 3.8
 
 conda:
-  environment: environment.yml  
+  environment: .environment.yml  
 
 sphinx:
   configuration: docs/conf.py
