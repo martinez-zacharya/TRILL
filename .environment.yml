@@ -10,7 +10,7 @@ dependencies:
   - openmm
   - swig
   - pdbfixer
-  - https://anaconda.org/pytorch/pytorch/1.13.1/download/linux-64/pytorch-1.13.1-py3.8_cpu_0.tar.bz2
+  - pytorch=1.13.1=py3.8_cpu_0
   - cpuonly
   - pyg=2.3.1=py38_torch_1.13.0_cpu 
   - pytorch-cluster=1.6.1=py38_torch_1.13.0_cpu 
