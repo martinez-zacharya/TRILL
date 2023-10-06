@@ -6,7 +6,7 @@ build:
 python:
   version: 3.8
   install:
-    - path: .environment.yml
+    - path: ./.environment.yml
 
 sphinx:
   configuration: docs/conf.py
