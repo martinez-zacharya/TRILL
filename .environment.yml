@@ -45,3 +45,4 @@ dependencies:
     - myst-parser
     - sphinx-rtd-dark-mode
     - sphinx-copybutton
+    - biobb_vs
