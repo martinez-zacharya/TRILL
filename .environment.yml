@@ -3,7 +3,7 @@ channels:
   - conda-forge
   - defaults
 dependencies:
-  - python=3.10
+  - python=3.8
   - openmm
   - swig
   - pdbfixer
@@ -33,7 +33,7 @@ dependencies:
     - skops
     - fairscale
     - deepspeed
-    - pyg-lib
+    - torch-geometric
     - torch-scatter -f https://data.pyg.org/whl/torch-1.13.1+cpu.html
     - torch-sparse -f https://data.pyg.org/whl/torch-1.13.1+cpu.html
     - torch-cluster -f https://data.pyg.org/whl/torch-1.13.1+cpu.html
