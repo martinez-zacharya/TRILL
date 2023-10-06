@@ -18,7 +18,6 @@ from Bio.PDB import PDBParser, Superimposer, PDBIO
 import glob
 from io import StringIO 
 import sys
-from Bio.PDB import PDBParser, Superimposer, PDBIO
 import numpy as np
 
 
@@ -88,51 +87,71 @@ def perform_docking(args, ligands):
         pockets = run_fpocket_filtering(protein_name)
     docking_results = []
 
-    for current_lig in ligands:
+
+    if args.multi_lig:
+       prepped_ligs = ''
+       for current_lig in ligands:
         ligand_file = os.path.abspath(current_lig)
         lig_name, lig_ext = os.path.basename(ligand_file).split('.')
         lig_pdbqt = f'{os.path.join(args.outdir, lig_name)}.pdbqt'
         
         if args.algorithm == 'Vina' and lig_ext != 'pdbqt':
             convert_ligand_to_pdbqt(ligand_file, lig_pdbqt, lig_ext)
-        
-        if not args.blind:
-            for pocket in tqdm(pockets, desc=f"Docking {protein_name} and {lig_name}"):
-              with Capturing() as output3:
-                fpocket_select(f'{protein_name}_filtered_pockets.zip', f'{protein_name}_filtered_pockets/{pocket}_atm.pdb', f'{protein_name}_filtered_pockets/{pocket}_vert.pqr')
-                prop = {
-                'offset': 2,
-                'box_coordinates': True
-                }
-                box(input_pdb_path=f'{protein_name}_filtered_pockets/{pocket}_vert.pqr',output_pdb_path=f'{protein_name}_filtered_pockets/{pocket}_box.pdb',properties=prop)
+            prepped_ligs += lig_pdbqt
 
-              pocket_file = f'{protein_name}_filtered_pockets/{pocket}_box.pdb'
-              output_file = os.path.join(args.outdir, f"{lig_name}_{pocket}_{args.algorithm}.pdbqt")
-              args.output_file = output_file
-              if args.algorithm == 'Vina':
+        output_file = os.path.join(args.outdir, f"{lig_name}_{args.algorithm}.pdbqt")
+        args.output_file = output_file
+        args.protein = rec_pdbqt
+        args.ligand = prepped_ligs
+        result = vina_dock(args, '', ligand_file)
+        docking_results.append(('blind_dock:', result.stdout))
+              
+    else: 
+      for current_lig in ligands:
+          ligand_file = os.path.abspath(current_lig)
+          lig_name, lig_ext = os.path.basename(ligand_file).split('.')
+          lig_pdbqt = f'{os.path.join(args.outdir, lig_name)}.pdbqt'
+          
+          if args.algorithm == 'Vina' and lig_ext != 'pdbqt':
+              convert_ligand_to_pdbqt(ligand_file, lig_pdbqt, lig_ext)
+          
+          if not args.blind:
+              for pocket in tqdm(pockets, desc=f"Docking {protein_name} and {lig_name}"):
+                with Capturing() as output3:
+                  fpocket_select(f'{protein_name}_filtered_pockets.zip', f'{protein_name}_filtered_pockets/{pocket}_atm.pdb', f'{protein_name}_filtered_pockets/{pocket}_vert.pqr')
+                  prop = {
+                  'offset': 2,
+                  'box_coordinates': True
+                  }
+                  box(input_pdb_path=f'{protein_name}_filtered_pockets/{pocket}_vert.pqr',output_pdb_path=f'{protein_name}_filtered_pockets/{pocket}_box.pdb',properties=prop)
+
+                pocket_file = f'{protein_name}_filtered_pockets/{pocket}_box.pdb'
+                output_file = os.path.join(args.outdir, f"{lig_name}_{pocket}_{args.algorithm}.pdbqt")
+                args.output_file = output_file
+                if args.algorithm == 'Vina':
+                  args.protein = rec_pdbqt
+                  args.ligand = lig_pdbqt
+                  result = vina_dock(args, pocket_file, ligand_file)
+                  docking_results.append((pocket, result.stdout))
+                elif args.algorithm == 'Smina':
+                  result = smina_dock(args, pocket_file, ligand_file)
+                  docking_results.append((pocket, result.stdout))
+
+                for log_file in glob.glob("log*.out"):
+                  os.remove(log_file)
+                for log_file in glob.glob("log*.err"):
+                  os.remove(log_file)
+          else:
+            output_file = os.path.join(args.outdir, f"{lig_name}_{args.algorithm}.pdbqt")
+            args.output_file = output_file
+            if args.algorithm == 'Vina':
                 args.protein = rec_pdbqt
                 args.ligand = lig_pdbqt
-                result = vina_dock(args, pocket_file, ligand_file)
-                docking_results.append((pocket, result.stdout))
-              elif args.algorithm == 'Smina':
-                result = smina_dock(args, pocket_file, ligand_file)
-                docking_results.append((pocket, result.stdout))
-
-              for log_file in glob.glob("log*.out"):
-                os.remove(log_file)
-              for log_file in glob.glob("log*.err"):
-                os.remove(log_file)
-        else:
-          output_file = os.path.join(args.outdir, f"{lig_name}_{args.algorithm}.pdbqt")
-          args.output_file = output_file
-          if args.algorithm == 'Vina':
-              args.protein = rec_pdbqt
-              args.ligand = lig_pdbqt
-              result = vina_dock(args, '', ligand_file)
-              docking_results.append(('blind_dock:', result.stdout))
-          elif args.algorithm == 'Smina':
-              result = smina_dock(args, '', ligand_file)
-              docking_results.append(('blind_dock:', result.stdout))
+                result = vina_dock(args, '', ligand_file)
+                docking_results.append(('blind_dock:', result.stdout))
+            elif args.algorithm == 'Smina':
+                result = smina_dock(args, '', ligand_file)
+                docking_results.append(('blind_dock:', result.stdout))
 
 
 
@@ -217,101 +236,6 @@ def run_fpocket_filtering(protein_name):
     shutil.unpack_archive(f'{protein_name}_filtered_pockets.zip', f'{protein_name}_filtered_pockets', 'zip')
     return pockets
 
-# def perform_docking(args):
-    protein_file = os.path.abspath(args.protein)
-    ligand_file = os.path.abspath(args.ligand)
-    if args.algorithm == 'LightDock':
-      lightdock_setup(args)
-      lightdock_run(f'{args.outdir}/setup.json', args.sim_steps, args.outdir)
-      generate_ant_thony_list(args)
-      rank_lightdock(args)
-      return 
-    else:
-      protein_name = os.path.basename(protein_file).split('.')[0]
-      prot_ext = os.path.basename(protein_file).split('.')[1]
-      lig_name = os.path.basename(ligand_file).split('.')[0]
-      lig_ext = os.path.basename(ligand_file).split('.')[1]
-      rec_pdbqt = f'{os.path.join(args.outdir, protein_name)}.pdbqt'
-      lig_pdb = f'{os.path.join(args.outdir, lig_name)}.pdb'
-      lig_pdbqt = f'{os.path.join(args.outdir, lig_name)}.pdbqt'
-      if prot_ext != 'pdbqt' and args.algorithm != 'Smina':
-        print(f'Converting {protein_file} to {rec_pdbqt}...')
-        convert_rec = f'obabel -ipdb {protein_file} --partialcharge eem -h -xr -opdbqt -O {rec_pdbqt}'.split(' ')
-        subprocess.run(convert_rec, stdout=subprocess.DEVNULL)
-      if args.algorithm == 'Vina' and os.path.basename(ligand_file).split('.')[1] != 'pdbqt':
-        if lig_ext == "pdb":
-          convert_lig = f'obabel -ipdb {lig_pdb} -xr -h --partialcharge eem -opdbqt -O {lig_pdbqt}'.split(' ')
-        else:
-          convert_lig = f'obabel -i{lig_ext} {ligand_file} -h --partialcharge eem -opdbqt -O {lig_pdbqt}'.split(' ')
-        print(f'Converting {ligand_file} to {lig_pdbqt}...')
-        subprocess.run(convert_lig, stdout=subprocess.DEVNULL)
-      
-      if not args.blind:
-        prop = {
-        'min_radius': args.min_radius,
-        'max_radius': args.max_radius,
-        'num_spheres': args.min_alpha_spheres,
-        'sort_by': 'score'
-        }
-        print('Pocket hunting...')
-        with Capturing() as output1:
-          fpocket_run(input_pdb_path=protein_file,
-              output_pockets_zip=f'{protein_name}_raw_pockets.zip',
-              output_summary=f'{protein_name}_fpocket_info.json',
-              properties=prop)
-
-        prop = {
-        'score': [0.2, 1],
-        }
-        print('Pocket filtering...')
-        with Capturing() as output2:
-          fpocket_filter(f'{protein_name}_raw_pockets.zip', f'{protein_name}_fpocket_info.json', f'{protein_name}_filtered_pockets.zip', properties = prop)
-        pockets = parse_pocket_output(output2)
-        shutil.unpack_archive(f'{protein_name}_filtered_pockets.zip', f'{protein_name}_filtered_pockets', 'zip')
-        docking_results = []
-        for pocket in tqdm(pockets, desc="Docking..."):
-          with Capturing() as output3:
-            fpocket_select(f'{protein_name}_filtered_pockets.zip', f'{protein_name}_filtered_pockets/{pocket}_atm.pdb', f'{protein_name}_filtered_pockets/{pocket}_vert.pqr')
-            prop = {
-                'offset': 2,
-                'box_coordinates': True
-            }
-            box(input_pdb_path=f'{protein_name}_filtered_pockets/{pocket}_vert.pqr',output_pdb_path=f'{protein_name}_filtered_pockets/{pocket}_box.pdb',properties=prop)
-
-
-
-          pocket_file = f'{protein_name}_filtered_pockets/{pocket}_box.pdb'
-          output_file = os.path.join(args.outdir, f"{lig_name}_{pocket}_{args.algorithm}.pdbqt")
-          args.output_file = output_file
-          if args.algorithm == 'Vina':
-            args.protein = rec_pdbqt
-            args.ligand = lig_pdbqt
-            result = vina_dock(args, pocket_file)
-            docking_results.append((pocket, result.stdout))
-          elif args.algorithm == 'Smina':
-            result = smina_dock(args, pocket_file)
-            docking_results.append((pocket, result.stdout))
-
-          for log_file in glob.glob("log*.out"):
-            os.remove(log_file)
-          for log_file in glob.glob("log*.err"):
-            os.remove(log_file)
-      else:
-        docking_results = []
-        output_file = os.path.join(args.outdir, f"{lig_name}_{args.algorithm}.pdbqt")
-        args.output_file = output_file
-        if args.algorithm == 'Vina':
-            args.protein = rec_pdbqt
-            args.ligand = lig_pdbqt
-            result = vina_dock(args, '')
-            docking_results.append(('blind_dock:', result.stdout))
-        elif args.algorithm == 'Smina':
-            result = smina_dock(args, '')
-            docking_results.append(('blind_dock:', result.stdout))
-
-    
-    return docking_results
-
 def extract_box_info_from_pdb(pdb_file_path):
     with open(pdb_file_path, 'r') as f:
         lines = f.readlines()
@@ -364,24 +288,36 @@ def smina_dock(args, pocket_file, ligand_file):
     return result
 
 def vina_dock(args, pocket_file, ligand_file):
-    # print(f"Vina docking with {args.protein} and {ligand_file} in pocket {pocket_file}")
+    if args.blind:
+      print('Vina blind docking...')
 
-    # Extract center and size from the pocket PDB file
-    center, size = extract_box_info_from_pdb(pocket_file)
 
-    # Prepare the Vina command
-    vina_cmd = [
-        "vina",
-        "--receptor", args.protein,
-        "--ligand", args.ligand,
-        "--center_x", str(center[0]),
-        "--center_y", str(center[1]),
-        "--center_z", str(center[2]),
-        "--size_x", str(size[0]),
-        "--size_y", str(size[1]),
-        "--size_z", str(size[2]),
-        "--exhaustiveness", str(args.exhaustiveness),
-        "--out", args.output_file,    ]
+      # Prepare the Vina command
+      vina_cmd = [
+          "smina",
+          "-r", args.protein,
+          "-l", args.ligand,
+          "--autobox_ligand", args.ligand if not isinstance(args.ligand, list) else args.ligand[0],
+          "--exhaustiveness", str(args.exhaustiveness),
+          "-o", args.output_file
+      ]
+    else:
+      # Extract center and size from the pocket PDB file
+      center, size = extract_box_info_from_pdb(pocket_file)
+
+      # Prepare the Vina command
+      vina_cmd = [
+          "vina",
+          "--receptor", args.protein,
+          "--ligand", args.ligand,
+          "--center_x", str(center[0]),
+          "--center_y", str(center[1]),
+          "--center_z", str(center[2]),
+          "--size_x", str(size[0]),
+          "--size_y", str(size[1]),
+          "--size_z", str(size[2]),
+          "--exhaustiveness", str(args.exhaustiveness),
+          "--out", args.output_file,    ]
 
     # Run the Vina command
     result = subprocess.run(vina_cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
@@ -423,9 +359,15 @@ def find_best_match(structure1, structure2):
 def fixer_of_pdbs(args):
     fixed_pdb_files = []
     if args.just_relax:
-      alterations = {}
-      fixed_pdb = fix_pdb(args.receptor, alterations, args)
-      fixed_pdb_files.append(fixed_pdb)
+      if len(args.receptor) > 1:
+        for rec in args.receptor:
+          alterations = {}
+          fixed_pdb = fix_pdb(rec, alterations, args)
+          fixed_pdb_files.append(fixed_pdb)
+      else:
+          alterations = {}
+          fixed_pdb = fix_pdb(args.receptor[0], alterations, args)
+          fixed_pdb_files.append(fixed_pdb)         
     else:
       receptor = fix_pdb(args.receptor, alterations={}, args=args)
       ligand = fix_pdb(args.ligand, alterations={}, args=args)

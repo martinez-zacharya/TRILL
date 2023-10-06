@@ -29,7 +29,7 @@ from pytorch_lightning.utilities.deepspeed import convert_zero_checkpoint_to_fp3
 from trill.utils.lightning_models import ESM, ProtGPT2, CustomWriter, ESM_Gibbs, ProtT5, ZymCTRL, ProstT5, Custom3DiDataset
 from trill.utils.update_weights import weights_update
 from trill.utils.dock_utils import perform_docking, fixer_of_pdbs, write_docking_results_to_file
-from trill.utils.simulation_utils import relax_structure, run_simulation
+from trill.utils.simulation_utils import relax_structure
 from transformers import AutoTokenizer, EsmForProteinFolding, set_seed
 from pytorch_lightning.callbacks import ModelCheckpoint
 # from trill.utils.strategy_tuner import tune_esm_inference, tune_esm_train
@@ -45,6 +45,7 @@ from trill.utils.classify_utils import generate_class_key_csv
 import logging
 from pyfiglet import Figlet
 import bokeh
+from Bio import PDB
 os.environ['CUDA_LAUNCH_BLOCKING'] = '1'
 os.environ["TOKENIZERS_PARALLELISM"] = "false"
 
@@ -133,18 +134,18 @@ def main(args):
 
     embed.add_argument(
         "model",
-        help="You can choose from either 'esm2_t6_8M', 'esm2_t12_35M', 'esm2_t30_150M', 'esm2_t33_650M', 'esm2_t36_3B','esm2_t48_15B', 'ProtT5-XL' or 'ProstT5'",
+        help="Choose protein language model to embed query proteins",
         action="store",
-        # default = 'esm2_t12_35M_UR50D',
+        choices = ['esm2_t6_8M', 'esm2_t12_35M', 'esm2_t30_150M', 'esm2_t33_650M', 'esm2_t36_3B','esm2_t48_15B', 'ProtT5-XL', 'ProstT5']
 )
 
     embed.add_argument("query", 
-        help="Input fasta file", 
+        help="Input protein fasta file", 
         action="store"
 )
     embed.add_argument(
         "--batch_size",
-        help="Change batch-size number for embedding proteins. Default is 1",
+        help="Change batch-size number for embedding proteins. Default is 1, but with more RAM, you can do more",
         action="store",
         default = 1,
         dest="batch_size",
@@ -175,8 +176,9 @@ def main(args):
 
     finetune.add_argument(
         "model",
-        help="You can choose to finetune either 'esm2_t6_8M', 'esm2_t12_35M', 'esm2_t30_150M', 'esm2_t33_650M', 'esm2_t36_3B','esm2_t48_15B', 'ProtGPT2', or ZymCTRL.",
+        help="Choose the protein language model to finetune. Note that ESM2 is trained with the MLM objective, while ProtGPT2/ZymCTRL are trained with the CLM objective.",
         action="store",
+        choices = ['esm2_t6_8M', 'esm2_t12_35M', 'esm2_t30_150M', 'esm2_t33_650M', 'esm2_t36_3B','esm2_t48_15B', 'ProtGPT2', 'ZymCTRL']
 )
 
     finetune.add_argument("query", 
@@ -184,7 +186,7 @@ def main(args):
         action="store"
 )
     finetune.add_argument("--epochs", 
-        help="Number of epochs for fine-tuning. Default is 20", 
+        help="Number of epochs for fine-tuning. Default is 10", 
         action="store",
         default=10,
         dest="epochs",
@@ -220,7 +222,7 @@ def main(args):
 
     finetune.add_argument(
         "--ctrl_tag",
-        help="Choose an Enzymatic Commision (EC) control tag for finetuning ZymCTRL. Note that the tag must match all of the enzymes in the query fasta file. You can find all ECs here https://www.brenda-enzymes.org/index.php",
+        help="ZymCTRL: Choose an Enzymatic Commision (EC) control tag for finetuning ZymCTRL. Note that the tag must match all of the enzymes in the query fasta file. You can find all ECs here https://www.brenda-enzymes.org/index.php",
         action="store"
 )
 
@@ -235,77 +237,92 @@ def main(args):
     inv_fold = subparsers.add_parser('inv_fold_gen', help='Generate proteins using inverse folding')
     inv_fold.add_argument(
         "model",
-        help="Choose between ESM-IF1 or ProteinMPNN to generate proteins using inverse folding.",
+        help="Select which model to generate proteins using inverse folding.",
         choices = ['ESM-IF1', 'ProteinMPNN', 'ProstT5']
     )
 
     inv_fold.add_argument("query", 
-        help="Input pdb file for inverse folding with ESM_IF1 or ProteinMPNN", 
+        help="Input pdb file for inverse folding", 
         action="store"
         )
 
     inv_fold.add_argument(
         "--temp",
-        help="Choose sampling temperature for ESM_IF1 or ProteinMPNN.",
+        help="Choose sampling temperature.",
         action="store",
         default = '1'
         )
     
     inv_fold.add_argument(
         "--num_return_sequences",
-        help="Choose number of proteins for ESM-IF1 or ProteinMPNN to generate.",
+        help="Choose number of proteins to generate.",
         action="store",
         default = 1
         )
     
     inv_fold.add_argument(
         "--max_length",
-        help="Max length of proteins generated from ESM-IF1 or ProteinMPNN",
+        help="Max length of proteins generated, default is 500 AAs",
         default=500,
         type=int
 )
-
-    inv_fold.add_argument("--mpnn_model", type=str, default="v_48_020", help="ProteinMPNN model name: v_48_002, v_48_010, v_48_020, v_48_030; v_48_010=version with 48 edges 0.10A noise")
-    inv_fold.add_argument("--save_score", type=int, default=0, help="ProteinMPNN-only argument. 0 for False, 1 for True; save score=-log_prob to npy files")
-    inv_fold.add_argument("--save_probs", type=int, default=0, help="ProteinMPNN-only argument. 0 for False, 1 for True; save MPNN predicted probabilites per position")
-    inv_fold.add_argument("--score_only", type=int, default=0, help="ProteinMPNN-only argument. 0 for False, 1 for True; score input backbone-sequence pairs")
-    inv_fold.add_argument("--path_to_fasta", type=str, default="", help="ProteinMPNN-only argument. score provided input sequence in a fasta format; e.g. GGGGGG/PPPPS/WWW for chains A, B, C sorted alphabetically and separated by /")
-    inv_fold.add_argument("--conditional_probs_only", type=int, default=0, help="ProteinMPNN-only argument. 0 for False, 1 for True; output conditional probabilities p(s_i given the rest of the sequence and backbone)")    
-    inv_fold.add_argument("--conditional_probs_only_backbone", type=int, default=0, help="ProteinMPNN-only argument. 0 for False, 1 for True; if true output conditional probabilities p(s_i given backbone)") 
-    inv_fold.add_argument("--unconditional_probs_only", type=int, default=0, help="ProteinMPNN-only argument. 0 for False, 1 for True; output unconditional probabilities p(s_i given backbone) in one forward pass")   
-    inv_fold.add_argument("--backbone_noise", type=float, default=0.00, help="ProteinMPNN-only argument. Standard deviation of Gaussian noise to add to backbone atoms")
-    inv_fold.add_argument("--batch_size", type=int, default=1, help="ProteinMPNN-only argument. Batch size; can set higher for titan, quadro GPUs, reduce this if running out of GPU memory")
-    inv_fold.add_argument("--pdb_path_chains", type=str, default='', help="ProteinMPNN-only argument. Define which chains need to be designed for a single PDB ")
-    inv_fold.add_argument("--chain_id_jsonl",type=str, default='', help="ProteinMPNN-only argument. Path to a dictionary specifying which chains need to be designed and which ones are fixed, if not specied all chains will be designed.")
-    inv_fold.add_argument("--fixed_positions_jsonl", type=str, default='', help="ProteinMPNN-only argument. Path to a dictionary with fixed positions")
-    inv_fold.add_argument("--omit_AAs", type=list, default='X', help="ProteinMPNN-only argument. Specify which amino acids should be omitted in the generated sequence, e.g. 'AC' would omit alanine and cystine.")
-    inv_fold.add_argument("--bias_AA_jsonl", type=str, default='', help="ProteinMPNN-only argument. Path to a dictionary which specifies AA composion bias if neededi, e.g. {A: -1.1, F: 0.7} would make A less likely and F more likely.")
-    inv_fold.add_argument("--bias_by_res_jsonl", default='', help="ProteinMPNN-only argument. Path to dictionary with per position bias.") 
-    inv_fold.add_argument("--omit_AA_jsonl", type=str, default='', help="ProteinMPNN-only argument. Path to a dictionary which specifies which amino acids need to be omited from design at specific chain indices")
-    inv_fold.add_argument("--pssm_jsonl", type=str, default='', help="ProteinMPNN-only argument. Path to a dictionary with pssm")
-    inv_fold.add_argument("--pssm_multi", type=float, default=0.0, help="ProteinMPNN-only argument. A value between [0.0, 1.0], 0.0 means do not use pssm, 1.0 ignore MPNN predictions")
-    inv_fold.add_argument("--pssm_threshold", type=float, default=0.0, help="ProteinMPNN-only argument. A value between -inf + inf to restric per position AAs")
-    inv_fold.add_argument("--pssm_log_odds_flag", type=int, default=0, help="ProteinMPNN-only argument. 0 for False, 1 for True")
-    inv_fold.add_argument("--pssm_bias_flag", type=int, default=0, help="ProteinMPNN-only argument. 0 for False, 1 for True")
-    inv_fold.add_argument("--tied_positions_jsonl", type=str, default='', help="ProteinMPNN-only argument. Path to a dictionary with tied positions")
+    inv_fold.add_argument(
+        "--top_p",
+        help="ProstT5: If set to float < 1, only the smallest set of most probable tokens with probabilities that add up to top_p or higher are kept for generation. Default is 1",
+        default=1
+)
+    inv_fold.add_argument(
+        "--repetition_penalty",
+        help="ProstT5: The parameter for repetition penalty. 1.0 means no penalty, the default is 1.2",
+        default=1.2
+)   
+    inv_fold.add_argument(
+        "--dont_sample",
+        help="ProstT5: By default, the model will sample to generate the protein. With this flag, you can enable greedy decoding, where the most probable tokens will be returned.",
+        default=True,
+        action="store_false"
+)
+    inv_fold.add_argument("--mpnn_model", type=str, default="v_48_020", help="ProteinMPNN: v_48_002, v_48_010, v_48_020, v_48_030; v_48_010=version with 48 edges 0.10A noise")
+    inv_fold.add_argument("--save_score", type=int, default=0, help="ProteinMPNN: 0 for False, 1 for True; save score=-log_prob to npy files")
+    inv_fold.add_argument("--save_probs", type=int, default=0, help="ProteinMPNN: 0 for False, 1 for True; save MPNN predicted probabilites per position")
+    inv_fold.add_argument("--score_only", type=int, default=0, help="ProteinMPNN: 0 for False, 1 for True; score input backbone-sequence pairs")
+    inv_fold.add_argument("--path_to_fasta", type=str, default="", help="ProteinMPNN: score provided input sequence in a fasta format; e.g. GGGGGG/PPPPS/WWW for chains A, B, C sorted alphabetically and separated by /")
+    inv_fold.add_argument("--conditional_probs_only", type=int, default=0, help="ProteinMPNN: 0 for False, 1 for True; output conditional probabilities p(s_i given the rest of the sequence and backbone)")    
+    inv_fold.add_argument("--conditional_probs_only_backbone", type=int, default=0, help="ProteinMPNN: 0 for False, 1 for True; if true output conditional probabilities p(s_i given backbone)") 
+    inv_fold.add_argument("--unconditional_probs_only", type=int, default=0, help="ProteinMPNN: 0 for False, 1 for True; output unconditional probabilities p(s_i given backbone) in one forward pass")   
+    inv_fold.add_argument("--backbone_noise", type=float, default=0.00, help="ProteinMPNN: Standard deviation of Gaussian noise to add to backbone atoms")
+    inv_fold.add_argument("--batch_size", type=int, default=1, help="ProteinMPNN: Batch size; can set higher for titan, quadro GPUs, reduce this if running out of GPU memory")
+    inv_fold.add_argument("--pdb_path_chains", type=str, default='', help="ProteinMPNN: Define which chains need to be designed for a single PDB ")
+    inv_fold.add_argument("--chain_id_jsonl",type=str, default='', help="ProteinMPNN: Path to a dictionary specifying which chains need to be designed and which ones are fixed, if not specied all chains will be designed.")
+    inv_fold.add_argument("--fixed_positions_jsonl", type=str, default='', help="ProteinMPNN: Path to a dictionary with fixed positions")
+    inv_fold.add_argument("--omit_AAs", type=list, default='X', help="ProteinMPNN: Specify which amino acids should be omitted in the generated sequence, e.g. 'AC' would omit alanine and cystine.")
+    inv_fold.add_argument("--bias_AA_jsonl", type=str, default='', help="ProteinMPNN: Path to a dictionary which specifies AA composion bias if neededi, e.g. {A: -1.1, F: 0.7} would make A less likely and F more likely.")
+    inv_fold.add_argument("--bias_by_res_jsonl", default='', help="ProteinMPNN: Path to dictionary with per position bias.") 
+    inv_fold.add_argument("--omit_AA_jsonl", type=str, default='', help="ProteinMPNN: Path to a dictionary which specifies which amino acids need to be omited from design at specific chain indices")
+    inv_fold.add_argument("--pssm_jsonl", type=str, default='', help="ProteinMPNN: Path to a dictionary with pssm")
+    inv_fold.add_argument("--pssm_multi", type=float, default=0.0, help="ProteinMPNN: A value between [0.0, 1.0], 0.0 means do not use pssm, 1.0 ignore MPNN predictions")
+    inv_fold.add_argument("--pssm_threshold", type=float, default=0.0, help="ProteinMPNN: A value between -inf + inf to restric per position AAs")
+    inv_fold.add_argument("--pssm_log_odds_flag", type=int, default=0, help="ProteinMPNN: 0 for False, 1 for True")
+    inv_fold.add_argument("--pssm_bias_flag", type=int, default=0, help="ProteinMPNN: 0 for False, 1 for True")
+    inv_fold.add_argument("--tied_positions_jsonl", type=str, default='', help="ProteinMPNN: Path to a dictionary with tied positions")
 
 ##############################################################################################################
-    lang_gen = subparsers.add_parser('lang_gen', help='Generate proteins using large language models including ProtGPT2 and ESM2')
+    lang_gen = subparsers.add_parser('lang_gen', help='Generate proteins using large language models')
 
     lang_gen.add_argument(
         "model",
-        help="Choose between Gibbs sampling with ESM2, ProtGPT2 or ZymCTRL.",
+        help="Choose desired language model",
         choices = ['ESM2','ProtGPT2', 'ZymCTRL']
 )
     lang_gen.add_argument(
         "--finetuned",
-        help="Input path to your own finetuned ProtGPT2 or ESM2 model",
+        help="Input path to your own finetuned model",
         action="store",
         default = False,
 )
     lang_gen.add_argument(
         "--esm2_arch",
-        help="Choose which ESM2 architecture your finetuned model is",
+        help="ESM2_Gibbs: Choose which ESM2 architecture your finetuned model is",
         action="store",
         default = 'esm2_t12_35M_UR50D',
 )
@@ -318,7 +335,7 @@ def main(args):
 
     lang_gen.add_argument(
         "--ctrl_tag",
-        help="Choose an Enzymatic Commision (EC) control tag for conditional protein generation based on the tag. You can find all ECs here https://www.brenda-enzymes.org/index.php",
+        help="ZymCTRL: Choose an Enzymatic Commision (EC) control tag for conditional protein generation based on the tag. You can find all ECs here https://www.brenda-enzymes.org/index.php",
         action="store",
 )
     lang_gen.add_argument(
@@ -330,48 +347,48 @@ def main(args):
 )
     lang_gen.add_argument(
         "--seed_seq",
-        help="Sequence to seed generation",
+        help="Sequence to seed generation, the default is M.",
         default='M',
 )
     lang_gen.add_argument(
         "--max_length",
-        help="Max length of proteins generated",
+        help="Max length of proteins generated, defautl is 100",
         default=100,
         type=int
 )
     lang_gen.add_argument(
         "--do_sample",
-        help="Whether or not to use sampling for ProtGPT2 ; use greedy decoding otherwise",
+        help="ProtGPT2/ZymCTRL: Whether or not to use sampling for generation; use greedy decoding otherwise",
         default=True,
         dest="do_sample",
 )
     lang_gen.add_argument(
         "--top_k",
-        help="The number of highest probability vocabulary tokens to keep for top-k-filtering for ProtGPT2 or ESM2_Gibbs",
+        help="The number of highest probability vocabulary tokens to keep for top-k-filtering",
         default=950,
         dest="top_k",
         type=int
 )
     lang_gen.add_argument(
         "--repetition_penalty",
-        help="The parameter for repetition penalty for ProtGPT2. 1.0 means no penalty",
+        help="ProtGPT2/ZymCTRL: The parameter for repetition penalty, the default is 1.2. 1.0 means no penalty",
         default=1.2,
         dest="repetition_penalty",
 )
     lang_gen.add_argument(
         "--num_return_sequences",
-        help="Number of sequences for ProtGPT or ESM2_Gibbs to generate. Default is 5",
-        default=5,
+        help="Number of sequences to generate. Default is 1",
+        default=1,
         dest="num_return_sequences",
         type=int,
 )
     lang_gen.add_argument("--random_fill", 
-        help="Randomly select positions to fill each iteration for Gibbs sampling with ESM2. If not called then fill the positions in order", 
+        help="ESM2_Gibbs: Randomly select positions to fill each iteration for Gibbs sampling with ESM2. If not called then fill the positions in order", 
         action="store_false",
         default = True,
         )
     lang_gen.add_argument("--num_positions", 
-        help="Generate new AAs for this many positions each iteration for Gibbs sampling with ESM2. If 0, then generate for all target positions each round.", 
+        help="ESM2_Gibbs: Generate new AAs for this many positions each iteration for Gibbs sampling with ESM2. If 0, then generate for all target positions each round.", 
         action="store",
         default = 0,
         )
@@ -472,9 +489,10 @@ def main(args):
 )
     classify.add_argument(
         "--emb_model",
-        help="Select between 'esm2_t6_8M', 'esm2_t12_35M', 'esm2_t30_150M', 'esm2_t33_650M', 'esm2_t36_3B','esm2_t48_15B', or 'ProtT5-XL' for embedding your query proteins to then train your custom classifier",
+        help="Select desired protein language model for embedding your query proteins to then train your custom classifier. Default is esm2_t12_35M",
         default = 'esm2_t12_35M',
-        action="store"
+        action="store",
+        choices = ['esm2_t6_8M', 'esm2_t12_35M', 'esm2_t30_150M', 'esm2_t33_650M', 'esm2_t36_3B','esm2_t48_15B', 'ProtT5-XL', 'ProstT5']
 )
     classify.add_argument(
         "--train_split",
@@ -483,7 +501,7 @@ def main(args):
 )
     classify.add_argument(
         "--preTrained",
-        help="Enter the path to your pre-trained XGBoost binary classifier that you've trained with TRILL.",
+        help="Enter the path to your pre-trained XGBoost binary classifier that you've trained with TRILL. This will be a .json file.",
         action="store",
 )
 
@@ -553,7 +571,7 @@ def main(args):
     fold = subparsers.add_parser('fold', help='Predict 3D protein structures using ESMFold or obtain 3Di structure for use with Foldseek to perform remote homology detection')
 
     fold.add_argument("model", 
-        help="Input fasta file", 
+        help="Choose your desired model.", 
         choices = ['ESMFold', 'ProstT5']
         )
     
@@ -562,14 +580,14 @@ def main(args):
         action="store"
         )
     fold.add_argument("--strategy", 
-        help="Choose a specific strategy if you are running out of CUDA memory. You can also pass either 64, or 32 for model.trunk.set_chunk_size(x)", 
+        help="ESMFold: Choose a specific strategy if you are running out of CUDA memory. You can also pass either 64, or 32 for model.trunk.set_chunk_size(x)", 
         action="store",
         default = None,
         )    
 
     fold.add_argument(
         "--batch_size",
-        help="Change batch-size number for folding proteins. Default is 1",
+        help="ESMFold: Change batch-size number for folding proteins. Default is 1",
         action="store",
         default = 1,
         dest="batch_size",
@@ -583,152 +601,160 @@ def main(args):
         )
     
     visualize.add_argument("--method", 
-        help="Method for reducing dimensions of embeddings. Default is PCA, but you can also choose UMAP or tSNE", 
+        help="Method for reducing dimensions of embeddings. Default is PCA", 
         action="store",
+        choices = ['PCA', 'UMAP', 'tSNE'],
         default="PCA"
         )
     visualize.add_argument("--key", 
-        help="Grouping for color scheme of output scatterplot. Choose this option if the labels in your embedding csv are grouped by the last pattern separated by an underscore. For example, 'Protein1_group1', 'Protein2_group1', 'Protein3_group2'. By default, all points are treated as same group.", 
+        help="Input a CSV, with your group mappings for your embeddings where the first column is the label and the second column is the group to be colored.", 
         action="store",
         default=False
         )
     
 ##############################################################################################################
-    simulate = subparsers.add_parser('simulate', help='Use MD to simulate proteins, small-molecules, etc.')
+    simulate = subparsers.add_parser('simulate', help='Use MD to relax protein structures')
 
     simulate.add_argument(
         "receptor",
-        help="Receptor of interest to be simulated.",
+        help="Receptor of interest to be simulated. Must be either pdb file or a .txt file with the absolute path for each pdb, separated by a new-line.",
         action="store",
 )
 
-    simulate.add_argument("--ligand", 
-        help="Ligand of interest to be simulated with input receptor", 
-        action="store",
-        )
+#     simulate.add_argument("--ligand", 
+#         help="Ligand of interest to be simulated with input receptor", 
+#         action="store",
+#         )
     
-    simulate.add_argument(
-        "--constraints",
-        help="Specifies which bonds and angles should be implemented with constraints. Allowed values are None, HBonds, AllBonds, or HAngles.",
-        choices=["None", "HBonds", "AllBonds", "HAngles"],
-        default="None",
-        action="store",
-    )
+#     simulate.add_argument(
+#         "--constraints",
+#         help="Specifies which bonds and angles should be implemented with constraints. Allowed values are None, HBonds, AllBonds, or HAngles.",
+#         choices=["None", "HBonds", "AllBonds", "HAngles"],
+#         default="None",
+#         action="store",
+#     )
 
-    simulate.add_argument(
-        "--rigidWater",
-        help="If true, water molecules will be fully rigid regardless of the value passed for the constraints argument.",
-        default=None,
-        action="store_true",
-    )
+#     simulate.add_argument(
+#         "--rigidWater",
+#         help="If true, water molecules will be fully rigid regardless of the value passed for the constraints argument.",
+#         default=None,
+#         action="store_true",
+#     )
 
-    simulate.add_argument(
-        '--forcefield', 
-        type=str, 
-        default='amber14-all.xml', 
-        help='Main force field to use'
-    )
+    # simulate.add_argument(
+    #     '--forcefield', 
+    #     type=str, 
+    #     default='amber14-all.xml', 
+    #     help='Force field to use. Default is amber14-all.xml'
+    # )
     
-    simulate.add_argument(
-        '--solvent', 
-        type=str, 
-        default='amber14/tip3pfb.xml', 
-        help='Solvent model to use'
-    )
-    simulate.add_argument(
-        '--solvate', 
-        default=False, 
-        help='Add to solvate your simulation',
-        action='store_true'
-    )
+    # simulate.add_argument(
+    #     '--solvent', 
+    #     type=str, 
+    #     default='amber14/tip3pfb.xml', 
+    #     help='Solvent model to use, the default is amber14/tip3pfb.xml'
+    # )
+#     simulate.add_argument(
+#         '--solvate', 
+#         default=False, 
+#         help='Add to solvate your simulation',
+#         action='store_true'
+#     )
 
-    simulate.add_argument(
-        '--step_size',
-        help='Step size in picoseconds. Default is 0.002',
-        type=float,
-        default=0.002, 
-        action="store",
-    )
-    simulate.add_argument(
-        '--num_steps',
-        type=int,
-        default=5000,
-        help='Number of simulation steps'
-    )
+#     simulate.add_argument(
+#         '--step_size',
+#         help='Step size in picoseconds. Default is 0.002',
+#         type=float,
+#         default=0.002, 
+#         action="store",
+#     )
+#     simulate.add_argument(
+#         '--num_steps',
+#         type=int,
+#         default=5000,
+#         help='Number of simulation steps'
+#     )
 
-    simulate.add_argument(
-        '--reporting_interval',
-        type=int,
-        default=1000,
-        help='Reporting interval for simulation'
-    )
+#     simulate.add_argument(
+#         '--reporting_interval',
+#         type=int,
+#         default=1000,
+#         help='Reporting interval for simulation'
+#     )
 
-    simulate.add_argument(
-        '--output_traj_dcd',
-        type=str,
-        default='trajectory.dcd',
-        help='Output trajectory DCD file'
-    )
+#     simulate.add_argument(
+#         '--output_traj_dcd',
+#         type=str,
+#         default='trajectory.dcd',
+#         help='Output trajectory DCD file'
+#     )
 
-    simulate.add_argument(
-        '--apply-harmonic-force',
-        help='Whether to apply a harmonic force to pull the molecule.',
-        type=bool,
-        default=False,
-        action="store",
-    )
+#     simulate.add_argument(
+#         '--apply-harmonic-force',
+#         help='Whether to apply a harmonic force to pull the molecule.',
+#         type=bool,
+#         default=False,
+#         action="store",
+#     )
 
-    simulate.add_argument(
-        '--force-constant',
-        help='Force constant for the harmonic force in kJ/mol/nm^2.',
-        type=float,
-        default=None,
-        action="store",
-    )
+#     simulate.add_argument(
+#         '--force-constant',
+#         help='Force constant for the harmonic force in kJ/mol/nm^2.',
+#         type=float,
+#         default=None,
+#         action="store",
+#     )
 
-    simulate.add_argument(
-        '--z0',
-        help='The z-coordinate to pull towards in nm.',
-        type=float,
-        default=None,
-        action="store",
-    )
+#     simulate.add_argument(
+#         '--z0',
+#         help='The z-coordinate to pull towards in nm.',
+#         type=float,
+#         default=None,
+#         action="store",
+#     )
 
-    simulate.add_argument(
-        '--molecule-atom-indices',
-        help='Comma-separated list of atom indices to which the harmonic force will be applied.',
-        type=str,
-        default="0,1,2",  # Replace with your default indices
-        action="store",
-    )
+#     simulate.add_argument(
+#         '--molecule-atom-indices',
+#         help='Comma-separated list of atom indices to which the harmonic force will be applied.',
+#         type=str,
+#         default="0,1,2",  # Replace with your default indices
+#         action="store",
+#     )
 
-    simulate.add_argument(
-        '--equilibration_steps',
-        help='Steps you want to take for NVT and NPT equilibration. Each step is 0.002 picoseconds',
-        type=int,
-        default=300, 
-        action="store",
-    )
+#     simulate.add_argument(
+#         '--equilibration_steps',
+#         help='Steps you want to take for NVT and NPT equilibration. Each step is 0.002 picoseconds',
+#         type=int,
+#         default=300, 
+#         action="store",
+#     )
 
-    simulate.add_argument(
-        '--periodic_box',
-        help='Give, in nm, one of the dimensions to build the periodic boundary.',
-        type=int,
-        default=10, 
-        action="store",
-    )
+#     simulate.add_argument(
+#         '--periodic_box',
+#         help='Give, in nm, one of the dimensions to build the periodic boundary.',
+#         type=int,
+#         default=10, 
+#         action="store",
+#     )
+#     simulate.add_argument(
+#         '--martini_top',
+#         help='Specify the path to the MARTINI topology file you want to use.',
+#         type=str,
+#         default=False,
+#         action="store",
+# )
     simulate.add_argument(
         '--just_relax',
-        help='Just relaxes the input structure(s) and outputs the fixed, relaxed structure.',
+        help='Just relaxes the input structure(s) and outputs the fixed and relaxed structure(s). The forcefield that is used is amber14.',
         action="store_true",
         default=False,
     )
 
 ##############################################################################################################
-    dock = subparsers.add_parser('dock', help='Dock proteins and small molecule ligands with DiffDock or Smina')
+    dock = subparsers.add_parser('dock', help='Perform molecular docking with proteins and ligands. Note that you should relax your protein receptor with Simulate or another method before docking.')
 
     dock.add_argument("algorithm",
-        help="Choose between DiffDock and Smina. Note that while Smina can dock small-molecule and protein ligands, DiffDock and Vina can only do small-molecules.",
+        help="Note that while Smina and LightDock can dock small-molecule and protein ligands, DiffDock and Vina can only do small-molecules.",
         choices = ['DiffDock', 'Vina', 'Smina', 'LightDock']
     )
 
@@ -738,15 +764,16 @@ def main(args):
         )
     
     dock.add_argument("ligand", 
-        help="Ligand to dock protein with", 
+        help="Ligand to dock protein with. Note that with Autodock Vina, you can dock multiple ligands at one time. Simply provide them one after another before any other optional TRILL arguments are added. Also, if a .txt file is provided with each line providing the absolute path to different ligands, TRILL will dock each ligand one at a time.", 
         action="store",
+        nargs='*'
         )
     
-    dock.add_argument("--force_ligand", 
-        help="TRILL will automatically assume your ligand is a small molecule if the MW is less than 800. To get around this, you can force TRILL to read the ligand as either type.", 
-        default=False,
-        choices = ['small', 'protein']
-        )
+    # dock.add_argument("--force_ligand", 
+    #     help="If you are not doing blind docking, TRILL will automatically assume your ligand is a small molecule if the MW is less than 800. To get around this, you can force TRILL to read the ligand as either type.", 
+    #     default=False,
+    #     choices = ['small', 'protein']
+    #     )
     
     dock.add_argument("--save_visualisation", 
         help="DiffDock: Save a pdb file with all of the steps of the reverse diffusion.", 
@@ -781,21 +808,21 @@ def main(args):
         default=None
         )
     dock.add_argument("--min_radius", 
-        help="Smina/Fpocket: Minimum radius of alpha spheres in a pocket. Default is 3Å.", 
+        help="Smina/Vina + Fpocket: Minimum radius of alpha spheres in a pocket. Default is 3Å.", 
         type=float,
         action="store",
         default=3.0
         )
 
     dock.add_argument("--max_radius", 
-        help="Smina/Fpocket: Maximum radius of alpha spheres in a pocket. Default is 6Å.", 
+        help="Smina/Vina + Fpocket: Maximum radius of alpha spheres in a pocket. Default is 6Å.", 
         type=float,
         action="store",
         default=6.0
         )
 
     dock.add_argument("--min_alpha_spheres", 
-        help="Smina/Fpocket: Minimum number of alpha spheres a pocket must contain to be considered. Default is 35.", 
+        help="Smina/Vina + Fpocket: Minimum number of alpha spheres a pocket must contain to be considered. Default is 35.", 
         type=int,
         action="store",
         default=35
@@ -820,14 +847,14 @@ def main(args):
         )
     
     dock.add_argument("--swarms", 
-        help="LightDock: The number of swarms of the simulations, if not provided by the user, automatically calculated depending on receptor surface area and shape", 
+        help="LightDock: The number of swarms of the simulations, if not provided by the user, automatically calculated depending on receptor surface area and shape. Default is 100", 
         action="store",
         type=int,
         default=100
         )
     
     dock.add_argument("--sim_steps", 
-        help="LightDock: The number of steps of the simulation", 
+        help="LightDock: The number of steps of the simulation. Default is 100", 
         action="store",
         type=int,
         default=100
@@ -839,11 +866,11 @@ def main(args):
         )
 ##############################################################################################################
 
-    utils = subparsers.add_parser('utils', help='Various utilities')
+    utils = subparsers.add_parser('utils', help='Misc utilities')
 
     utils.add_argument(
         "tool",
-        help="Pepare a csv for use with the classify command. Takes a directory or text file with list of paths for fasta files. Each file will be a unique class, so if your directory contains 5 fasta files, there will be 5 classes in the output key csv.",
+        help="prepare_class_key: Pepare a csv for use with the classify command. Takes a directory or text file with list of paths for fasta files. Each file will be a unique class, so if your directory contains 5 fasta files, there will be 5 classes in the output key csv.",
         choices = ['prepare_class_key']
 )
 
@@ -859,11 +886,6 @@ def main(args):
         action="store",
 )
 
-    utils.add_argument(
-        "--structure",
-        help="Input a single protein structure in the PDB format.",
-        action="store",
-)
     
 ##############################################################################################################
 
@@ -1123,15 +1145,23 @@ def main(args):
             
             data = Custom3DiDataset(f'{os.path.join(args.outdir, args.name)}_ss.3di')
             dataloader = torch.utils.data.DataLoader(data, batch_size=1, shuffle=False)
+            chain_id_list = []
+            pdb_parser = PDB.PDBParser(QUIET=True)
+            pdb = pdb_parser.get_structure('NA', args.query)
+            for x in pdb:
+                for chain in x:
+                    chain_id_list.append(chain.id)
             if int(args.GPUs) == 0:
                 trainer = pl.Trainer(enable_checkpointing=False, logger=logger, num_nodes=int(args.nodes))
             else:
                 trainer = pl.Trainer(enable_checkpointing=False, devices=int(args.GPUs), accelerator='gpu', logger=logger, num_nodes=int(args.nodes))
             with open(os.path.join(args.outdir, f'{args.name}_ProstT5_InvFold.fasta'), 'w+') as fasta:
                 for i in range(int(args.num_return_sequences)):
+
                     out = trainer.predict(model, dataloader)
-                    fasta.write(f'>{args.name}_ProstT5_InvFold_{i} \n')
-                    fasta.write(f'{out[0]}\n')
+                    for seq, chain_id in zip(out, chain_id_list):
+                        fasta.write(f'>{args.name}_ProstT5_InvFold_Chain-{chain_id}_{i} \n')
+                        fasta.write(f'{seq}\n')
                     fasta.flush()
 
             
@@ -1367,15 +1397,22 @@ def main(args):
 
     elif args.command == 'dock':
         ligands = []
-        if args.ligand.endswith('.txt'):
-            with open(args.ligand, 'r') as infile:
-                for path in infile:
-                    path = path.strip()
-                    if not path:
-                        continue
-                    ligands.append(path)
+        if isinstance(args.ligand, list) and len(args.ligand) > 1:
+            for lig in args.ligand:
+                ligands.append(lig)
+                args.multi_lig = True
         else:
-            ligands.append(args.ligand)
+            args.ligand = args.ligand[0]
+            args.multi_lig = False
+            if args.ligand.endswith('.txt'):
+                with open(args.ligand, 'r') as infile:
+                    for path in infile:
+                        path = path.strip()
+                        if not path:
+                            continue
+                        ligands.append(path)
+            else:
+                ligands.append(args.ligand)
         
         protein_name = os.path.splitext(os.path.basename(args.protein))[0]
 
@@ -1702,23 +1739,38 @@ def main(args):
     elif args.command == 'utils':
         if args.tool == 'prepare_class_key':
             generate_class_key_csv(args)
-        # elif args.tool == 'relax':
-        #     fixed_pdb_files = fixer_of_pdbs(args)
-        #     relax_structure(args, fixed_pdb_files)
         
     elif args.command == 'simulate':
         if args.just_relax:
+            args.forcefield = 'amber14-all.xml'
+            args.solvent = 'amber14/tip3pfb.xml'
+            pdb_list = []
+            if args.receptor.endswith('.txt'):
+                with open(args.receptor, 'r') as infile:
+                    for path in infile:
+                        path = path.strip()
+                        if not path:
+                            continue
+                        pdb_list.append(path)
+            else:
+                pdb_list.append(args.receptor)
+            args.receptor = pdb_list
             fixed_pdb_files = fixer_of_pdbs(args)
             relax_structure(args, fixed_pdb_files)
         else:
-            fixed_pdb_files = fixer_of_pdbs(args)
+            print('Currently, Simulate only supports relaxing a structure! Stay tuned for more MD related features...')
+            # if args.martini_top:
+            #     args.output_traj_dcd = os.path.join(args.outdir, args.output_traj_dcd)
+            #     run_simulation(args)
+            # else:
+            #     fixed_pdb_files = fixer_of_pdbs(args)
             
-            args.output_traj_dcd = os.path.join(args.outdir, args.output_traj_dcd)
-            
-            # Run the simulation on the combined PDB file
-            args.protein = fixed_pdb_files[0]
-            args.ligand = fixed_pdb_files[1]
-            run_simulation(args, fixed_pdb_files)
+            #     args.output_traj_dcd = os.path.join(args.outdir, args.output_traj_dcd)
+                
+            #     # Run the simulation on the combined PDB file
+            #     args.protein = fixed_pdb_files[0]
+            #     args.ligand = fixed_pdb_files[1]
+            #     run_simulation(args)
 
 
 
@@ -1795,12 +1847,12 @@ def return_parser():
         default = '.'
 )
 
-#     parser.add_argument(
-#         "--n_workers",
-#         help="Change number of CPU cores/'workers' TRILL uses",
-#         action="store",
-#         default = 1
-# )
+    parser.add_argument(
+        "--n_workers",
+        help="Change number of CPU cores/'workers' TRILL uses",
+        action="store",
+        default = 1
+)
 
 
 ##############################################################################################################
@@ -1811,18 +1863,18 @@ def return_parser():
 
     embed.add_argument(
         "model",
-        help="You can choose from either 'esm2_t6_8M', 'esm2_t12_35M', 'esm2_t30_150M', 'esm2_t33_650M', 'esm2_t36_3B','esm2_t48_15B', 'ProtT5-XL' or 'ProstT5'",
+        help="Choose protein language model to embed query proteins",
         action="store",
-        # default = 'esm2_t12_35M_UR50D',
+        choices = ['esm2_t6_8M', 'esm2_t12_35M', 'esm2_t30_150M', 'esm2_t33_650M', 'esm2_t36_3B','esm2_t48_15B', 'ProtT5-XL', 'ProstT5']
 )
 
     embed.add_argument("query", 
-        help="Input fasta file", 
+        help="Input protein fasta file", 
         action="store"
 )
     embed.add_argument(
         "--batch_size",
-        help="Change batch-size number for embedding proteins. Default is 1",
+        help="Change batch-size number for embedding proteins. Default is 1, but with more RAM, you can do more",
         action="store",
         default = 1,
         dest="batch_size",
@@ -1835,14 +1887,27 @@ def return_parser():
         default = False,
         dest="finetuned",
 )
+    embed.add_argument(
+        "--per_AA",
+        help="Add this flag to return the per amino acid representations.",
+        action="store_true",
+        default = False,
+)
+    embed.add_argument(
+        "--avg",
+        help="Add this flag to return the average, whole sequence representation.",
+        action="store_true",
+        default = False,
+)
 ##############################################################################################################
 
     finetune = subparsers.add_parser('finetune', help='Finetune protein language models')
 
     finetune.add_argument(
         "model",
-        help="You can choose to finetune either 'esm2_t6_8M', 'esm2_t12_35M', 'esm2_t30_150M', 'esm2_t33_650M', 'esm2_t36_3B','esm2_t48_15B', 'ProtGPT2', or ZymCTRL.",
+        help="Choose the protein language model to finetune. Note that ESM2 is trained with the MLM objective, while ProtGPT2/ZymCTRL are trained with the CLM objective.",
         action="store",
+        choices = ['esm2_t6_8M', 'esm2_t12_35M', 'esm2_t30_150M', 'esm2_t33_650M', 'esm2_t36_3B','esm2_t48_15B', 'ProtGPT2', 'ZymCTRL']
 )
 
     finetune.add_argument("query", 
@@ -1850,7 +1915,7 @@ def return_parser():
         action="store"
 )
     finetune.add_argument("--epochs", 
-        help="Number of epochs for fine-tuning. Default is 20", 
+        help="Number of epochs for fine-tuning. Default is 10", 
         action="store",
         default=10,
         dest="epochs",
@@ -1886,7 +1951,7 @@ def return_parser():
 
     finetune.add_argument(
         "--ctrl_tag",
-        help="Choose an Enzymatic Commision (EC) control tag for finetuning ZymCTRL. Note that the tag must match all of the enzymes in the query fasta file. You can find all ECs here https://www.brenda-enzymes.org/index.php",
+        help="ZymCTRL: Choose an Enzymatic Commision (EC) control tag for finetuning ZymCTRL. Note that the tag must match all of the enzymes in the query fasta file. You can find all ECs here https://www.brenda-enzymes.org/index.php",
         action="store"
 )
 
@@ -1901,77 +1966,92 @@ def return_parser():
     inv_fold = subparsers.add_parser('inv_fold_gen', help='Generate proteins using inverse folding')
     inv_fold.add_argument(
         "model",
-        help="Choose between ESM-IF1 or ProteinMPNN to generate proteins using inverse folding.",
+        help="Select which model to generate proteins using inverse folding.",
         choices = ['ESM-IF1', 'ProteinMPNN', 'ProstT5']
     )
 
     inv_fold.add_argument("query", 
-        help="Input pdb file for inverse folding with ESM_IF1 or ProteinMPNN", 
+        help="Input pdb file for inverse folding", 
         action="store"
         )
 
     inv_fold.add_argument(
         "--temp",
-        help="Choose sampling temperature for ESM_IF1 or ProteinMPNN.",
+        help="Choose sampling temperature.",
         action="store",
         default = '1'
         )
     
     inv_fold.add_argument(
         "--num_return_sequences",
-        help="Choose number of proteins for ESM-IF1 or ProteinMPNN to generate.",
+        help="Choose number of proteins to generate.",
         action="store",
         default = 1
         )
     
     inv_fold.add_argument(
         "--max_length",
-        help="Max length of proteins generated from ESM-IF1 or ProteinMPNN",
+        help="Max length of proteins generated, default is 500 AAs",
         default=500,
         type=int
 )
-
-    inv_fold.add_argument("--mpnn_model", type=str, default="v_48_020", help="ProteinMPNN model name: v_48_002, v_48_010, v_48_020, v_48_030; v_48_010=version with 48 edges 0.10A noise")
-    inv_fold.add_argument("--save_score", type=int, default=0, help="ProteinMPNN-only argument. 0 for False, 1 for True; save score=-log_prob to npy files")
-    inv_fold.add_argument("--save_probs", type=int, default=0, help="ProteinMPNN-only argument. 0 for False, 1 for True; save MPNN predicted probabilites per position")
-    inv_fold.add_argument("--score_only", type=int, default=0, help="ProteinMPNN-only argument. 0 for False, 1 for True; score input backbone-sequence pairs")
-    inv_fold.add_argument("--path_to_fasta", type=str, default="", help="ProteinMPNN-only argument. score provided input sequence in a fasta format; e.g. GGGGGG/PPPPS/WWW for chains A, B, C sorted alphabetically and separated by /")
-    inv_fold.add_argument("--conditional_probs_only", type=int, default=0, help="ProteinMPNN-only argument. 0 for False, 1 for True; output conditional probabilities p(s_i given the rest of the sequence and backbone)")    
-    inv_fold.add_argument("--conditional_probs_only_backbone", type=int, default=0, help="ProteinMPNN-only argument. 0 for False, 1 for True; if true output conditional probabilities p(s_i given backbone)") 
-    inv_fold.add_argument("--unconditional_probs_only", type=int, default=0, help="ProteinMPNN-only argument. 0 for False, 1 for True; output unconditional probabilities p(s_i given backbone) in one forward pass")   
-    inv_fold.add_argument("--backbone_noise", type=float, default=0.00, help="ProteinMPNN-only argument. Standard deviation of Gaussian noise to add to backbone atoms")
-    inv_fold.add_argument("--batch_size", type=int, default=1, help="ProteinMPNN-only argument. Batch size; can set higher for titan, quadro GPUs, reduce this if running out of GPU memory")
-    inv_fold.add_argument("--pdb_path_chains", type=str, default='', help="ProteinMPNN-only argument. Define which chains need to be designed for a single PDB ")
-    inv_fold.add_argument("--chain_id_jsonl",type=str, default='', help="ProteinMPNN-only argument. Path to a dictionary specifying which chains need to be designed and which ones are fixed, if not specied all chains will be designed.")
-    inv_fold.add_argument("--fixed_positions_jsonl", type=str, default='', help="ProteinMPNN-only argument. Path to a dictionary with fixed positions")
-    inv_fold.add_argument("--omit_AAs", type=list, default='X', help="ProteinMPNN-only argument. Specify which amino acids should be omitted in the generated sequence, e.g. 'AC' would omit alanine and cystine.")
-    inv_fold.add_argument("--bias_AA_jsonl", type=str, default='', help="ProteinMPNN-only argument. Path to a dictionary which specifies AA composion bias if neededi, e.g. {A: -1.1, F: 0.7} would make A less likely and F more likely.")
-    inv_fold.add_argument("--bias_by_res_jsonl", default='', help="ProteinMPNN-only argument. Path to dictionary with per position bias.") 
-    inv_fold.add_argument("--omit_AA_jsonl", type=str, default='', help="ProteinMPNN-only argument. Path to a dictionary which specifies which amino acids need to be omited from design at specific chain indices")
-    inv_fold.add_argument("--pssm_jsonl", type=str, default='', help="ProteinMPNN-only argument. Path to a dictionary with pssm")
-    inv_fold.add_argument("--pssm_multi", type=float, default=0.0, help="ProteinMPNN-only argument. A value between [0.0, 1.0], 0.0 means do not use pssm, 1.0 ignore MPNN predictions")
-    inv_fold.add_argument("--pssm_threshold", type=float, default=0.0, help="ProteinMPNN-only argument. A value between -inf + inf to restric per position AAs")
-    inv_fold.add_argument("--pssm_log_odds_flag", type=int, default=0, help="ProteinMPNN-only argument. 0 for False, 1 for True")
-    inv_fold.add_argument("--pssm_bias_flag", type=int, default=0, help="ProteinMPNN-only argument. 0 for False, 1 for True")
-    inv_fold.add_argument("--tied_positions_jsonl", type=str, default='', help="ProteinMPNN-only argument. Path to a dictionary with tied positions")
+    inv_fold.add_argument(
+        "--top_p",
+        help="ProstT5: If set to float < 1, only the smallest set of most probable tokens with probabilities that add up to top_p or higher are kept for generation. Default is 1",
+        default=1
+)
+    inv_fold.add_argument(
+        "--repetition_penalty",
+        help="ProstT5: The parameter for repetition penalty. 1.0 means no penalty, the default is 1.2",
+        default=1.2
+)   
+    inv_fold.add_argument(
+        "--dont_sample",
+        help="ProstT5: By default, the model will sample to generate the protein. With this flag, you can enable greedy decoding, where the most probable tokens will be returned.",
+        default=True,
+        action="store_false"
+)
+    inv_fold.add_argument("--mpnn_model", type=str, default="v_48_020", help="ProteinMPNN: v_48_002, v_48_010, v_48_020, v_48_030; v_48_010=version with 48 edges 0.10A noise")
+    inv_fold.add_argument("--save_score", type=int, default=0, help="ProteinMPNN: 0 for False, 1 for True; save score=-log_prob to npy files")
+    inv_fold.add_argument("--save_probs", type=int, default=0, help="ProteinMPNN: 0 for False, 1 for True; save MPNN predicted probabilites per position")
+    inv_fold.add_argument("--score_only", type=int, default=0, help="ProteinMPNN: 0 for False, 1 for True; score input backbone-sequence pairs")
+    inv_fold.add_argument("--path_to_fasta", type=str, default="", help="ProteinMPNN: score provided input sequence in a fasta format; e.g. GGGGGG/PPPPS/WWW for chains A, B, C sorted alphabetically and separated by /")
+    inv_fold.add_argument("--conditional_probs_only", type=int, default=0, help="ProteinMPNN: 0 for False, 1 for True; output conditional probabilities p(s_i given the rest of the sequence and backbone)")    
+    inv_fold.add_argument("--conditional_probs_only_backbone", type=int, default=0, help="ProteinMPNN: 0 for False, 1 for True; if true output conditional probabilities p(s_i given backbone)") 
+    inv_fold.add_argument("--unconditional_probs_only", type=int, default=0, help="ProteinMPNN: 0 for False, 1 for True; output unconditional probabilities p(s_i given backbone) in one forward pass")   
+    inv_fold.add_argument("--backbone_noise", type=float, default=0.00, help="ProteinMPNN: Standard deviation of Gaussian noise to add to backbone atoms")
+    inv_fold.add_argument("--batch_size", type=int, default=1, help="ProteinMPNN: Batch size; can set higher for titan, quadro GPUs, reduce this if running out of GPU memory")
+    inv_fold.add_argument("--pdb_path_chains", type=str, default='', help="ProteinMPNN: Define which chains need to be designed for a single PDB ")
+    inv_fold.add_argument("--chain_id_jsonl",type=str, default='', help="ProteinMPNN: Path to a dictionary specifying which chains need to be designed and which ones are fixed, if not specied all chains will be designed.")
+    inv_fold.add_argument("--fixed_positions_jsonl", type=str, default='', help="ProteinMPNN: Path to a dictionary with fixed positions")
+    inv_fold.add_argument("--omit_AAs", type=list, default='X', help="ProteinMPNN: Specify which amino acids should be omitted in the generated sequence, e.g. 'AC' would omit alanine and cystine.")
+    inv_fold.add_argument("--bias_AA_jsonl", type=str, default='', help="ProteinMPNN: Path to a dictionary which specifies AA composion bias if neededi, e.g. {A: -1.1, F: 0.7} would make A less likely and F more likely.")
+    inv_fold.add_argument("--bias_by_res_jsonl", default='', help="ProteinMPNN: Path to dictionary with per position bias.") 
+    inv_fold.add_argument("--omit_AA_jsonl", type=str, default='', help="ProteinMPNN: Path to a dictionary which specifies which amino acids need to be omited from design at specific chain indices")
+    inv_fold.add_argument("--pssm_jsonl", type=str, default='', help="ProteinMPNN: Path to a dictionary with pssm")
+    inv_fold.add_argument("--pssm_multi", type=float, default=0.0, help="ProteinMPNN: A value between [0.0, 1.0], 0.0 means do not use pssm, 1.0 ignore MPNN predictions")
+    inv_fold.add_argument("--pssm_threshold", type=float, default=0.0, help="ProteinMPNN: A value between -inf + inf to restric per position AAs")
+    inv_fold.add_argument("--pssm_log_odds_flag", type=int, default=0, help="ProteinMPNN: 0 for False, 1 for True")
+    inv_fold.add_argument("--pssm_bias_flag", type=int, default=0, help="ProteinMPNN: 0 for False, 1 for True")
+    inv_fold.add_argument("--tied_positions_jsonl", type=str, default='', help="ProteinMPNN: Path to a dictionary with tied positions")
 
 ##############################################################################################################
-    lang_gen = subparsers.add_parser('lang_gen', help='Generate proteins using large language models including ProtGPT2 and ESM2')
+    lang_gen = subparsers.add_parser('lang_gen', help='Generate proteins using large language models')
 
     lang_gen.add_argument(
         "model",
-        help="Choose between Gibbs sampling with ESM2, ProtGPT2 or ZymCTRL.",
+        help="Choose desired language model",
         choices = ['ESM2','ProtGPT2', 'ZymCTRL']
 )
     lang_gen.add_argument(
         "--finetuned",
-        help="Input path to your own finetuned ProtGPT2 or ESM2 model",
+        help="Input path to your own finetuned model",
         action="store",
         default = False,
 )
     lang_gen.add_argument(
         "--esm2_arch",
-        help="Choose which ESM2 architecture your finetuned model is",
+        help="ESM2_Gibbs: Choose which ESM2 architecture your finetuned model is",
         action="store",
         default = 'esm2_t12_35M_UR50D',
 )
@@ -1984,7 +2064,7 @@ def return_parser():
 
     lang_gen.add_argument(
         "--ctrl_tag",
-        help="Choose an Enzymatic Commision (EC) control tag for conditional protein generation based on the tag. You can find all ECs here https://www.brenda-enzymes.org/index.php",
+        help="ZymCTRL: Choose an Enzymatic Commision (EC) control tag for conditional protein generation based on the tag. You can find all ECs here https://www.brenda-enzymes.org/index.php",
         action="store",
 )
     lang_gen.add_argument(
@@ -1996,48 +2076,48 @@ def return_parser():
 )
     lang_gen.add_argument(
         "--seed_seq",
-        help="Sequence to seed generation",
+        help="Sequence to seed generation, the default is M.",
         default='M',
 )
     lang_gen.add_argument(
         "--max_length",
-        help="Max length of proteins generated",
+        help="Max length of proteins generated, defautl is 100",
         default=100,
         type=int
 )
     lang_gen.add_argument(
         "--do_sample",
-        help="Whether or not to use sampling for ProtGPT2 ; use greedy decoding otherwise",
+        help="ProtGPT2/ZymCTRL: Whether or not to use sampling for generation; use greedy decoding otherwise",
         default=True,
         dest="do_sample",
 )
     lang_gen.add_argument(
         "--top_k",
-        help="The number of highest probability vocabulary tokens to keep for top-k-filtering for ProtGPT2 or ESM2_Gibbs",
+        help="The number of highest probability vocabulary tokens to keep for top-k-filtering",
         default=950,
         dest="top_k",
         type=int
 )
     lang_gen.add_argument(
         "--repetition_penalty",
-        help="The parameter for repetition penalty for ProtGPT2. 1.0 means no penalty",
+        help="ProtGPT2/ZymCTRL: The parameter for repetition penalty, the default is 1.2. 1.0 means no penalty",
         default=1.2,
         dest="repetition_penalty",
 )
     lang_gen.add_argument(
         "--num_return_sequences",
-        help="Number of sequences for ProtGPT or ESM2_Gibbs to generate. Default is 5",
-        default=5,
+        help="Number of sequences to generate. Default is 1",
+        default=1,
         dest="num_return_sequences",
         type=int,
 )
     lang_gen.add_argument("--random_fill", 
-        help="Randomly select positions to fill each iteration for Gibbs sampling with ESM2. If not called then fill the positions in order", 
+        help="ESM2_Gibbs: Randomly select positions to fill each iteration for Gibbs sampling with ESM2. If not called then fill the positions in order", 
         action="store_false",
         default = True,
         )
     lang_gen.add_argument("--num_positions", 
-        help="Generate new AAs for this many positions each iteration for Gibbs sampling with ESM2. If 0, then generate for all target positions each round.", 
+        help="ESM2_Gibbs: Generate new AAs for this many positions each iteration for Gibbs sampling with ESM2. If 0, then generate for all target positions each round.", 
         action="store",
         default = 0,
         )
@@ -2138,9 +2218,10 @@ def return_parser():
 )
     classify.add_argument(
         "--emb_model",
-        help="Select between 'esm2_t6_8M', 'esm2_t12_35M', 'esm2_t30_150M', 'esm2_t33_650M', 'esm2_t36_3B','esm2_t48_15B', or 'ProtT5-XL' for embedding your query proteins to then train your custom classifier",
+        help="Select desired protein language model for embedding your query proteins to then train your custom classifier. Default is esm2_t12_35M",
         default = 'esm2_t12_35M',
-        action="store"
+        action="store",
+        choices = ['esm2_t6_8M', 'esm2_t12_35M', 'esm2_t30_150M', 'esm2_t33_650M', 'esm2_t36_3B','esm2_t48_15B', 'ProtT5-XL', 'ProstT5']
 )
     classify.add_argument(
         "--train_split",
@@ -2149,7 +2230,7 @@ def return_parser():
 )
     classify.add_argument(
         "--preTrained",
-        help="Enter the path to your pre-trained XGBoost binary classifier that you've trained with TRILL.",
+        help="Enter the path to your pre-trained XGBoost binary classifier that you've trained with TRILL. This will be a .json file.",
         action="store",
 )
 
@@ -2219,7 +2300,7 @@ def return_parser():
     fold = subparsers.add_parser('fold', help='Predict 3D protein structures using ESMFold or obtain 3Di structure for use with Foldseek to perform remote homology detection')
 
     fold.add_argument("model", 
-        help="Input fasta file", 
+        help="Choose your desired model.", 
         choices = ['ESMFold', 'ProstT5']
         )
     
@@ -2228,14 +2309,14 @@ def return_parser():
         action="store"
         )
     fold.add_argument("--strategy", 
-        help="Choose a specific strategy if you are running out of CUDA memory. You can also pass either 64, or 32 for model.trunk.set_chunk_size(x)", 
+        help="ESMFold: Choose a specific strategy if you are running out of CUDA memory. You can also pass either 64, or 32 for model.trunk.set_chunk_size(x)", 
         action="store",
         default = None,
         )    
 
     fold.add_argument(
         "--batch_size",
-        help="Change batch-size number for folding proteins. Default is 1",
+        help="ESMFold: Change batch-size number for folding proteins. Default is 1",
         action="store",
         default = 1,
         dest="batch_size",
@@ -2249,22 +2330,161 @@ def return_parser():
         )
     
     visualize.add_argument("--method", 
-        help="Method for reducing dimensions of embeddings. Default is PCA, but you can also choose UMAP or tSNE", 
+        help="Method for reducing dimensions of embeddings. Default is PCA", 
         action="store",
+        choices = ['PCA', 'UMAP', 'tSNE'],
         default="PCA"
         )
     visualize.add_argument("--key", 
-        help="Input a CSV, with your class mappings for your embeddings where the first column is the label and the second column is the grouping.", 
+        help="Input a CSV, with your group mappings for your embeddings where the first column is the label and the second column is the group to be colored.", 
         action="store",
         default=False
         )
     
 ##############################################################################################################
-    dock = subparsers.add_parser('dock', help='Dock proteins and small molecule ligands with DiffDock or Smina')
+    simulate = subparsers.add_parser('simulate', help='Use MD to relax protein structures')
+
+    simulate.add_argument(
+        "receptor",
+        help="Receptor of interest to be simulated. Must be either pdb file or a .txt file with the absolute path for each pdb, separated by a new-line.",
+        action="store",
+)
+
+#     simulate.add_argument("--ligand", 
+#         help="Ligand of interest to be simulated with input receptor", 
+#         action="store",
+#         )
+    
+#     simulate.add_argument(
+#         "--constraints",
+#         help="Specifies which bonds and angles should be implemented with constraints. Allowed values are None, HBonds, AllBonds, or HAngles.",
+#         choices=["None", "HBonds", "AllBonds", "HAngles"],
+#         default="None",
+#         action="store",
+#     )
+
+#     simulate.add_argument(
+#         "--rigidWater",
+#         help="If true, water molecules will be fully rigid regardless of the value passed for the constraints argument.",
+#         default=None,
+#         action="store_true",
+#     )
+
+    # simulate.add_argument(
+    #     '--forcefield', 
+    #     type=str, 
+    #     default='amber14-all.xml', 
+    #     help='Force field to use. Default is amber14-all.xml'
+    # )
+    
+    # simulate.add_argument(
+    #     '--solvent', 
+    #     type=str, 
+    #     default='amber14/tip3pfb.xml', 
+    #     help='Solvent model to use, the default is amber14/tip3pfb.xml'
+    # )
+#     simulate.add_argument(
+#         '--solvate', 
+#         default=False, 
+#         help='Add to solvate your simulation',
+#         action='store_true'
+#     )
+
+#     simulate.add_argument(
+#         '--step_size',
+#         help='Step size in picoseconds. Default is 0.002',
+#         type=float,
+#         default=0.002, 
+#         action="store",
+#     )
+#     simulate.add_argument(
+#         '--num_steps',
+#         type=int,
+#         default=5000,
+#         help='Number of simulation steps'
+#     )
+
+#     simulate.add_argument(
+#         '--reporting_interval',
+#         type=int,
+#         default=1000,
+#         help='Reporting interval for simulation'
+#     )
+
+#     simulate.add_argument(
+#         '--output_traj_dcd',
+#         type=str,
+#         default='trajectory.dcd',
+#         help='Output trajectory DCD file'
+#     )
+
+#     simulate.add_argument(
+#         '--apply-harmonic-force',
+#         help='Whether to apply a harmonic force to pull the molecule.',
+#         type=bool,
+#         default=False,
+#         action="store",
+#     )
+
+#     simulate.add_argument(
+#         '--force-constant',
+#         help='Force constant for the harmonic force in kJ/mol/nm^2.',
+#         type=float,
+#         default=None,
+#         action="store",
+#     )
+
+#     simulate.add_argument(
+#         '--z0',
+#         help='The z-coordinate to pull towards in nm.',
+#         type=float,
+#         default=None,
+#         action="store",
+#     )
+
+#     simulate.add_argument(
+#         '--molecule-atom-indices',
+#         help='Comma-separated list of atom indices to which the harmonic force will be applied.',
+#         type=str,
+#         default="0,1,2",  # Replace with your default indices
+#         action="store",
+#     )
+
+#     simulate.add_argument(
+#         '--equilibration_steps',
+#         help='Steps you want to take for NVT and NPT equilibration. Each step is 0.002 picoseconds',
+#         type=int,
+#         default=300, 
+#         action="store",
+#     )
+
+#     simulate.add_argument(
+#         '--periodic_box',
+#         help='Give, in nm, one of the dimensions to build the periodic boundary.',
+#         type=int,
+#         default=10, 
+#         action="store",
+#     )
+#     simulate.add_argument(
+#         '--martini_top',
+#         help='Specify the path to the MARTINI topology file you want to use.',
+#         type=str,
+#         default=False,
+#         action="store",
+# )
+    simulate.add_argument(
+        '--just_relax',
+        help='Just relaxes the input structure(s) and outputs the fixed and relaxed structure(s). The forcefield that is used is amber14.',
+        action="store_true",
+        default=False,
+    )
+
+##############################################################################################################
+    dock = subparsers.add_parser('dock', help='Perform molecular docking with proteins and ligands. Note that you should relax your protein receptor with Simulate or another method before docking.')
 
     dock.add_argument("algorithm",
-        help="Choose between DiffDock and Smina. Note that while Smina can dock small-molecule and protein ligands, DiffDock can only do small-molecules.",
-        choices = ['DiffDock', 'Smina']
+        help="Note that while Smina and LightDock can dock small-molecule and protein ligands, DiffDock and Vina can only do small-molecules.",
+        choices = ['DiffDock', 'Vina', 'Smina', 'LightDock']
     )
 
     dock.add_argument("protein", 
@@ -2273,15 +2493,16 @@ def return_parser():
         )
     
     dock.add_argument("ligand", 
-        help="Ligand to dock protein with", 
+        help="Ligand to dock protein with. Note that with Autodock Vina, you can dock multiple ligands at one time. Simply provide them one after another before any other optional TRILL arguments are added. Also, if a .txt file is provided with each line providing the absolute path to different ligands, TRILL will dock each ligand one at a time.", 
         action="store",
+        nargs='*'
         )
     
-    dock.add_argument("--force_ligand", 
-        help="TRILL will automatically assume your ligand is a small molecule if the MW is less than 800. To get around this, you can force TRILL to read the ligand as either type.", 
-        default=False,
-        choices = ['small', 'protein']
-        )
+    # dock.add_argument("--force_ligand", 
+    #     help="If you are not doing blind docking, TRILL will automatically assume your ligand is a small molecule if the MW is less than 800. To get around this, you can force TRILL to read the ligand as either type.", 
+    #     default=False,
+    #     choices = ['small', 'protein']
+    #     )
     
     dock.add_argument("--save_visualisation", 
         help="DiffDock: Save a pdb file with all of the steps of the reverse diffusion.", 
@@ -2315,47 +2536,85 @@ def return_parser():
         action="store",
         default=None
         )
-    
-    # dock.add_argument("--anm", 
-    #     help="LightDock: If selected, backbone flexibility is modeled using Anisotropic Network Model (via ProDy)", 
-    #     action="store_true",
-    #     default=False
-    #     )
-    
-    # dock.add_argument("--swarms", 
-    #     help="LightDock: The number of swarms of the simulations, if not provided by the user, automatically calculated depending on receptor surface area and shape", 
-    #     action="store",
-    #     type=int,
-    #     default=False
-    #     )
-    
-    # dock.add_argument("--sim_steps", 
-    #     help="LightDock: The number of steps of the simulation", 
-    #     action="store",
-    #     type=int,
-    #     default=100
-    #     )
+    dock.add_argument("--min_radius", 
+        help="Smina/Vina + Fpocket: Minimum radius of alpha spheres in a pocket. Default is 3Å.", 
+        type=float,
+        action="store",
+        default=3.0
+        )
 
+    dock.add_argument("--max_radius", 
+        help="Smina/Vina + Fpocket: Maximum radius of alpha spheres in a pocket. Default is 6Å.", 
+        type=float,
+        action="store",
+        default=6.0
+        )
+
+    dock.add_argument("--min_alpha_spheres", 
+        help="Smina/Vina + Fpocket: Minimum number of alpha spheres a pocket must contain to be considered. Default is 35.", 
+        type=int,
+        action="store",
+        default=35
+        )
+    
+    dock.add_argument("--exhaustiveness", 
+        help="Smina/Vina: Change computational effort.", 
+        type=int,
+        action="store",
+        default=8
+        )
+    
+    dock.add_argument("--blind", 
+        help="Smina/Vina: Perform blind docking and skip binding pocket prediction with fpocket", 
+        action="store_true",
+        default=False
+        )
+    dock.add_argument("--anm", 
+        help="LightDock: If selected, backbone flexibility is modeled using Anisotropic Network Model (via ProDy)", 
+        action="store_true",
+        default=False
+        )
+    
+    dock.add_argument("--swarms", 
+        help="LightDock: The number of swarms of the simulations, if not provided by the user, automatically calculated depending on receptor surface area and shape. Default is 100", 
+        action="store",
+        type=int,
+        default=100
+        )
+    
+    dock.add_argument("--sim_steps", 
+        help="LightDock: The number of steps of the simulation. Default is 100", 
+        action="store",
+        type=int,
+        default=100
+        )
+    dock.add_argument("--restraints", 
+        help="LightDock: If restraints_file is provided, residue restraints will be considered during the setup and the simulation", 
+        action="store",
+        default=None
+        )
 ##############################################################################################################
 
-    utils = subparsers.add_parser('utils', help='Various utilities')
+    utils = subparsers.add_parser('utils', help='Misc utilities')
 
     utils.add_argument(
         "tool",
-        help="Pepare a csv for use with the classify command. Takes a directory or text file with list of paths for fasta files. Each file will be a unique class, so if your directory contains 5 fasta files, there will be 5 classes in the output key csv.",
+        help="prepare_class_key: Pepare a csv for use with the classify command. Takes a directory or text file with list of paths for fasta files. Each file will be a unique class, so if your directory contains 5 fasta files, there will be 5 classes in the output key csv.",
         choices = ['prepare_class_key']
 )
 
     utils.add_argument(
         "--dir",
-        help="Directory to be used for creating a class key csv for classification.",
+        help="Directory to be used for creating a class key csv for classification or for bulk-relaxation of protein structures.",
         action="store",
 )
+
     utils.add_argument(
         "--fasta_paths_txt",
         help="Text file with absolute paths of fasta files to be used for creating the class key. Each unique path will be treated as a unique class, and all the sequences in that file will be in the same class.",
         action="store",
 )
+
     
 ##############################################################################################################
 

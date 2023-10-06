@@ -668,6 +668,13 @@ class ProstT5(pl.LightningModule):
         self.tokenizer = T5Tokenizer.from_pretrained('Rostlab/ProstT5', do_lower_case=False)
         if int(args.GPUs) >= 1:
             self.model = self.model.half()
+        if self.command == 'inv_fold_gen':
+            self.min_len = 1
+            self.max_len = int(args.max_length)
+            self.temp = float(args.temp)
+            self.sample = args.dont_sample
+            self.top_p = float(args.top_p)
+            self.rep_pen = float(args.repetition_penalty)
 
     
     def training_step(self, batch, batch_idx):
@@ -732,12 +739,7 @@ class ProstT5(pl.LightningModule):
                     aa_reps.append((emb, lab))
 
             return aa_reps, avg_reps
-            # if len(seqs) == 1:
-            #     protein_emb = emb.mean(dim=0)
-            #     return tuple((protein_emb, label[0]))
-            # else:
-            #     protein_emb = emb.mean(dim=1)
-            #     return list(zip(protein_emb, label))
+
         elif self.command == 'fold':
             label, _ = batch
             seqs = [" ".join(list(re.sub(r"[UZOB]", "X", sequence))) for sequence in batch[1]]
@@ -785,25 +787,23 @@ class ProstT5(pl.LightningModule):
             label, seq = batch
             seq = seq[0].lower()
             sequence_examples_backtranslation = [ "<fold2AA>" + " " + s for s in seq]
+            sequence_examples_backtranslation = [' '.join(sequence_examples_backtranslation)]
             ids_backtranslation = self.tokenizer.batch_encode_plus(sequence_examples_backtranslation,
                                   add_special_tokens=True,
-                                  padding="longest",
                                   return_tensors='pt')
             
             gen_kwargs_fold2AA = {
-            "do_sample": True,
-            "top_p" : 0.90,
-            "temperature" : 1.1,
-            "top_k" : 6,
-            "repetition_penalty" : 1.2,
+            "do_sample": self.sample,
+            "top_p" : self.top_p,
+            "temperature" : self.temp,
+            "repetition_penalty" : self.rep_pen,
             }
             if next(self.model.parameters()).is_cuda:
                 backtranslations = self.model.generate( 
                 ids_backtranslation.input_ids.cuda(), 
                 attention_mask=ids_backtranslation.attention_mask.cuda(), 
-                max_length=max([ len(s) for s in seq]),
-                min_length=min([ len(s) for s in seq]), 
-                early_stopping=True,
+                max_length=self.max_len,
+                min_length=self.min_len, 
                 num_return_sequences=1,
                 **gen_kwargs_fold2AA
                 )
@@ -811,15 +811,14 @@ class ProstT5(pl.LightningModule):
                 backtranslations = self.model.generate( 
                 ids_backtranslation.input_ids, 
                 attention_mask=ids_backtranslation.attention_mask, 
-                max_length=max([ len(s) for s in seq]),
-                min_length=min([ len(s) for s in seq]), 
-                early_stopping=True,
+                max_length=self.max_len,
+                min_length=self.min_len, 
                 num_return_sequences=1,
                 **gen_kwargs_fold2AA
                 )
 
             decoded_backtranslations = self.tokenizer.batch_decode(backtranslations, skip_special_tokens=True)
-            aminoAcid_sequences = "".join(decoded_backtranslations)
+            aminoAcid_sequences = ''.join(decoded_backtranslations).replace(' ', '')
             return aminoAcid_sequences
 
 class CustomWriter(BasePredictionWriter):
