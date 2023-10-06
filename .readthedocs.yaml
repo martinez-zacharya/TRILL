@@ -12,7 +12,7 @@ build:
     - pip install pytorch-lightning transformers datasets biotite bokeh umap-learn pyfiglet
     - pip install fair-esm GitPython xgboost pandas rdkit e3nn biopython spyrmsd SentencePiece omegaconf hydra-core icecream chardet cchardet skops fairscale deepspeed
     - pip install pyg-lib torch-scatter torch-sparse torch-cluster torch-spline-conv torch-geometric -f https://data.pyg.org/whl/torch-1.13.1+cpu.html
-    - >
+    - |
     "${SHELL}" <(curl -L micro.mamba.pm/install.sh)
     - micromamba install -c conda-forge openmm swig pdbfixer
 sphinx:
