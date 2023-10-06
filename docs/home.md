@@ -39,6 +39,7 @@ TRILL (**TR**aining and **I**nference using the **L**anguage of **L**ife) is a s
 ```shell
 micromamba create -n TRILL python=3.10 ; micromamba activate TRILL
 micromamba install pytorch==1.13.1 pytorch-cuda=11.7 -c pytorch -c nvidia -c conda-forge openmm swig pdbfixer openbabel smina fpocket vina -c bioconda foldseek -c pyg pyg=2.3.1=py310_torch_1.13.0_cu117 pytorch-cluster=1.6.1=py310_torch_1.13.0_cu117 pytorch-sparse=0.6.17=py310_torch_1.13.0_cu117 pytorch-scatter=2.1.1=py310_torch_1.13.0_cu117 -c "dglteam/label/cu117" dgl
+pip install git+https://github.com/martinez-zacharya/lightdock.git@03a8bc4888c0ff8c98b7f0df4b3c671e3dbf3b1f
 ```
 3. Next, simply install TRILL!
 ```shell
