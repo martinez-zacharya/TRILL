@@ -10,7 +10,7 @@ dependencies:
   - openmm
   - swig
   - pdbfixer
-  - pytorch=1.13.1=py38_cpuonly
+  - pytorch=1.13.1=py38_cpu
   - cpuonly
   - pyg=2.3.1=py38_torch_1.13.0_cpu 
   - pytorch-cluster=1.6.1=py38_torch_1.13.0_cpu 
