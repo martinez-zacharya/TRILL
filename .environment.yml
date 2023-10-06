@@ -7,8 +7,8 @@ dependencies:
   - openmm
   - swig
   - pdbfixer
+  - pytorch=1.13.1
   - pip:
-    - torch==1.13.1 -f https://download.pytorch.org/whl/cpu
     - pytorch-lightning
     - transformers
     - datasets
