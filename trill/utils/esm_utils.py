@@ -10,6 +10,8 @@ from transformers.models.esm.openfold_utils.protein import to_pdb, Protein as OF
 from transformers.models.esm.openfold_utils.feats import atom14_to_atom37
 from trill.utils.inverse_folding.gvp_transformer import GVPTransformerModel, lightning_GVPTransformerModel
 import warnings
+import os
+import glob
 
 class coordDataset(torch.utils.data.Dataset):
     def __init__(self, input):
@@ -258,3 +260,74 @@ def _load_model_and_alphabet_core_v1(model_data):
 
     return model, alphabet, model_state
 
+
+def parse_and_save_all_predictions(args):
+    # Look for all 'predictions_*.pt' files in the specified directory
+    prediction_files = glob.glob(f"{args.outdir}/predictions_*.pt")
+    
+    # Initialize lists to hold parsed data across all files
+    all_parsed_data_avg = []
+    all_batched_per_aa_embeddings_with_labels = []  # Modified to store labels
+
+    for file_path in prediction_files:
+        # Load the predictions file
+        preds = torch.load(file_path)
+        
+        # Initialize lists to hold parsed data
+        parsed_data_avg = []
+        
+        # Initialize a list to hold per amino acid embeddings and labels for each batch
+        batched_per_aa_embeddings_with_labels = []  # Modified to store labels
+
+        # Start parsing
+        for outer_list in preds:
+            batch_per_aa_embeddings = []  # To hold per_AA embeddings for the current batch
+            for tuple_in_outer_list in outer_list:
+                if len(tuple_in_outer_list) == 2:
+                    per_aa_list, avg_list = tuple_in_outer_list
+                else:
+                    # Handle cases where there's only one type of representation
+                    if isinstance(tuple_in_outer_list[0][0], np.ndarray):
+                        if len(tuple_in_outer_list[0][0].shape) > 1:
+                            per_aa_list = tuple_in_outer_list
+                            avg_list = []
+                        else:
+                            avg_list = tuple_in_outer_list
+                            per_aa_list = []
+                
+                # Parsing per amino acid representations
+                for tuple_in_per_aa_list in per_aa_list:
+                    embedding, label = tuple_in_per_aa_list
+                    batch_per_aa_embeddings.append((embedding, label))  # Modified to store labels
+                    
+                # Parsing average representations
+                for tuple_in_avg_list in avg_list:
+                    embedding, label = tuple_in_avg_list
+                    parsed_data_avg.append((embedding.flatten(), label))
+            
+            # Append the batch of per_AA embeddings to the main list
+            if batch_per_aa_embeddings:
+                batched_per_aa_embeddings_with_labels.append(batch_per_aa_embeddings)  # Modified to store labels
+
+        # Accumulate parsed data across all files
+        all_parsed_data_avg.extend(parsed_data_avg)
+        all_batched_per_aa_embeddings_with_labels.extend(batched_per_aa_embeddings_with_labels)  # Modified to store labels
+
+    # Save average embeddings as CSV
+    if all_parsed_data_avg:
+        df_parsed_avg = pd.DataFrame(all_parsed_data_avg, columns=['Embeddings', 'Label'])
+        finaldf_parsed_avg = df_parsed_avg['Embeddings'].apply(pd.Series)
+        finaldf_parsed_avg['Label'] = df_parsed_avg['Label']
+        if args.command == 'embed':
+            outname = os.path.join(args.outdir, f'{args.name}_{args.model}_AVG.csv')
+        elif args.command == 'classify':
+            outname = os.path.join(args.outdir, f'{args.name}_ProtT5_AVG.csv')
+        finaldf_parsed_avg.to_csv(outname, index=False)
+    
+    # Save batched per_AA embeddings as .pt file
+    if all_batched_per_aa_embeddings_with_labels:  # Modified to store labels
+        if args.command == 'embed':
+            outname = os.path.join(args.outdir, f'{args.name}_{args.model}_perAA.pt')
+            torch.save(all_batched_per_aa_embeddings_with_labels, outname)  # Modified to store labels
+
+    return 
