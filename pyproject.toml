@@ -53,7 +53,7 @@ xgboost = "^1.7.5"
 skops = "^0.6.0"
 #lightdock = "^0.9.4"
 #vina = "^1.2.5"
-lightdock = {git = "https://github.com/martinez-zacharya/lightdock.git", rev = "03a8bc4888c0ff8c98b7f0df4b3c671e3dbf3b1f"}
+#lightdock = {git = "https://github.com/martinez-zacharya/lightdock.git", rev = "03a8bc4888c0ff8c98b7f0df4b3c671e3dbf3b1f"}
 biobb_vs = "^4.1.1"
 
 
