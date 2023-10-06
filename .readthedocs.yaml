@@ -6,8 +6,7 @@ build:
 python:
   version: 3.8
   install:
-    - method: conda
-      environment: environment.yml
+    - path: environment.yml
 
 sphinx:
   configuration: docs/conf.py
