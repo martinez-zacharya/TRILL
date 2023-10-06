@@ -1,0 +1,41 @@
+name: TRILL_RTD
+channels:
+  - conda-forge
+  - defaults
+dependencies:
+  - python=3.10
+  - openmm
+  - swig
+  - pdbfixer
+  - pip:
+    - torch==1.13.1 -f https://download.pytorch.org/whl/cpu
+    - pytorch-lightning
+    - transformers
+    - datasets
+    - biotite
+    - bokeh
+    - umap-learn
+    - pyfiglet
+    - fair-esm
+    - GitPython
+    - xgboost
+    - pandas
+    - rdkit
+    - e3nn
+    - biopython
+    - spyrmsd
+    - SentencePiece
+    - omegaconf
+    - hydra-core
+    - icecream
+    - chardet
+    - cchardet
+    - skops
+    - fairscale
+    - deepspeed
+    - pyg-lib
+    - torch-scatter -f https://data.pyg.org/whl/torch-1.13.1+cpu.html
+    - torch-sparse -f https://data.pyg.org/whl/torch-1.13.1+cpu.html
+    - torch-cluster -f https://data.pyg.org/whl/torch-1.13.1+cpu.html
+    - torch-spline-conv -f https://data.pyg.org/whl/torch-1.13.1+cpu.html
+    - torch-geometric -f https://data.pyg.org/whl/torch-1.13.1+cpu.html
