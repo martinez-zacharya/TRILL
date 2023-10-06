@@ -9,7 +9,8 @@ build:
     - pip install poetry
     - poetry config virtualenvs.create false
     - |
-      curl -L micro.mamba.pm/install.sh | bash -s -- --shell=bash
+      curl -L micro.mamba.pm/install.sh -o install.sh
+      bash install.sh --shell=bash
     - micromamba install -c conda-forge openmm swig pdbfixer
 
 sphinx:
