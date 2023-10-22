@@ -1,20 +1,12 @@
 version: 2
 
 build:
-  os: "ubuntu-22.04"
-  tools:
-    python: "3.10"
-  jobs:
-    post_install:
-    - pip install poetry
-    - poetry config virtualenvs.create false
-    - pip install torch==1.13.1 -f https://download.pytorch.org/whl/cpu
-    - pip install pytorch-lightning transformers datasets biotite bokeh umap-learn pyfiglet
-    - pip install fair-esm GitPython xgboost pandas rdkit e3nn biopython spyrmsd SentencePiece omegaconf hydra-core icecream chardet cchardet skops fairscale deepspeed
-    - pip install pyg-lib torch-scatter torch-sparse torch-cluster torch-spline-conv torch-geometric -f https://data.pyg.org/whl/torch-1.13.1+cpu.html
+  image: latest
+
+python:
+  version: 3.8
+conda:
+  environment: .environment.yml 
+
 sphinx:
   configuration: docs/conf.py
-  
-python:
-  install:
-    - requirements: docs/doc_requirements.txt
