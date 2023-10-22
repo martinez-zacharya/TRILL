@@ -14,6 +14,7 @@ from sklearn.model_selection import train_test_split
 import torch.nn as nn
 import torch.nn.functional as F
 import pandas as pd
+from Bio import SeqIO
 import requests
 from pytorch_lightning.loggers import TensorBoardLogger
 from pytorch_lightning.profilers import PyTorchProfiler
@@ -26,7 +27,7 @@ from rdkit import Chem
 # from fairscale.nn.wrap import enable_wrap, wrap
 import builtins
 from pytorch_lightning.utilities.deepspeed import convert_zero_checkpoint_to_fp32_state_dict
-from trill.utils.lightning_models import ESM, ProtGPT2, CustomWriter, ESM_Gibbs, ProtT5, ZymCTRL, ProstT5, Custom3DiDataset
+from trill.utils.lightning_models import ESM, ProtGPT2, CustomWriter, ESM_Gibbs, ProtT5, ZymCTRL, ProstT5, Custom3DiDataset, Ankh
 from trill.utils.update_weights import weights_update
 from trill.utils.dock_utils import perform_docking, fixer_of_pdbs, write_docking_results_to_file
 from trill.utils.simulation_utils import relax_structure
@@ -41,7 +42,8 @@ from sklearn.ensemble import IsolationForest
 import skops.io as sio
 from sklearn.preprocessing import LabelEncoder
 import trill.utils.ephod_utils as eu
-from trill.utils.classify_utils import generate_class_key_csv
+from trill.utils.classify_utils import generate_class_key_csv, prep_data, log_results, xg_test, sweep, train_model, custom_xg_test
+from trill.utils.fetch_embs import convert_embeddings_to_csv, download_embeddings
 import logging
 from pyfiglet import Figlet
 import bokeh
@@ -136,7 +138,7 @@ def main(args):
         "model",
         help="Choose protein language model to embed query proteins",
         action="store",
-        choices = ['esm2_t6_8M', 'esm2_t12_35M', 'esm2_t30_150M', 'esm2_t33_650M', 'esm2_t36_3B','esm2_t48_15B', 'ProtT5-XL', 'ProstT5']
+        choices = ['esm2_t6_8M', 'esm2_t12_35M', 'esm2_t30_150M', 'esm2_t33_650M', 'esm2_t36_3B','esm2_t48_15B', 'ProtT5-XL', 'ProstT5', 'Ankh', 'Ankh-Large']
 )
 
     embed.add_argument("query", 
@@ -492,7 +494,7 @@ def main(args):
         help="Select desired protein language model for embedding your query proteins to then train your custom classifier. Default is esm2_t12_35M",
         default = 'esm2_t12_35M',
         action="store",
-        choices = ['esm2_t6_8M', 'esm2_t12_35M', 'esm2_t30_150M', 'esm2_t33_650M', 'esm2_t36_3B','esm2_t48_15B', 'ProtT5-XL', 'ProstT5']
+        choices = ['esm2_t6_8M', 'esm2_t12_35M', 'esm2_t30_150M', 'esm2_t33_650M', 'esm2_t36_3B','esm2_t48_15B', 'ProtT5-XL', 'ProstT5', 'Ankh', 'Ankh-Large']
 )
     classify.add_argument(
         "--train_split",
@@ -565,6 +567,25 @@ def main(args):
         help="XGBoost/iForest: Number of boosting rounds",
         action="store",
         default=115
+)
+    classify.add_argument(
+        "--sweep",
+        help="XGBoost/iForest: Use this flag to perform cross-validated bayesian optimization over the hyperparameter space.",
+        action="store_true",
+        default=False
+)
+    classify.add_argument(
+        "--sweep_cv",
+        help="XGBoost Change the number of folds used for cross-validation.",
+        action="store",
+        default=3
+)
+    classify.add_argument(
+        "--f1_avg_method",
+        help="XGBoost: Change the scoring method used for calculated F1. Default is with no averaging.",
+        action="store",
+        default=None,
+        choices=["macro", "weighted", "micro", "None"]
 )
 ##############################################################################################################
     
@@ -871,7 +892,7 @@ def main(args):
     utils.add_argument(
         "tool",
         help="prepare_class_key: Pepare a csv for use with the classify command. Takes a directory or text file with list of paths for fasta files. Each file will be a unique class, so if your directory contains 5 fasta files, there will be 5 classes in the output key csv.",
-        choices = ['prepare_class_key']
+        choices = ['prepare_class_key', 'fetch_embeddings']
 )
 
     utils.add_argument(
@@ -884,6 +905,25 @@ def main(args):
         "--fasta_paths_txt",
         help="Text file with absolute paths of fasta files to be used for creating the class key. Each unique path will be treated as a unique class, and all the sequences in that file will be in the same class.",
         action="store",
+)
+    utils.add_argument(
+    "--uniprotDB",
+    help="UniProt embedding dataset to download.",
+    choices=['UniProtKB',
+        'A.thaliana',
+        'C.elegans',
+        'E.coli',
+        'H.sapiens',
+        'M.musculus',
+        'R.norvegicus',
+        'SARS-CoV-2'],
+    action="store",
+)   
+    utils.add_argument(
+    "--rep",
+    help="The representation to download.",
+    choices=['per_AA', 'avg'],
+    action="store"
 )
 
     
@@ -939,7 +979,7 @@ def main(args):
         bokeh.io.save(layout, filename=os.path.join(args.outdir, f'{args.name}_{args.method}_{incsv}.html'), title = args.name)
 
 
-
+    
     elif args.command == 'embed':
         if args.query.endswith(('.fasta', '.faa', '.fa')) == False:
             raise Exception(f'Input query file - {args.query} is not a valid file format.\
@@ -955,7 +995,7 @@ def main(args):
             if int(args.GPUs) == 0:
                 trainer = pl.Trainer(enable_checkpointing=False, callbacks = [pred_writer], logger=logger, num_nodes=int(args.nodes))
             else:
-                trainer = pl.Trainer(enable_checkpointing=False, devices=int(args.GPUs), callbacks = [pred_writer], accelerator='gpu', logger=logger, num_nodes=int(args.nodes))
+                trainer = pl.Trainer(enable_checkpointing=False, precision=16, devices=int(args.GPUs), callbacks = [pred_writer], accelerator='gpu', logger=logger, num_nodes=int(args.nodes))
             reps = trainer.predict(model, dataloader)
             cwd_files = os.listdir(args.outdir)
             pt_files = [file for file in cwd_files if 'predictions_' in file]
@@ -968,6 +1008,23 @@ def main(args):
             model = ProstT5(args)
             data = esm.data.FastaBatchedDataset.from_file(args.query)
             dataloader = torch.utils.data.DataLoader(data, shuffle = False, batch_size = int(args.batch_size), num_workers=0)
+            pred_writer = CustomWriter(output_dir=args.outdir, write_interval="epoch")
+            if int(args.GPUs) == 0:
+                trainer = pl.Trainer(enable_checkpointing=False, callbacks = [pred_writer], logger=logger, num_nodes=int(args.nodes))
+            else:
+                trainer = pl.Trainer(enable_checkpointing=False, precision=16, devices=int(args.GPUs), callbacks = [pred_writer], accelerator='gpu', logger=logger, num_nodes=int(args.nodes))
+
+            reps = trainer.predict(model, dataloader)
+            cwd_files = os.listdir(args.outdir)
+            pt_files = [file for file in cwd_files if 'predictions_' in file]
+            parse_and_save_all_predictions(args)
+            for file in pt_files:
+                os.remove(os.path.join(args.outdir,file))
+
+        elif args.model == 'Ankh' or args.model == 'Ankh-Large':
+            model = Ankh(args)
+            data = esm.data.FastaBatchedDataset.from_file(args.query)
+            dataloader = torch.utils.data.DataLoader(data, shuffle = False, batch_size = int(args.batch_size), num_workers=int(args.n_workers), persistent_workers=True)
             pred_writer = CustomWriter(output_dir=args.outdir, write_interval="epoch")
             if int(args.GPUs) == 0:
                 trainer = pl.Trainer(enable_checkpointing=False, callbacks = [pred_writer], logger=logger, num_nodes=int(args.nodes))
@@ -990,7 +1047,7 @@ def main(args):
             if int(args.GPUs) == 0:
                 trainer = pl.Trainer(enable_checkpointing=False, callbacks = [pred_writer], logger=logger, num_nodes=int(args.nodes))
             else:
-                trainer = pl.Trainer(enable_checkpointing=False, devices=int(args.GPUs), callbacks = [pred_writer], accelerator='gpu', logger=logger, num_nodes=int(args.nodes))
+                trainer = pl.Trainer(enable_checkpointing=False, precision=16, devices=int(args.GPUs), callbacks = [pred_writer], accelerator='gpu', logger=logger, num_nodes=int(args.nodes))
             if args.finetuned:
                 model = weights_update(model = ESM(eval(model_import_name), 0.0001, args), checkpoint = torch.load(args.finetuned))
             trainer.predict(model, dataloader)
@@ -1460,6 +1517,8 @@ def main(args):
 
 
     elif args.command == 'classify':
+        if args.sweep and not args.train_split:
+            raise Exception("You need to provide a train-test fraction with --train_split!")
         if args.classifier == 'TemStaPro':
             if not args.preComputed_Embs:
                 data = esm.data.FastaBatchedDataset.from_file(args.query)
@@ -1586,162 +1645,98 @@ def main(args):
 
 
         elif args.classifier == 'XGBoost':
-                if not args.preComputed_Embs:
-                    embed_command = f"trill {args.name} {args.GPUs} --outdir {args.outdir} embed {args.emb_model} {args.query}"
-                    subprocess.run(embed_command.split(' '), check=True)
-                    df = pd.read_csv(os.path.join(args.outdir, f'{args.name}_{args.emb_model}.csv'))
-                else:
-                    df = pd.read_csv(args.preComputed_Embs)
-
-                if args.train_split is not None:
-                    if args.key == None:
-                        print('Training an XGBoost classifier requires a class key CSV!')
-                        raise RuntimeError
-                    with open(os.path.join(args.outdir, f'{args.name}_XGBoost.out'), 'w+') as out:
-                        command_line_args = sys.argv
-                        command_line_str = ' '.join(command_line_args)
-                        out.write('TRILL command used: ' + command_line_str+'\n\n')
-                        if not args.preComputed_Embs:
-                            out.write('TRILL embed command: ' +embed_command+'\n\n')
-
-                        key_df = pd.read_csv(args.key)
-                        n_classes = key_df['Class'].nunique()
-
-                        for cls in key_df['Class'].unique():
-                            condition = key_df[key_df['Class'] == cls]['Label'].tolist()
-                            df.loc[df['Label'].str.contains('|'.join(condition)), 'NewLab'] = cls
-                        df = df.sample(frac=1)
-                        train_df, test_df = train_test_split(df, test_size=float(args.train_split), stratify=df['NewLab'])
-
-                        # Initialize and train the XGBoost multi-class classifier
-                        model = xgb.XGBClassifier(objective = 'multi:softprob', num_class=n_classes, gamma = args.xg_gamma, learning_rate = args.xg_lr,  max_depth = args.xg_max_depth, n_estimators = args.n_estimators, reg_alpha = args.xg_reg_alpha, reg_lambda = args.xg_reg_lambda, random_state = args.RNG_seed)
-                        le = LabelEncoder()
-
-                        # Encode 'NewLab' column to integers
-                        train_df['NewLab'] = le.fit_transform(train_df['NewLab'])
-                        test_df['NewLab'] = le.transform(test_df['NewLab'])
-                        classes = le.inverse_transform(range(n_classes))
-
-                        model.fit(train_df.iloc[:, :-2], train_df['NewLab'])
-
-                        # Make predictions on the test set to get probabilities
-                        test_preds_proba = model.predict_proba(test_df.iloc[:, :-2])
-                        
-                        proba_df = pd.DataFrame(test_preds_proba, columns=classes)
-                        proba_df.to_csv(os.path.join(args.outdir, f'{args.name}_XGBoost_class_probs.csv'), index=False)
-
-                        # Use argmax to get the most probable class
-                        test_preds = np.argmax(test_preds_proba, axis=1)
-
-                        # Convert integer labels back to original string labels
-                        test_preds = le.inverse_transform(test_preds)
-
-                        y_true_transformed = le.inverse_transform(test_df['NewLab'])
-                        # Compute precision, recall, fscore, and support without averaging
-                        precision, recall, fscore, support = precision_recall_fscore_support(
-                            y_true_transformed, test_preds, average=None, labels=np.unique(y_true_transformed)
-                        )
-
-                        # Print and write metrics for each class
-                        unique_classes = np.unique(y_true_transformed)
-                        out.write("Classification Metrics Per Class:\n")
-                        print("Classification Metrics Per Class:")
-
-                        for i, label in enumerate(unique_classes):
-                            out.write(f"\nClass: {label}\n")
-                            print(f"\nClass: {label}")
-                            
-                            out.write(f"\tPrecision: {precision[i]:.4f}\n")
-                            print(f"\tPrecision: {precision[i]:.4f}")
-                            
-                            out.write(f"\tRecall: {recall[i]:.4f}\n")
-                            print(f"\tRecall: {recall[i]:.4f}")
-                            
-                            out.write(f"\tF-score: {fscore[i]:.4f}\n")
-                            print(f"\tF-score: {fscore[i]:.4f}")
-
-                            out.write(f"\tSupport: {support[i]}\n")
-                            print(f"\tSupport: {support[i]}")
-
-                        # Compute and display average metrics
-                        avg_precision = np.mean(precision)
-                        avg_recall = np.mean(recall)
-                        avg_fscore = np.mean(fscore)
-
-                        out.write("\nAverage Metrics:\n")
-                        print("\nAverage Metrics:")
-
-                        out.write(f"\tAverage Precision: {avg_precision:.4f}\n")
-                        print(f"\tAverage Precision: {avg_precision:.4f}")
-
-                        out.write(f"\tAverage Recall: {avg_recall:.4f}\n")
-                        print(f"\tAverage Recall: {avg_recall:.4f}")
-
-                        out.write(f"\tAverage F-score: {avg_fscore:.4f}\n")
-                        print(f"\tAverage F-score: {avg_fscore:.4f}")
-
-                        if not args.save_emb and not args.preComputed_Embs:
-                            os.remove(os.path.join(args.outdir, f'{args.name}_{args.emb_model}.csv'))
-                        model.save_model(os.path.join(args.outdir, f'{args.name}_XGBoost_{len(test_df.columns)-2}.json'))
-
-                else:
-                    if not args.preTrained:
-                        print('You need to provide a model with --args.preTrained to perform inference!')
-                        raise RuntimeError
-                    else:
-                        # Load the pre-trained XGBoost model
-                        model = xgb.Booster()
-                        model.load_model(args.preTrained)
-                        
-                        # Prepare the data
-                        data = xgb.DMatrix(df.iloc[:,:-1])
-                        
-                        # Make predictions
-                        test_preds_proba = model.predict(data)
-                        # If binary, round the scores
-                        if test_preds_proba.shape[1] == 2:
-                            test_preds = test_preds_proba[:, 1].round()
-                        else:  # Else, take the argmax for multi-class
-                            test_preds = np.argmax(test_preds_proba, axis=1)
-                            
-                        # Save class probabilities
-                        proba_df = pd.DataFrame(test_preds_proba)
-                        proba_df.to_csv(os.path.join(args.outdir, f'{args.name}_XGBoost_class_probs.csv'), index=False)      
-
-                        # Add the predictions to the DataFrame
-                        df['Predicted_Class'] = test_preds.astype(int)
-                        
-                        # Save the predictions to a CSV file
-                        out_df = df[['Label', 'Predicted_Class']]
-                        out_df.to_csv(os.path.join(args.outdir, f'{args.name}_XGBoost_predictions.csv'), index=False)
-                        
-                        if not args.save_emb:
-                            os.remove(os.path.join(args.outdir, f'{args.name}_{args.emb_model}.csv'))
-
-        elif args.classifier == 'iForest':
+            outfile = os.path.join(args.outdir, f'{args.name}_XGBoost.out')
             if not args.preComputed_Embs:
-                embed_command = f"trill {args.name} {args.GPUs} --outdir {args.outdir} embed {args.emb_model} {args.query}".split(' ')
-                subprocess.run(embed_command, check=True)
-                df = pd.read_csv(os.path.join(args.outdir, f'{args.name}_{args.emb_model}.csv'))
+                embed_command = f"trill {args.name} {args.GPUs} --outdir {args.outdir} embed {args.emb_model} {args.query} --avg"
+                subprocess.run(embed_command.split(' '), check=True)
+                df = pd.read_csv(os.path.join(args.outdir, f'{args.name}_{args.emb_model}_AVG.csv'))
             else:
                 df = pd.read_csv(args.preComputed_Embs)
-            
-            if not args.preTrained:
-                model = IsolationForest(random_state=int(args.RNG_seed), verbose=True, n_estimators=args.n_estimators, contamination=args.if_contamination).fit(df.iloc[:,:-1])
-                obj = sio.dump(model, os.path.join(args.outdir, f'{args.name}_iForest.skops'))
+
+            if args.train_split is not None:
+                le = LabelEncoder()
+                # print(df)
+                train_df, test_df, n_classes = prep_data(df, args)
+                unique_c = np.unique(test_df['NewLab'])
+                classes = train_df['NewLab'].unique()
+                train_df['NewLab'] = le.fit_transform(train_df['NewLab'])
+                test_df['NewLab'] = le.transform(test_df['NewLab'])
+                command_line_args = sys.argv
+                command_line_str = ' '.join(command_line_args)
+
+                if args.sweep:
+                    sweeped_clf = sweep(train_df, args)
+                    precision, recall, fscore, support = xg_test(sweeped_clf, le, test_df, args)
+                    log_results(outfile, command_line_str, n_classes, args, classes = unique_c, sweeped_clf=sweeped_clf, precision=precision, recall=recall, fscore=fscore, support=support)
+                else:
+                    clf = train_model(train_df, args)
+                    clf.save_model(os.path.join(args.outdir, f'{args.name}_XGBoost_{len(train_df.columns)-2}.json'))
+                    precision, recall, fscore, support = xg_test(clf, le, test_df, args)
+                    log_results(outfile, command_line_str, n_classes, args, classes = classes, precision=precision, recall=recall, fscore=fscore, support=support)
+
+                if not args.save_emb and not args.preComputed_Embs:
+                    os.remove(os.path.join(args.outdir, f'{args.name}_{args.emb_model}_AVG.csv'))
+
             else:
-                model = sio.load(args.preTrained)
+                if not args.preTrained:
+                    raise Exception('You need to provide a model with --args.preTrained to perform inference!')
+                else:
+                    clf = xgb.XGBClassifier()
+                    clf.load_model(args.preTrained)
+                    custom_xg_test(clf, df, args)
+
+                    if not args.save_emb and not args.preComputed_Embs:
+                        os.remove(os.path.join(args.outdir, f'{args.name}_{args.emb_model}_AVG.csv'))
+
+        elif args.classifier == 'iForest':
+            # Load embeddings
+            if not args.preComputed_Embs:
+                embed_command = f"trill {args.name} {args.GPUs} --outdir {args.outdir} embed {args.emb_model} {args.query} --avg".split(' ')
+                subprocess.run(embed_command, check=True)
+                df = pd.read_csv(os.path.join(args.outdir, f'{args.name}_{args.emb_model}_AVG.csv'))
+            else:
+                df = pd.read_csv(args.preComputed_Embs)
+
+            # Filter fasta file
+            if args.preComputed_Embs and not args.preTrained:
+                valid_labels = set(df['Label'])
+                filtered_records_labels = {record.id for record in SeqIO.parse(args.query, "fasta") if record.id in valid_labels}
+                df = df[df['Label'].isin(filtered_records_labels)]
+
+            # Train or load model
+            if not args.preTrained:
+                model = IsolationForest(
+                    random_state=int(args.RNG_seed),
+                    verbose=True,
+                    n_estimators=args.n_estimators,
+                    contamination=float(args.if_contamination) if args.if_contamination != 'auto' else 'auto'
+                )
+                model.fit(df.iloc[:,:-1])
+                sio.dump(model, os.path.join(args.outdir, f'{args.name}_iForest.skops'))
+            else:
+                model = sio.load(args.preTrained, trusted=True)
+
+                # Predict and output results
                 preds = model.predict(df.iloc[:,:-1])
+                # unique_values, counts = np.unique(preds, return_counts=True)
+                # for value, count in zip(unique_values, counts):
+                #     print(f'{value}: {count}')
+
                 df['Predicted_Class'] = preds
                 out_df = df[['Label', 'Predicted_Class']]
-                out_df.to_csv(os.path.join(args.outdir, f'{args.name}_iForest_predictions.csv'), index = False)
-                if not args.save_emb:
-                    os.remove(os.path.join(args.outdir, f'{args.name}_{args.emb_model}.csv'))
+                out_df.to_csv(os.path.join(args.outdir, f'{args.name}_iForest_predictions.csv'), index=False)
+            if not args.save_emb and not args.preComputed_Embs:
+                os.remove(os.path.join(args.outdir, f'{args.name}_{args.emb_model}_AVG.csv'))
+
 
     elif args.command == 'utils':
         if args.tool == 'prepare_class_key':
             generate_class_key_csv(args)
-        
+        elif args.tool == 'fetch_embeddings':
+            h5_path = download_embeddings(args)
+            h5_name = os.path.splitext(os.path.basename(h5_path))[0]
+            convert_embeddings_to_csv(h5_path, os.path.join(args.outdir, f'{h5_name}.csv'))
+
     elif args.command == 'simulate':
         if args.just_relax:
             args.forcefield = 'amber14-all.xml'
@@ -1867,7 +1862,7 @@ def return_parser():
         "model",
         help="Choose protein language model to embed query proteins",
         action="store",
-        choices = ['esm2_t6_8M', 'esm2_t12_35M', 'esm2_t30_150M', 'esm2_t33_650M', 'esm2_t36_3B','esm2_t48_15B', 'ProtT5-XL', 'ProstT5']
+        choices = ['esm2_t6_8M', 'esm2_t12_35M', 'esm2_t30_150M', 'esm2_t33_650M', 'esm2_t36_3B','esm2_t48_15B', 'ProtT5-XL', 'ProstT5', 'Ankh', 'Ankh-Large']
 )
 
     embed.add_argument("query", 
@@ -2223,7 +2218,7 @@ def return_parser():
         help="Select desired protein language model for embedding your query proteins to then train your custom classifier. Default is esm2_t12_35M",
         default = 'esm2_t12_35M',
         action="store",
-        choices = ['esm2_t6_8M', 'esm2_t12_35M', 'esm2_t30_150M', 'esm2_t33_650M', 'esm2_t36_3B','esm2_t48_15B', 'ProtT5-XL', 'ProstT5']
+        choices = ['esm2_t6_8M', 'esm2_t12_35M', 'esm2_t30_150M', 'esm2_t33_650M', 'esm2_t36_3B','esm2_t48_15B', 'ProtT5-XL', 'ProstT5', 'Ankh', 'Ankh-Large']
 )
     classify.add_argument(
         "--train_split",
@@ -2296,6 +2291,25 @@ def return_parser():
         help="XGBoost/iForest: Number of boosting rounds",
         action="store",
         default=115
+)
+    classify.add_argument(
+        "--sweep",
+        help="XGBoost/iForest: Use this flag to perform cross-validated bayesian optimization over the hyperparameter space.",
+        action="store_true",
+        default=False
+)
+    classify.add_argument(
+        "--sweep_cv",
+        help="XGBoost Change the number of folds used for cross-validation.",
+        action="store",
+        default=3
+)
+    classify.add_argument(
+        "--f1_avg_method",
+        help="XGBoost: Change the scoring method used for calculated F1. Default is with no averaging.",
+        action="store",
+        default=None,
+        choices=["macro", "weighted", "micro", "None"]
 )
 ##############################################################################################################
     
@@ -2602,7 +2616,7 @@ def return_parser():
     utils.add_argument(
         "tool",
         help="prepare_class_key: Pepare a csv for use with the classify command. Takes a directory or text file with list of paths for fasta files. Each file will be a unique class, so if your directory contains 5 fasta files, there will be 5 classes in the output key csv.",
-        choices = ['prepare_class_key']
+        choices = ['prepare_class_key', 'fetch_embeddings']
 )
 
     utils.add_argument(
@@ -2616,9 +2630,24 @@ def return_parser():
         help="Text file with absolute paths of fasta files to be used for creating the class key. Each unique path will be treated as a unique class, and all the sequences in that file will be in the same class.",
         action="store",
 )
-
-    
-##############################################################################################################
-
+    utils.add_argument(
+    "--uniprotDB",
+    help="UniProt embedding dataset to download.",
+    choices=['UniProtKB',
+        'A.thaliana',
+        'C.elegans',
+        'E.coli',
+        'H.sapiens',
+        'M.musculus',
+        'R.norvegicus',
+        'SARS-CoV-2'],
+    action="store",
+)   
+    utils.add_argument(
+    "--rep",
+    help="The representation to download.",
+    choices=['per_AA', 'avg'],
+    action="store"
+)
 
     return parser
