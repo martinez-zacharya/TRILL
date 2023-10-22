@@ -19,7 +19,7 @@ from utils.update_weights import weights_update
 from pytorch_lightning.loggers import TensorBoardLogger
 from pytorch_lightning.profilers import PyTorchProfiler
 from deepspeed.ops.adam import DeepSpeedCPUAdam
-from transformers import pipeline, AutoTokenizer, AutoModelForCausalLM, DataCollatorForLanguageModeling, T5EncoderModel, T5Tokenizer, AutoModelForSeq2SeqLM
+from transformers import pipeline, AutoTokenizer, AutoModelForCausalLM, DataCollatorForLanguageModeling, T5EncoderModel, T5Tokenizer, AutoModelForSeq2SeqLM, AutoModel
 from esm.inverse_folding.multichain_util import sample_sequence_in_complex
 # from colossalai.nn.optimizer import HybridAdam, CPUAdam
 from deepspeed.ops.adam import FusedAdam
@@ -726,12 +726,13 @@ class ProstT5(pl.LightningModule):
                 embedding_repr = self.model(ids.input_ids.cuda(), attention_mask=ids.attention_mask.cuda())
             else:
                 embedding_repr = self.model(ids.input_ids, attention_mask=ids.attention_mask)
-            embs = embedding_repr.last_hidden_state.squeeze(0)
+            # embs = embedding_repr.last_hidden_state.squeeze(0)
+            embs = embedding_repr.last_hidden_state
             for i, (emb, lab) in enumerate(zip(embs, label)):
                 actual_len = seq_lengths[i]  # Length of the actual sequence without padding
-
                 # Remove padding from embeddings
-                emb = emb[:actual_len]
+                if len(label) > 1:
+                    emb = emb[:actual_len]
                 if self.avg:
                     avg_reps.append((emb.mean(dim=0), lab))
                 if self.per_AA:
@@ -819,6 +820,58 @@ class ProstT5(pl.LightningModule):
             decoded_backtranslations = self.tokenizer.batch_decode(backtranslations, skip_special_tokens=True)
             aminoAcid_sequences = ''.join(decoded_backtranslations).replace(' ', '')
             return aminoAcid_sequences
+        
+
+class Ankh(pl.LightningModule):
+    def __init__(self, args):
+        super().__init__()
+        model_name = "ElnaggarLab/ankh-large" if args.model == "Ankh-Large" else "ElnaggarLab/ankh-base"
+        self.tokenizer = AutoTokenizer.from_pretrained(model_name)
+        self.model = T5EncoderModel.from_pretrained(model_name, output_attentions=False)
+        if args.command == 'embed':
+            self.per_AA = args.per_AA
+            self.avg = args.avg
+        else:
+            self.avg = True
+            self.per_AA = False
+
+    def training_step(self, batch, batch_idx):
+        loss = 0  # Placeholder
+        return {"loss": loss}
+
+    def configure_optimizers(self):
+        optimizer = torch.optim.Adam(self.model.parameters(), lr=self.args.lr)
+        lr_scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=1)
+        return [optimizer], [lr_scheduler]
+
+    def predict_step(self, batch, batch_idx):
+        aa_reps = []
+        avg_reps = []
+        label, seqs = batch
+
+        seq_lengths = [len(seq) for seq in seqs]
+        inputs = self.tokenizer.batch_encode_plus([seqs], return_tensors="pt", add_special_tokens=True,padding=True,is_split_into_words=True)
+
+        input_ids = inputs['input_ids']
+        attention_mask = inputs['attention_mask']
+
+        if next(self.model.parameters()).is_cuda:
+            input_ids = input_ids.cuda()
+            attention_mask = attention_mask.cuda()
+
+        outputs = self.model(input_ids=input_ids, output_hidden_states=True)
+        embs = outputs.hidden_states[-2]
+
+        for i, (emb, lab) in enumerate(zip(embs, label)):
+            actual_len = seq_lengths[i]
+            emb = emb[:actual_len]
+            if self.avg:
+                avg_reps.append((emb.mean(dim=0), lab))
+            if self.per_AA:
+                aa_reps.append((emb, lab))
+
+        return aa_reps, avg_reps
+
 
 class CustomWriter(BasePredictionWriter):
 
