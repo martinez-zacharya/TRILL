@@ -17,6 +17,7 @@ dependencies:
   - pytorch-sparse=0.6.17=py38_torch_1.13.0_cpu 
   - pytorch-scatter=2.1.1=py38_torch_1.13.0_cpu
   - pip:
+    - h5py
     - pytorch-lightning
     - transformers
     - datasets
