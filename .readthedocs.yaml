@@ -5,8 +5,12 @@ build:
   tools:
     python: "3.8"
 
-conda:
-  environment: .environment.yml 
+# conda:
+#   environment: .environment.yml 
 
 sphinx:
   configuration: docs/conf.py
+  
+ # python:
+  # install:
+    # - requirements: docs/requirements.txt
