@@ -199,10 +199,6 @@ In the examples below the string immediately after `trill` specifies the name of
   ```
   trill example 1 dock Lightdock trill/data/4ih9.pdb ligand_1.sdf ligand_2.sdf --blind
   ```
-  Smina: Similar to Vina, but is also able to dock proteins to proteins, but only without --blind. When not performing blind docking, TRILL first uses fpocket to predict potential binding pockets, and then depending on the pocket scores, the input ligand is docked to each valid pocket. You can also control the pocket selection by adjusting the corresponding fpocket hyperparams.
-  ```
-  trill example 1 dock Lightdock trill/data/4ih9.pdb ligand_1.pdb --min_radius 6 --max_radius 9
-  ```
 ### 9. Visualize your embeddings
   Create interactive, queryable visualizations for your output embeddings in 2D. TRILL uses PCA by default, but you can specify tSNE or UMAP with --method.
   ```
