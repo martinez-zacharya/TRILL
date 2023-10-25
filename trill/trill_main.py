@@ -775,7 +775,7 @@ def main(args):
     dock = subparsers.add_parser('dock', help='Perform molecular docking with proteins and ligands. Note that you should relax your protein receptor with Simulate or another method before docking.')
 
     dock.add_argument("algorithm",
-        help="Note that while Smina and LightDock can dock protein ligands, DiffDock and Vina can only do small-molecules.",
+        help="Note that while LightDock can dock protein ligands, DiffDock, Smina, and Vina can only do small-molecules.",
         choices = ['DiffDock', 'Vina', 'Smina', 'LightDock']
     )
 
@@ -2499,7 +2499,7 @@ def return_parser():
     dock = subparsers.add_parser('dock', help='Perform molecular docking with proteins and ligands. Note that you should relax your protein receptor with Simulate or another method before docking.')
 
     dock.add_argument("algorithm",
-        help="Note that while Smina and LightDock can dock protein ligands, DiffDock and Vina can only do small-molecules.",
+        help="Note that while LightDock can dock protein ligands, DiffDock, Smina, and Vina can only do small-molecules.",
         choices = ['DiffDock', 'Vina', 'Smina', 'LightDock']
     )
 
