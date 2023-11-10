@@ -1293,9 +1293,9 @@ def main(args):
             with open(os.path.join(args.outdir, f'{args.name}_ZymCTRL.fasta'), 'w+') as fasta:
                 for i in tqdm(range(int(args.num_return_sequences))):
                     if int(args.GPUs) == 0:
-                        generated_output = model.generator(str(args.ctrl_tag), device = torch.device('cpu'), max_length=int(args.max_length),repetition_penalty=float(args.repetition_penalty), do_sample=args.do_sample, top_k=int(args.top_k))
+                        generated_output = model.generator(str(args.ctrl_tag), device = torch.device('cpu'), temperature = float(args.temp), max_length=int(args.max_length),repetition_penalty=float(args.repetition_penalty), do_sample=args.do_sample, top_k=int(args.top_k))
                     else:
-                        generated_output = model.generator(str(args.ctrl_tag), device = torch.device('cuda'), max_length=int(args.max_length),repetition_penalty=float(args.repetition_penalty), do_sample=args.do_sample, top_k=int(args.top_k))
+                        generated_output = model.generator(str(args.ctrl_tag), device = torch.device('cuda'), temperature = float(args.temp), max_length=int(args.max_length),repetition_penalty=float(args.repetition_penalty), do_sample=args.do_sample, top_k=int(args.top_k))
                     fasta.write(f'>{args.name}_{args.ctrl_tag}_ZymCTRL_{i}_PPL={generated_output[0][1]} \n')
                     fasta.write(f'{generated_output[0][0]}\n')
                     fasta.flush()
