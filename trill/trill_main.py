@@ -1246,7 +1246,8 @@ def main(args):
                         do_sample=args.do_sample,
                         top_k=int(args.top_k),
                         repetition_penalty=float(args.repetition_penalty),
-                        num_return_sequences=num_sequences_this_round
+                        num_return_sequences=num_sequences_this_round,
+                        temperature=float(args.temp)
                     )
 
                     for i, generated_output in enumerate(generated_outputs):
