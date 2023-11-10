@@ -627,7 +627,7 @@ class ZymCTRL(pl.LightningModule):
     
     def generator(self, tag, seed_seq = "", max_length = 100, do_sample = True, temperature = 1.0, top_k = 9, repetition_penalty = 1.2, num_return_sequences = 1, eos_token_id=1, pad_token_id=0, device = 'cpu'):
         tokenized_tag = self.tokenizer.encode(tag, return_tensors='pt').to(device)
-        out = self.model.generate(tokenized_tag.to(device), top_k=top_k, repetition_penalty=repetition_penalty,max_length=max_length,eos_token_id=1,pad_token_id=0,do_sample=do_sample,num_return_sequences=1)
+        out = self.model.generate(tokenized_tag.to(device), top_k=top_k, temperature = temperature, repetition_penalty=repetition_penalty,max_length=max_length,eos_token_id=1,pad_token_id=0,do_sample=do_sample,num_return_sequences=1)
         out = out.squeeze(0)
         ppls = [(self.tokenizer.decode(output), self.calculatePerplexity(output)) for output in out.unsqueeze(0)]
         
