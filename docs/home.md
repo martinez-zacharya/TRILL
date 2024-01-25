@@ -31,15 +31,18 @@ TRILL (**TR**aining and **I**nference using the **L**anguage of **L**ife) is a s
 
 
 ## Set-Up
-1. TRILL has only ever been tested on Linux machines, but it might work on Windows with WSL2. You can use TRILL with Google Colab by using the installation instructions from [this notebook](https://colab.research.google.com/drive/1mx16cDAEgCYtflKm80mE8L_ZEk7Upxxe#scrollTo=AunNpGWa8tGn). For regular installations, I recommend using micromamba or mamba. If you don't have mamba installed, use this command
+1. TRILL has only ever been tested on Linux machines, but it might work on Windows with WSL2. You can use TRILL with Google Colab by using the installation instructions from [this notebook](https://colab.research.google.com/drive/1UK5ULlFAmcjteabgXsfjizqFF35jJlAz?usp=sharing). For regular installations, I recommend using micromamba or mamba. If you don't have mamba installed, use this command
 ```shell
 "${SHELL}" <(curl -L micro.mamba.pm/install.sh)
 ```
 2. Once micromamba is set up, create a new environment with
 ```shell
-micromamba create -n TRILL python=3.10 ; micromamba activate TRILL
-micromamba install pytorch==1.13.1 pytorch-cuda=11.7 -c pytorch -c nvidia -c conda-forge openmm swig pdbfixer openbabel smina fpocket vina -c bioconda pyrsistent foldseek -c pyg pyg=2.3.1=py310_torch_1.13.0_cu117 pytorch-cluster=1.6.1=py310_torch_1.13.0_cu117 pytorch-sparse=0.6.17=py310_torch_1.13.0_cu117 pytorch-scatter=2.1.1=py310_torch_1.13.0_cu117
-micromamba install -c bioconda -c "dglteam/label/cu117" dgl
+micromamba create -n TRILL ; micromamba activate TRILL
+micromamba install -c pytorch -c nvidia pytorch pytorch-cuda=12.1
+micromamba install -c conda-forge openbabel pdbfixer swig openmm smina fpocket vina
+micromamba install -c bioconda foldseek pyrsistent
+micromamba install -c "dglteam/label/cu121" dgl
+micromamba install -c pyg pyg pytorch-cluster pytorch-sparse pytorch-scatter
 pip install git+https://github.com/martinez-zacharya/lightdock.git@03a8bc4888c0ff8c98b7f0df4b3c671e3dbf3b1f
 ```
 3. Next, simply install TRILL!
