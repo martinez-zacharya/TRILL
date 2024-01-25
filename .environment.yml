@@ -31,7 +31,7 @@ dependencies:
     - pandas
     - rdkit
     - e3nn
-    - biopython
+    - biopython==1.81
     - spyrmsd
     - SentencePiece
     - omegaconf
