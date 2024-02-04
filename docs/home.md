@@ -38,7 +38,7 @@ TRILL (**TR**aining and **I**nference using the **L**anguage of **L**ife) is a s
 2. Once micromamba is set up, create a new environment with
 ```shell
 micromamba create -n TRILL python=3.10 ; micromamba activate TRILL
-micromamba install -c pytorch -c nvidia pytorch==2.1.2 pytorch-cuda=12.1
+micromamba install -c pytorch -c nvidia pytorch=2.1.2 pytorch-cuda=12.1
 micromamba install -c conda-forge openbabel pdbfixer swig openmm smina fpocket vina
 micromamba install -c bioconda foldseek pyrsistent
 micromamba install -c "dglteam/label/cu121" dgl
