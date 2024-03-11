@@ -1,7 +1,7 @@
 import torch
 import numpy as np
 
-def maskInputs(train_inputs, model):
+def maskInputs(train_inputs, model, mask_fraction):
 
     # create random array of floats with equal dimensions to input_ids tensor
     if next(model.parameters()).is_cuda:
@@ -9,7 +9,7 @@ def maskInputs(train_inputs, model):
     else:
         rand = torch.rand(train_inputs.shape)
     # create mask array
-    mask_arr = (rand < 0.15) * (train_inputs != 0) * \
+    mask_arr = (rand < float(mask_fraction)) * (train_inputs != 0) * \
               (train_inputs != 2) * (train_inputs != 1)
 
     selection = []

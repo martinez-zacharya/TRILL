@@ -30,7 +30,7 @@ from pytorch_lightning.utilities.deepspeed import convert_zero_checkpoint_to_fp3
 from trill.utils.lightning_models import ESM, ProtGPT2, CustomWriter, ESM_Gibbs, ProtT5, ZymCTRL, ProstT5, Custom3DiDataset, Ankh
 from trill.utils.update_weights import weights_update
 from trill.utils.dock_utils import perform_docking, fixer_of_pdbs, write_docking_results_to_file
-from trill.utils.simulation_utils import relax_structure
+from trill.utils.simulation_utils import relax_structure, run_simulation
 from transformers import AutoTokenizer, EsmForProteinFolding, set_seed
 from pytorch_lightning.callbacks import ModelCheckpoint
 # from trill.utils.strategy_tuner import tune_esm_inference, tune_esm_train
@@ -44,10 +44,14 @@ from sklearn.preprocessing import LabelEncoder
 import trill.utils.ephod_utils as eu
 from trill.utils.classify_utils import generate_class_key_csv, prep_data, log_results, xg_test, sweep, train_model, custom_xg_test
 from trill.utils.fetch_embs import convert_embeddings_to_csv, download_embeddings
+from esm.inverse_folding.util import load_coords
 import logging
 from pyfiglet import Figlet
 import bokeh
 from Bio import PDB
+from icecream import ic
+import pkg_resources
+
 os.environ['CUDA_LAUNCH_BLOCKING'] = '1'
 os.environ["TOKENIZERS_PARALLELISM"] = "false"
 
@@ -212,6 +216,20 @@ def main(args):
         action="store",
         default = 1,
         dest="batch_size",
+)
+    
+    finetune.add_argument(
+        "--mask_fraction",
+        help="ESM: Change fraction of animo acids masked for MLM training. Default is 0.15",
+        action="store",
+        default = 0.15,
+)
+    
+    finetune.add_argument(
+        "--pre_masked_fasta",
+        help="ESM: Use this flag to specify that your input fasta will be pre-masked and does not need masking performed by TRILL. The sequences will still be randomly shuffled.",
+        action="store_true",
+        default = False,
 )
 
     finetune.add_argument(
@@ -570,13 +588,13 @@ def main(args):
 )
     classify.add_argument(
         "--sweep",
-        help="XGBoost/iForest: Use this flag to perform cross-validated bayesian optimization over the hyperparameter space.",
+        help="XGBoost: Use this flag to perform cross-validated bayesian optimization over the hyperparameter space.",
         action="store_true",
         default=False
 )
     classify.add_argument(
         "--sweep_cv",
-        help="XGBoost Change the number of folds used for cross-validation.",
+        help="XGBoost: Change the number of folds used for cross-validation.",
         action="store",
         default=3
 )
@@ -642,128 +660,128 @@ def main(args):
         action="store",
 )
 
-#     simulate.add_argument("--ligand", 
-#         help="Ligand of interest to be simulated with input receptor", 
-#         action="store",
-#         )
+    simulate.add_argument("--ligand", 
+        help="Ligand of interest to be simulated with input receptor", 
+        action="store",
+        )
     
-#     simulate.add_argument(
-#         "--constraints",
-#         help="Specifies which bonds and angles should be implemented with constraints. Allowed values are None, HBonds, AllBonds, or HAngles.",
-#         choices=["None", "HBonds", "AllBonds", "HAngles"],
-#         default="None",
-#         action="store",
-#     )
+    simulate.add_argument(
+        "--constraints",
+        help="Specifies which bonds and angles should be implemented with constraints. Allowed values are None, HBonds, AllBonds, or HAngles.",
+        choices=["None", "HBonds", "AllBonds", "HAngles"],
+        default="None",
+        action="store",
+    )
 
-#     simulate.add_argument(
-#         "--rigidWater",
-#         help="If true, water molecules will be fully rigid regardless of the value passed for the constraints argument.",
-#         default=None,
-#         action="store_true",
-#     )
+    simulate.add_argument(
+        "--rigidWater",
+        help="If true, water molecules will be fully rigid regardless of the value passed for the constraints argument.",
+        default=None,
+        action="store_true",
+    )
 
-    # simulate.add_argument(
-    #     '--forcefield', 
-    #     type=str, 
-    #     default='amber14-all.xml', 
-    #     help='Force field to use. Default is amber14-all.xml'
-    # )
+    simulate.add_argument(
+        '--forcefield', 
+        type=str, 
+        default='amber14-all.xml', 
+        help='Force field to use. Default is amber14-all.xml'
+    )
     
-    # simulate.add_argument(
-    #     '--solvent', 
-    #     type=str, 
-    #     default='amber14/tip3pfb.xml', 
-    #     help='Solvent model to use, the default is amber14/tip3pfb.xml'
-    # )
-#     simulate.add_argument(
-#         '--solvate', 
-#         default=False, 
-#         help='Add to solvate your simulation',
-#         action='store_true'
-#     )
+    simulate.add_argument(
+        '--solvent', 
+        type=str, 
+        default='amber14/tip3pfb.xml', 
+        help='Solvent model to use, the default is amber14/tip3pfb.xml'
+    )
+    simulate.add_argument(
+        '--solvate', 
+        default=False, 
+        help='Add to solvate your simulation',
+        action='store_true'
+    )
 
-#     simulate.add_argument(
-#         '--step_size',
-#         help='Step size in picoseconds. Default is 0.002',
-#         type=float,
-#         default=0.002, 
-#         action="store",
-#     )
-#     simulate.add_argument(
-#         '--num_steps',
-#         type=int,
-#         default=5000,
-#         help='Number of simulation steps'
-#     )
+    simulate.add_argument(
+        '--step_size',
+        help='Step size in femtoseconds. Default is 2',
+        type=float,
+        default=2, 
+        action="store",
+    )
+    simulate.add_argument(
+        '--num_steps',
+        type=int,
+        default=5000,
+        help='Number of simulation steps'
+    )
 
-#     simulate.add_argument(
-#         '--reporting_interval',
-#         type=int,
-#         default=1000,
-#         help='Reporting interval for simulation'
-#     )
+    simulate.add_argument(
+        '--reporting_interval',
+        type=int,
+        default=1000,
+        help='Reporting interval for simulation'
+    )
 
-#     simulate.add_argument(
-#         '--output_traj_dcd',
-#         type=str,
-#         default='trajectory.dcd',
-#         help='Output trajectory DCD file'
-#     )
+    simulate.add_argument(
+        '--output_traj_dcd',
+        type=str,
+        default='trajectory.dcd',
+        help='Output trajectory DCD file'
+    )
 
-#     simulate.add_argument(
-#         '--apply-harmonic-force',
-#         help='Whether to apply a harmonic force to pull the molecule.',
-#         type=bool,
-#         default=False,
-#         action="store",
-#     )
+    simulate.add_argument(
+        '--apply-harmonic-force',
+        help='Whether to apply a harmonic force to pull the molecule.',
+        type=bool,
+        default=False,
+        action="store",
+    )
 
-#     simulate.add_argument(
-#         '--force-constant',
-#         help='Force constant for the harmonic force in kJ/mol/nm^2.',
-#         type=float,
-#         default=None,
-#         action="store",
-#     )
+    simulate.add_argument(
+        '--force-constant',
+        help='Force constant for the harmonic force in kJ/mol/nm^2.',
+        type=float,
+        default=None,
+        action="store",
+    )
 
-#     simulate.add_argument(
-#         '--z0',
-#         help='The z-coordinate to pull towards in nm.',
-#         type=float,
-#         default=None,
-#         action="store",
-#     )
+    simulate.add_argument(
+        '--z0',
+        help='The z-coordinate to pull towards in nm.',
+        type=float,
+        default=None,
+        action="store",
+    )
 
-#     simulate.add_argument(
-#         '--molecule-atom-indices',
-#         help='Comma-separated list of atom indices to which the harmonic force will be applied.',
-#         type=str,
-#         default="0,1,2",  # Replace with your default indices
-#         action="store",
-#     )
+    simulate.add_argument(
+        '--molecule-atom-indices',
+        help='Comma-separated list of atom indices to which the harmonic force will be applied.',
+        type=str,
+        default="0,1,2",  # Replace with your default indices
+        action="store",
+    )
 
-#     simulate.add_argument(
-#         '--equilibration_steps',
-#         help='Steps you want to take for NVT and NPT equilibration. Each step is 0.002 picoseconds',
-#         type=int,
-#         default=300, 
-#         action="store",
-#     )
+    simulate.add_argument(
+        '--equilibration_steps',
+        help='Steps you want to take for NVT and NPT equilibration. Each step is 0.002 picoseconds',
+        type=int,
+        default=300, 
+        action="store",
+    )
 
-#     simulate.add_argument(
-#         '--periodic_box',
-#         help='Give, in nm, one of the dimensions to build the periodic boundary.',
-#         type=int,
-#         default=10, 
-#         action="store",
-#     )
-#     simulate.add_argument(
-#         '--martini_top',
-#         help='Specify the path to the MARTINI topology file you want to use.',
-#         type=str,
-#         default=False,
-#         action="store",
-# )
+    simulate.add_argument(
+        '--periodic_box',
+        help='Give, in nm, one of the dimensions to build the periodic boundary.',
+        type=int,
+        default=10, 
+        action="store",
+    )
+    simulate.add_argument(
+        '--martini_top',
+        help='Specify the path to the MARTINI topology file you want to use.',
+        type=str,
+        default=False,
+        action="store",
+)
     simulate.add_argument(
         '--just_relax',
         help='Just relaxes the input structure(s) and outputs the fixed and relaxed structure(s). The forcefield that is used is amber14.',
@@ -776,7 +794,7 @@ def main(args):
 
     dock.add_argument("algorithm",
         help="Note that while LightDock can dock protein ligands, DiffDock, Smina, and Vina can only do small-molecules.",
-        choices = ['DiffDock', 'Vina', 'Smina', 'LightDock']
+        choices = ['DiffDock', 'Vina', 'Smina', 'LightDock', 'GeoDock']
     )
 
     dock.add_argument("protein", 
@@ -1070,7 +1088,7 @@ def main(args):
                 model = model.load_from_checkpoint(args.finetuned, args = args, strict=False)
             tokenizer = AutoTokenizer.from_pretrained("nferruz/ProtGPT2")
             seq_dict_df = ProtGPT2_wrangle(data, tokenizer)
-            dataloader = torch.utils.data.DataLoader(seq_dict_df, shuffle = False, batch_size = int(args.batch_size), num_workers=0)
+            dataloader = torch.utils.data.DataLoader(seq_dict_df, shuffle = True, batch_size = int(args.batch_size), num_workers=0)
             if args.save_on_epoch:
                 checkpoint_callback = ModelCheckpoint(every_n_epochs=1, save_top_k = -1)
                 if int(args.GPUs) == 0:
@@ -1100,7 +1118,7 @@ def main(args):
         elif args.model == 'ZymCTRL':
             model = ZymCTRL(args)
             seq_dict_df = ProtGPT2_wrangle(data, model.tokenizer)
-            dataloader = torch.utils.data.DataLoader(seq_dict_df, shuffle = False, batch_size = int(args.batch_size), num_workers=0)
+            dataloader = torch.utils.data.DataLoader(seq_dict_df, shuffle = True, batch_size = int(args.batch_size), num_workers=0)
             if args.save_on_epoch:
                 checkpoint_callback = ModelCheckpoint(every_n_epochs=1, save_top_k = -1)
                 if int(args.GPUs) == 0:
@@ -1131,7 +1149,7 @@ def main(args):
             model = ESM(eval(model_import_name), float(args.lr), args)
             if args.finetuned:
                 model = weights_update(model = ESM(eval(model_import_name), 0.0001, args), checkpoint = torch.load(args.finetuned))
-            dataloader = torch.utils.data.DataLoader(data, shuffle = False, batch_size = int(args.batch_size), num_workers=0, collate_fn=model.alphabet.get_batch_converter())
+            dataloader = torch.utils.data.DataLoader(data, shuffle = True, batch_size = int(args.batch_size), num_workers=0, collate_fn=model.alphabet.get_batch_converter())
     
             if args.strategy == 'deepspeed_stage_3' or args.strategy == 'deepspeed_stage_3_offload' or args.strategy == 'deepspeed_stage_2' or args.strategy == 'deepspeed_stage_2_offload':
                 save_path = os.path.join(args.outdir, f"checkpoints/epoch={int(args.epochs) - 1}-step={len_data*int(args.epochs)}.ckpt")
@@ -1156,7 +1174,7 @@ def main(args):
                         trainer = pl.Trainer(devices=int(args.GPUs), profiler = profiler, accelerator='gpu', callbacks=[checkpoint_callback], default_root_dir=f'{os.path.join(args.outdir, args.name)}_ckpt',strategy = args.strategy, max_epochs=int(args.epochs), logger=logger, num_nodes=int(args.nodes), precision = 16)        
                 else:
                     if int(args.GPUs) == 0:
-                        trainer = pl.Trainer(profiler = profiler, max_epochs=int(args.epochs), logger=logger, num_nodes=int(args.nodes), enable_checkpointing=False) 
+                        trainer = pl.Trainer(profiler = profiler, accelerator="cpu", max_epochs=int(args.epochs), logger=logger, num_nodes=int(args.nodes), enable_checkpointing=False) 
                     else:
                         trainer = pl.Trainer(devices=int(args.GPUs), profiler = profiler, accelerator='gpu', strategy = args.strategy, max_epochs=int(args.epochs), logger=logger, num_nodes=int(args.nodes), precision = 16, enable_checkpointing=False)     
                 trainer.fit(model=model, train_dataloaders=dataloader)
@@ -1483,6 +1501,69 @@ def main(args):
         elif args.algorithm == 'LightDock':
             perform_docking(args, ligands)
             print(f"LightDock run complete! Output files are in {args.outdir}")
+        elif args.algorithm == 'GeoDock':
+            try:
+                pkg_resources.get_distribution('geodock')
+            except pkg_resources.DistributionNotFound:
+                install_cmd = 'pip install git+https://github.com/martinez-zacharya/GeoDock.git'.split(' ')
+                subprocess.run(install_cmd)
+            from geodock.GeoDockRunner import GeoDockRunner, EnMasseGeoDockRunner
+            base_url = "https://raw.githubusercontent.com/martinez-zacharya/GeoDock/main/geodock/weights/dips_0.3.ckpt"
+            weights_path = f'{cache_dir}/dips_0.3.ckpt'
+            if not os.path.exists(weights_path):
+                r = requests.get(base_url)
+                with open(weights_path, "wb") as file:
+                    file.write(r.content)
+
+            rec_coord, rec_seq = load_coords(args.protein, chain=None)
+            rec_name = os.path.basename(args.protein).split('.')[0]
+
+            lig_seqs = []
+            lig_coords = []
+            lig_names = []
+            with open(f'tmp_master.fasta', 'w+') as fasta:
+                fasta.write(f'>{rec_name}\n')
+                fasta.write(f'{rec_seq}\n')
+                for lig in ligands:
+                    lig_name = os.path.basename(lig).split('.')[0]
+                    coords, seq = load_coords(lig, chain=None)
+                    coords = torch.nan_to_num(torch.from_numpy(coords))
+                    lig_seqs.append(seq)
+                    lig_coords.append(coords)
+                    lig_names.append(lig_name)
+                    fasta.write(f'>{lig_name}\n')
+                    fasta.write(f'{seq}\n')
+
+            model_import_name = f'esm.pretrained.esm2_t33_650M_UR50D()'
+            args.per_AA = True
+            args.avg = False
+            model = ESM(eval(model_import_name), 0.0001, args)
+            seq_data = esm.data.FastaBatchedDataset.from_file('tmp_master.fasta')
+            loader = torch.utils.data.DataLoader(seq_data, shuffle = False, batch_size = 1, num_workers=0, collate_fn=model.alphabet.get_batch_converter())
+            pred_writer = CustomWriter(output_dir=args.outdir, write_interval="epoch")
+            if int(args.GPUs) == 0:
+                trainer = pl.Trainer(enable_checkpointing=False, callbacks = [pred_writer], logger=logger, num_nodes=int(args.nodes))
+            else:
+                trainer = pl.Trainer(enable_checkpointing=False, precision=16, devices=int(args.GPUs), callbacks = [pred_writer], accelerator='gpu', logger=logger, num_nodes=int(args.nodes))
+
+            trainer.predict(model, loader)
+            parse_and_save_all_predictions(args)
+            master_embs = []
+            emb_file = torch.load(f'{args.outdir}/predictions_0.pt')
+            for entry in emb_file[0]:
+                emb = entry[0][0][0]
+                master_embs.append(emb)
+
+            rec_emb = master_embs.pop(0)
+            for lig_name, lig_seq, lig_coord, lig_emb in zip(lig_names, lig_seqs, lig_coords, master_embs):
+                em_geodock = EnMasseGeoDockRunner(args, ckpt_file=weights_path)
+                pred = em_geodock.dock(
+                    rec_info = [rec_name, rec_seq, rec_coord, rec_emb],
+                    lig_info = [lig_name, lig_seq, lig_coord, lig_emb],
+                    out_name = args.name + '_' + rec_name + '_' + lig_name
+                )
+            os.remove(f'{args.outdir}/predictions_0.pt')
+
         elif args.algorithm == 'DiffDock':
             if not os.path.exists(os.path.join(cache_dir, 'DiffDock')):
                 print('Cloning forked DiffDock')
@@ -1709,7 +1790,7 @@ def main(args):
                 model = IsolationForest(
                     random_state=int(args.RNG_seed),
                     verbose=True,
-                    n_estimators=args.n_estimators,
+                    n_estimators=int(args.n_estimators),
                     contamination=float(args.if_contamination) if args.if_contamination != 'auto' else 'auto'
                 )
                 model.fit(df.iloc[:,:-1])
@@ -1756,19 +1837,18 @@ def main(args):
             fixed_pdb_files = fixer_of_pdbs(args)
             relax_structure(args, fixed_pdb_files)
         else:
-            print('Currently, Simulate only supports relaxing a structure! Stay tuned for more MD related features...')
-            # if args.martini_top:
-            #     args.output_traj_dcd = os.path.join(args.outdir, args.output_traj_dcd)
-            #     run_simulation(args)
-            # else:
-            #     fixed_pdb_files = fixer_of_pdbs(args)
+            # print('Currently, Simulate only supports relaxing a structure! Stay tuned for more MD related features...')
+            if args.martini_top:
+                args.output_traj_dcd = os.path.join(args.outdir, args.output_traj_dcd)
+                run_simulation(args)
+            else:
+                fixed_pdb_files = fixer_of_pdbs(args)
             
-            #     args.output_traj_dcd = os.path.join(args.outdir, args.output_traj_dcd)
+                args.output_traj_dcd = os.path.join(args.outdir, args.output_traj_dcd)
                 
-            #     # Run the simulation on the combined PDB file
-            #     args.protein = fixed_pdb_files[0]
-            #     args.ligand = fixed_pdb_files[1]
-            #     run_simulation(args)
+                # Run the simulation on the combined PDB file
+                args.protein = fixed_pdb_files[0]
+                run_simulation(args)               
 
 
 

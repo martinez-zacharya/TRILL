@@ -21,7 +21,6 @@ def set_platform_properties(args):
         selected_devices = ",".join(available_devices[:num_requested_gpus])
         properties = {'DeviceIndex': selected_devices, 'Precision': 'mixed'}
         platform = Platform.getPlatformByName('CUDA')
-
     else:
         num_threads = args.n_workers  # Number of CPU threads
         properties = {'Threads': str(num_threads)}

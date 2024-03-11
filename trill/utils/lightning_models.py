@@ -28,6 +28,7 @@ import re
 from pytorch_lightning.callbacks import BasePredictionWriter
 import torch
 from torch.utils.data import Dataset
+from icecream import ic
 
 ESM_ALLOWED_AMINO_ACIDS = "ACDEFGHIKLMNPQRSTVWY"
 
@@ -40,10 +41,14 @@ class ESM(pl.LightningModule):
         self.lr = lr
         if args.command == 'finetune':
             self.strat = args.strategy
+            self.mask_fraction = args.mask_fraction
+            self.pre_masked_fasta = args.pre_masked_fasta
         else:
             self.strat = None
+            self.mask_fraction = None
+            self.premasked = False
         self.sample_seqs = []
-        if args.command == 'embed':
+        if args.command == 'embed' or args.command == 'dock':
             self.per_AA = args.per_AA
             self.avg = args.avg
  
@@ -52,7 +57,10 @@ class ESM(pl.LightningModule):
         torch.cuda.empty_cache()
         labels, seqs, toks = batch
         del labels, seqs, batch_idx
-        masked_toks = maskInputs(toks, self.esm)
+        if self.pre_masked_fasta:
+            masked_toks = toks
+        else:
+            masked_toks = maskInputs(toks, self.esm, self.mask_fraction)
         output = self.esm(masked_toks, repr_layers = [-1], return_contacts=False)
         loss = F.cross_entropy(output['logits'].permute(0,2,1), toks)
         self.log("loss", loss)
@@ -72,7 +80,7 @@ class ESM(pl.LightningModule):
         labels, seqs, toks = batch
         pred = self.esm(toks, repr_layers=self.repr_layers, return_contacts=False)
         representations = {layer: t.to(device="cpu") for layer, t in pred["representations"].items()}
-        rep_numpy = representations[self.repr_layers[0]].cpu().detach().numpy()
+        rep_numpy = representations[self.repr_layers[0]].cpu().detach().numpy()[:, 1:-1, :]
         aa_reps = []
         avg_reps = []
         for i in range(len(rep_numpy)):
