@@ -357,7 +357,6 @@ def find_best_match(structure1, structure2):
     return best_match
 
 def fixer_of_pdbs(args):
-    from icecream import ic
     fixed_pdb_files = []
     if args.just_relax:
       if len(args.receptor) > 1:

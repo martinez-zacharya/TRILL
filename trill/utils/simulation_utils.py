@@ -131,78 +131,78 @@ def run_simulation(args):
     simulation.step(args.num_steps)
 
 def set_simulation_parameters2(platform, properties, args):
-    if args.martini_top:
-        box_vec = [Vec3(args.periodic_box,0,0), Vec3(0,args.periodic_box,0), Vec3(0,0,args.periodic_box)]
-        pdb = PDBFile(args.receptor)
-        top = martini.MartiniTopFile(
-		args.martini_top,
-		periodicBoxVectors=box_vec,
-		defines={},
-		epsilon_r=15,
-	)
-        system = top.create_system(nonbonded_cutoff=1.1 * nanometer)
+    # if args.martini_top:
+    #     box_vec = [Vec3(args.periodic_box,0,0), Vec3(0,args.periodic_box,0), Vec3(0,0,args.periodic_box)]
+    #     pdb = PDBFile(args.receptor)
+    #     top = martini.MartiniTopFile(
+	# 	args.martini_top,
+	# 	periodicBoxVectors=box_vec,
+	# 	defines={},
+	# 	epsilon_r=15,
+	# )
+    #     system = top.create_system(nonbonded_cutoff=1.1 * nanometer)
 
-        integrator = LangevinMiddleIntegrator(310 * kelvin,
-									10.0 / picosecond,
-									20 * femtosecond)
+    #     integrator = LangevinMiddleIntegrator(310 * kelvin,
+	# 								10.0 / picosecond,
+	# 								20 * femtosecond)
 
-        simulation = Simulation(top.topology, system, integrator,
-							platform, properties)
+    #     simulation = Simulation(top.topology, system, integrator,
+	# 						platform, properties)
 
-        simulation.context.setPositions(pdb.positions)
-        simulation.reporters.append(StateDataReporter(sys.stdout, 10, step=True, progress = True, totalSteps = (int(args.num_steps)+(2*args.equilibration_steps))))
-        simulation.reporters.append(StateDataReporter(f'{args.name}_StateDataReporter.out', 10, step=True, potentialEnergy=True, kineticEnergy=True, totalEnergy=True, volume = True, density=True,  temperature=True, speed=True))
-        simulation.reporters.append(PDBReporter(f'{args.name}_sim.pdb', 10000))
-        return simulation, system
+    #     simulation.context.setPositions(pdb.positions)
+    #     simulation.reporters.append(StateDataReporter(sys.stdout, 10, step=True, progress = True, totalSteps = (int(args.num_steps)+(2*args.equilibration_steps))))
+    #     simulation.reporters.append(StateDataReporter(f'{args.name}_StateDataReporter.out', 10, step=True, potentialEnergy=True, kineticEnergy=True, totalEnergy=True, volume = True, density=True,  temperature=True, speed=True))
+    #     simulation.reporters.append(PDBReporter(f'{args.name}_sim.pdb', 10000))
+    #     return simulation, system
 
-    else:
-        pdb = PDBFile(args.protein)
-        if args.ligand:
-            lig = PDBFile(args.ligand)
-        modeller = Modeller(pdb.topology, pdb.positions)
-        print(f'System has added {args.protein} with {modeller.topology.getNumAtoms()} atoms')
-        if args.ligand:
-            modeller.add(lig.topology, lig.positions)
-            print(f'System has added {args.ligand} with {modeller.topology.getNumAtoms()} atoms')
-        forcefield = ForceField(args.forcefield, args.solvent)
-        if args.solvate:
-            solvent = args.solvent.split('/')[-1].split('.')[0]
-            if solvent == 'tip3pfb':
-                solvent = 'tip3p'
-            modeller.addSolvent(forcefield, model=solvent, padding = 5*nanometer)
-            print(f'System has {modeller.topology.getNumAtoms()} atoms after solvation')
-            box_vec = modeller.getTopology().getPeriodicBoxVectors()
-            system = forcefield.createSystem(modeller.topology, nonbondedMethod=CutoffPeriodic, constraints=args.constraints, rigidWater=args.rigidWater)
-            system.setDefaultPeriodicBoxVectors(box_vec[0], box_vec[1], box_vec[2])
-        box_vec = [Vec3(args.periodic_box,0,0), Vec3(0,args.periodic_box,0), Vec3(0,0,args.periodic_box)]
-        system = forcefield.createSystem(modeller.topology, nonbondedMethod=NoCutoff, nonbondedCutoff=1*nanometer, constraints=args.constraints, rigidWater=args.rigidWater)
+    # else:
+    pdb = PDBFile(args.protein)
+    if args.ligand:
+        lig = PDBFile(args.ligand)
+    modeller = Modeller(pdb.topology, pdb.positions)
+    print(f'System has added {args.protein} with {modeller.topology.getNumAtoms()} atoms')
+    if args.ligand:
+        modeller.add(lig.topology, lig.positions)
+        print(f'System has added {args.ligand} with {modeller.topology.getNumAtoms()} atoms')
+    forcefield = ForceField(args.forcefield, args.solvent)
+    if args.solvate:
+        solvent = args.solvent.split('/')[-1].split('.')[0]
+        if solvent == 'tip3pfb':
+            solvent = 'tip3p'
+        modeller.addSolvent(forcefield, model=solvent, padding = 5*nanometer)
+        print(f'System has {modeller.topology.getNumAtoms()} atoms after solvation')
+        box_vec = modeller.getTopology().getPeriodicBoxVectors()
+        system = forcefield.createSystem(modeller.topology, nonbondedMethod=CutoffPeriodic, constraints=args.constraints, rigidWater=args.rigidWater)
         system.setDefaultPeriodicBoxVectors(box_vec[0], box_vec[1], box_vec[2])
-        if system.usesPeriodicBoundaryConditions():
-            print('Default Periodic box: {}'.format(system.getDefaultPeriodicBoxVectors()))
-        else:
-            print('No Periodic Box')
+    box_vec = [Vec3(args.periodic_box,0,0), Vec3(0,args.periodic_box,0), Vec3(0,0,args.periodic_box)]
+    system = forcefield.createSystem(modeller.topology, nonbondedMethod=NoCutoff, nonbondedCutoff=1*nanometer, constraints=args.constraints, rigidWater=args.rigidWater)
+    system.setDefaultPeriodicBoxVectors(box_vec[0], box_vec[1], box_vec[2])
+    if system.usesPeriodicBoundaryConditions():
+        print('Default Periodic box: {}'.format(system.getDefaultPeriodicBoxVectors()))
+    else:
+        print('No Periodic Box')
 
-        if args.apply_harmonic_force:
-            harmonic_force = CustomExternalForce("0.5 * k * (z - z0)^2")
-            harmonic_force.addGlobalParameter("k", args.force_constant)
-            harmonic_force.addGlobalParameter("z0", args.z0)
-            molecule_atom_indices = list(map(int, args.molecule_atom_indices.split(',')))
-            for atom_index in molecule_atom_indices:
-                harmonic_force.addParticle(atom_index, [])
-            system.addForce(harmonic_force)
-        # simulation.context.reinitialize(preserveState=True)
-        integrator = LangevinMiddleIntegrator(300*kelvin, 1/picosecond, args.step_size*femtosecond)
-        simulation = Simulation(modeller.topology, system, integrator, platform, properties)
-        simulation.context.setPositions(modeller.positions)
-        # simulation.reporters.append(StateDataReporter(sys.stdout, 10, step=True, progress = True, totalSteps = (int(args.num_steps)+(2*args.equilibration_steps))))
-        totalSteps = int(args.num_steps)
-        simulation.reporters.append(StateDataReporter(f'{args.name}_StateDataReporter.out', 100, step=True, potentialEnergy=True, kineticEnergy=True, totalEnergy=True, volume = True, density=True,  temperature=True, speed=True))
-        simulation.reporters.append(PDBReporter(f'{args.name}_sim.pdb', 500))
-        # simulation.reporters.append(DCDReporter(args.output_traj_dcd, 10))
-        silent_output_stream = SilentOutputStream()
-        progress_reporter = ProgressBarReporter(10, totalSteps, silent_output_stream, step=True)
-        simulation.reporters.append(progress_reporter)
-        return simulation, system
+    if args.apply_harmonic_force:
+        harmonic_force = CustomExternalForce("0.5 * k * (z - z0)^2")
+        harmonic_force.addGlobalParameter("k", args.force_constant)
+        harmonic_force.addGlobalParameter("z0", args.z0)
+        molecule_atom_indices = list(map(int, args.molecule_atom_indices.split(',')))
+        for atom_index in molecule_atom_indices:
+            harmonic_force.addParticle(atom_index, [])
+        system.addForce(harmonic_force)
+    # simulation.context.reinitialize(preserveState=True)
+    integrator = LangevinMiddleIntegrator(300*kelvin, 1/picosecond, args.step_size*femtosecond)
+    simulation = Simulation(modeller.topology, system, integrator, platform, properties)
+    simulation.context.setPositions(modeller.positions)
+    # simulation.reporters.append(StateDataReporter(sys.stdout, 10, step=True, progress = True, totalSteps = (int(args.num_steps)+(2*args.equilibration_steps))))
+    totalSteps = int(args.num_steps)
+    simulation.reporters.append(StateDataReporter(f'{args.name}_StateDataReporter.out', 100, step=True, potentialEnergy=True, kineticEnergy=True, totalEnergy=True, volume = True, density=True,  temperature=True, speed=True))
+    simulation.reporters.append(PDBReporter(f'{args.name}_sim.pdb', args.reporter_interval))
+    # simulation.reporters.append(DCDReporter(args.output_traj_dcd, 10))
+    silent_output_stream = SilentOutputStream()
+    progress_reporter = ProgressBarReporter(10, totalSteps, silent_output_stream, step=True)
+    simulation.reporters.append(progress_reporter)
+    return simulation, system
 
 def equilibriate(simulation, args, system):
     simulation.context.reinitialize(True)
