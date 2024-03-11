@@ -211,7 +211,7 @@ def sweep(train_df, args):
     }
 
     clf = BayesSearchCV(estimator=model, search_spaces=param_grid, n_points=10, n_jobs=int(args.n_workers), 
-                        scoring=f1_scorer, cv=args.sweep_cv, return_train_score=True, verbose=1)
+                        scoring=f1_scorer, cv=int(args.sweep_cv), return_train_score=True, verbose=1)
     print("Sweeping...")
     clf.fit(train_df.iloc[:, :-2], train_df['NewLab'])
     clf.best_estimator_.save_model(os.path.join(args.outdir, f'{args.name}_XGBoost_{len(train_df.columns)-2}.json'))

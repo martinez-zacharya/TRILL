@@ -367,7 +367,10 @@ def fixer_of_pdbs(args):
       else:
           alterations = {}
           fixed_pdb = fix_pdb(args.receptor[0], alterations, args)
-          fixed_pdb_files.append(fixed_pdb)         
+          fixed_pdb_files.append(fixed_pdb)   
+    elif not args.ligand:
+      receptor = fix_pdb(args.receptor, alterations={}, args=args)
+      fixed_pdb_files.append(receptor)
     else:
       receptor = fix_pdb(args.receptor, alterations={}, args=args)
       ligand = fix_pdb(args.ligand, alterations={}, args=args)
@@ -406,6 +409,7 @@ def fix_pdb(pdb, alterations, args):
   Returns:
     A PDB string representing the fixed structure.
   """
+  print(pdb)
   fixer = pdbfixer.PDBFixer(pdb)
   fixer.findNonstandardResidues()
   alterations['nonstandard_residues'] = fixer.nonstandardResidues
@@ -545,6 +549,9 @@ def lightdock(args, ligands):
             args.protein = os.path.join(args.outdir, protein_file)     
             args.ligand = os.path.join(args.outdir, os.path.basename(args.ligand))  
             # Run the LightDock pipeline for this ligand
+            lightdock_out = os.path.join(args.outdir, f'{args.name}_lightdock_output')
+            os.mkdir(lightdock_out)
+            args.outdir = lightdock_out
             lightdock_setup(args)
             lightdock_run(os.path.join(args.outdir, 'setup.json'), args.sim_steps, args.outdir, args.n_workers)
             generate_ant_thony_list(args)
