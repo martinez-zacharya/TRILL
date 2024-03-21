@@ -294,7 +294,7 @@ def tied_featurize(batch, device, chain_dict, fixed_position_dict=None, omit_AA_
                     if len(x_chain.shape) == 2:
                         x_chain = x_chain[:,None,:]
                 else:
-                    x_chain = np.stack([chain_coords[c] for c in [f'N_chain_{letter}', f'CA_chain_{letter}', f'C_chain_{letter}', f'O_chain_{letter}']]),1) #[chain_lenght,4,3]               
+                    x_chain = np.stack([chain_coords[c] for c in [f'N_chain_{letter}', f'CA_chain_{letter}', f'C_chain_{letter}', f'O_chain_{letter}']],1) #[chain_lenght,4,3]
                 x_chain_list.append(x_chain)
                 chain_mask_list.append(chain_mask)
                 chain_seq_list.append(chain_seq)
