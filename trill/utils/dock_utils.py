@@ -55,15 +55,41 @@ def parse_pocket_output(output):
 
 def convert_protein_to_pdbqt(protein_file, rec_pdbqt):
     print(f'Converting {protein_file} to {rec_pdbqt}...')
-    convert_rec = f'obabel -ipdb {protein_file} --partialcharge eem -h -xr -opdbqt -O {rec_pdbqt}'.split(' ')
+    convert_rec = [
+        'obabel',
+        '-ipdb', protein_file,
+        '--partialcharge', 'eem',
+        '-h',
+        '-xr',
+        '-opdbqt',
+        '-O', rec_pdbqt
+    ]
     subprocess.run(convert_rec, stdout=subprocess.DEVNULL)
 
 def convert_ligand_to_pdbqt(ligand_file, lig_pdbqt, lig_ext):
     print(f'Converting {ligand_file} to {lig_pdbqt}...')
     if lig_ext == "pdb":
-        convert_lig = f'obabel -ipdb {ligand_file} -xr -h --partialcharge eem -opdbqt -O {lig_pdbqt}'.split(' ')
+        convert_lig = [
+            'obabel',
+            '-ipdb',
+            ligand_file,
+            '-xr',
+            '-h',
+            '--partialcharge', 'eem',
+            '-opdbqt'
+            '-O', lig_pdbqt
+        ]
     else:
-        convert_lig = f'obabel -i{lig_ext} {ligand_file} -h --partialcharge eem -opdbqt -O {lig_pdbqt}'.split(' ')
+        convert_lig = [
+            'obabel',
+            f'-i{lig_ext}',
+            ligand_file,
+            '-h',
+            '--partialcharge',
+            'eem',
+            '-opdbqt',
+            '-O', lig_pdbqt
+        ]
     subprocess.run(convert_lig, stdout=subprocess.DEVNULL)
 
 def perform_docking(args, ligands):
