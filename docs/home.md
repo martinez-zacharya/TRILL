@@ -210,7 +210,7 @@ In the examples below the string immediately after `trill` specifies the name of
 ### 10. Relax protein structure(s) using molecular dynamics.
   Using OpenMM, TRILL is able to relax protein structures, which is often needed before performing docking. Be on the lookout for more MD related features!
   ```
-  trill example 1 simulate /path/to/embeddings.csv
+  trill example 1 simulate /path/to/protein.pdb
   ```
 ### 11. Leverage pretrained classifiers or train your own custom ones.
   Currently, TRILL offers two pretrained protein classifiers, EpHod and TemStaPro, which predict optimal enzymatic pH and thermostability respectively. The subsequent predictions of the models are saved as a csv.
