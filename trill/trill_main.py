@@ -228,7 +228,7 @@ def main(args):
     finetune.add_argument(
         "--pre_masked_fasta",
         help="ESM: Use this flag to specify that your input fasta will be pre-masked and does not need masking performed by TRILL. The sequences will still be randomly shuffled.",
-        action="store_true",
+        action="store",
         default = False,
 )
 
