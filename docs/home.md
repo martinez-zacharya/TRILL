@@ -200,7 +200,7 @@ In the examples below the string immediately after `trill` specifies the name of
   ```
   Autodock Vina: Dock small-molecule(s) to a protein. Not only can you perform blind docking, but with Vina exclusively in TRILL, you are able to dock multiple ligands at once!
   ```
-  trill example 1 dock Lightdock trill/data/4ih9.pdb ligand_1.sdf ligand_2.sdf --blind
+  trill example 1 dock Vina trill/data/4ih9.pdb ligand_1.sdf ligand_2.sdf --blind
   ```
 ### 9. Visualize your embeddings
   Create interactive, queryable visualizations for your output embeddings in 2D. TRILL uses PCA by default, but you can specify tSNE or UMAP with --method.
