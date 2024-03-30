@@ -18,7 +18,7 @@ def setup(subparsers):
         "--constraints",
         help="Specifies which bonds and angles should be implemented with constraints. Allowed values are None, "
              "HBonds, AllBonds, or HAngles.",
-        choices=["None", "HBonds", "AllBonds", "HAngles"],
+        choices=("None", "HBonds", "AllBonds", "HAngles"),
         default="None",
         action="store",
     )
