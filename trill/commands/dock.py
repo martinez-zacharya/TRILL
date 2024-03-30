@@ -1,14 +1,14 @@
 def setup(subparsers):
     dock = subparsers.add_parser(
-        'dock',
-        help='Perform molecular docking with proteins and ligands. Note that you should relax your protein receptor '
-             'with Simulate or another method before docking.')
+        "dock",
+        help="Perform molecular docking with proteins and ligands. Note that you should relax your protein receptor "
+             "with Simulate or another method before docking.")
 
     dock.add_argument(
         "algorithm",
         help="Note that while LightDock can dock protein ligands, DiffDock, Smina, and Vina can only do "
              "small-molecules.",
-        choices=['DiffDock', 'Vina', 'Smina', 'LightDock', 'GeoDock']
+        choices=["DiffDock", "Vina", "Smina", "LightDock", "GeoDock"]
     )
 
     dock.add_argument(
@@ -24,7 +24,7 @@ def setup(subparsers):
              "if a .txt file is provided with each line providing the absolute path to different ligands, TRILL will "
              "dock each ligand one at a time.",
         action="store",
-        nargs='*'
+        nargs="*"
     )
 
     # dock.add_argument(
@@ -32,7 +32,7 @@ def setup(subparsers):
     #     help="If you are not doing blind docking, TRILL will automatically assume your ligand is a small molecule if "
     #          "the MW is less than 800. To get around this, you can force TRILL to read the ligand as either type.",
     #     default=False,
-    #     choices=['small', 'protein']
+    #     choices=["small", "protein"]
     # )
 
     dock.add_argument(
@@ -168,8 +168,8 @@ def run(args, logger, profiler):
     else:
         args.ligand = args.ligand[0]
         args.multi_lig = False
-        if args.ligand.endswith('.txt'):
-            with open(args.ligand, 'r') as infile:
+        if args.ligand.endswith(".txt"):
+            with open(args.ligand, "r") as infile:
                 for path in infile:
                     path = path.strip()
                     if not path:
@@ -180,50 +180,50 @@ def run(args, logger, profiler):
 
     protein_name = os.path.splitext(os.path.basename(args.protein))[0]
 
-    if args.algorithm == 'Smina' or args.algorithm == 'Vina':
+    if args.algorithm == "Smina" or args.algorithm == "Vina":
         docking_results = perform_docking(args, ligands)
         write_docking_results_to_file(docking_results, args, protein_name, args.algorithm)
-    elif args.algorithm == 'LightDock':
+    elif args.algorithm == "LightDock":
         perform_docking(args, ligands)
         print(f"LightDock run complete! Output files are in {args.outdir}")
-    elif args.algorithm == 'GeoDock':
+    elif args.algorithm == "GeoDock":
         try:
-            pkg_resources.get_distribution('geodock')
+            pkg_resources.get_distribution("geodock")
         except pkg_resources.DistributionNotFound:
-            install_cmd = 'pip install git+https://github.com/martinez-zacharya/GeoDock.git'.split(' ')
+            install_cmd = "pip install git+https://github.com/martinez-zacharya/GeoDock.git".split(" ")
             subprocess.run(install_cmd)
         from geodock.GeoDockRunner import EnMasseGeoDockRunner
         base_url = "https://raw.githubusercontent.com/martinez-zacharya/GeoDock/main/geodock/weights/dips_0.3.ckpt"
-        weights_path = f'{cache_dir}/dips_0.3.ckpt'
+        weights_path = f"{cache_dir}/dips_0.3.ckpt"
         if not os.path.exists(weights_path):
             r = requests.get(base_url)
             with open(weights_path, "wb") as file:
                 file.write(r.content)
 
         rec_coord, rec_seq = load_coords(args.protein, chain=None)
-        rec_name = os.path.basename(args.protein).split('.')[0]
+        rec_name = os.path.basename(args.protein).split(".")[0]
 
         lig_seqs = []
         lig_coords = []
         lig_names = []
-        with open(f'tmp_master.fasta', 'w+') as fasta:
-            fasta.write(f'>{rec_name}\n')
-            fasta.write(f'{rec_seq}\n')
+        with open(f"tmp_master.fasta", "w+") as fasta:
+            fasta.write(f">{rec_name}\n")
+            fasta.write(f"{rec_seq}\n")
             for lig in ligands:
-                lig_name = os.path.basename(lig).split('.')[0]
+                lig_name = os.path.basename(lig).split(".")[0]
                 coords, seq = load_coords(lig, chain=None)
                 coords = torch.nan_to_num(torch.from_numpy(coords))
                 lig_seqs.append(seq)
                 lig_coords.append(coords)
                 lig_names.append(lig_name)
-                fasta.write(f'>{lig_name}\n')
-                fasta.write(f'{seq}\n')
+                fasta.write(f">{lig_name}\n")
+                fasta.write(f"{seq}\n")
 
-        model_import_name = f'esm.pretrained.esm2_t33_650M_UR50D()'
+        model_import_name = f"esm.pretrained.esm2_t33_650M_UR50D()"
         args.per_AA = True
         args.avg = False
         model = ESM(eval(model_import_name), 0.0001, args)
-        seq_data = esm.data.FastaBatchedDataset.from_file('tmp_master.fasta')
+        seq_data = esm.data.FastaBatchedDataset.from_file("tmp_master.fasta")
         loader = torch.utils.data.DataLoader(seq_data, shuffle=False, batch_size=1, num_workers=0,
                                              collate_fn=model.alphabet.get_batch_converter())
         pred_writer = CustomWriter(output_dir=args.outdir, write_interval="epoch")
@@ -232,12 +232,12 @@ def run(args, logger, profiler):
                                  num_nodes=int(args.nodes))
         else:
             trainer = pl.Trainer(enable_checkpointing=False, precision=16, devices=int(args.GPUs),
-                                 callbacks=[pred_writer], accelerator='gpu', logger=logger, num_nodes=int(args.nodes))
+                                 callbacks=[pred_writer], accelerator="gpu", logger=logger, num_nodes=int(args.nodes))
 
         trainer.predict(model, loader)
         parse_and_save_all_predictions(args)
         master_embs = []
-        emb_file = torch.load(f'{args.outdir}/predictions_0.pt')
+        emb_file = torch.load(f"{args.outdir}/predictions_0.pt")
         for entry in emb_file[0]:
             emb = entry[0][0][0]
             master_embs.append(emb)
@@ -248,40 +248,40 @@ def run(args, logger, profiler):
             pred = em_geodock.dock(
                 rec_info=[rec_name, rec_seq, rec_coord, rec_emb],
                 lig_info=[lig_name, lig_seq, lig_coord, lig_emb],
-                out_name=args.name + '_' + rec_name + '_' + lig_name
+                out_name=args.name + "_" + rec_name + "_" + lig_name
             )
-        os.remove(f'{args.outdir}/predictions_0.pt')
+        os.remove(f"{args.outdir}/predictions_0.pt")
 
-    elif args.algorithm == 'DiffDock':
-        if not os.path.exists(os.path.join(cache_dir, 'DiffDock')):
-            print('Cloning forked DiffDock')
-            os.makedirs(os.path.join(cache_dir, 'DiffDock'))
-            diffdock = Repo.clone_from('https://github.com/martinez-zacharya/DiffDock',
-                                       os.path.join(cache_dir, 'DiffDock'))
+    elif args.algorithm == "DiffDock":
+        if not os.path.exists(os.path.join(cache_dir, "DiffDock")):
+            print("Cloning forked DiffDock")
+            os.makedirs(os.path.join(cache_dir, "DiffDock"))
+            diffdock = Repo.clone_from("https://github.com/martinez-zacharya/DiffDock",
+                                       os.path.join(cache_dir, "DiffDock"))
             diffdock_root = diffdock.git.rev_parse("--show-toplevel")
-            subprocess.run(['pip', 'install', '-e', diffdock_root])
-            sys.path.insert(0, os.path.join(cache_dir, 'DiffDock'))
+            subprocess.run(["pip", "install", "-e", diffdock_root])
+            sys.path.insert(0, os.path.join(cache_dir, "DiffDock"))
         else:
-            sys.path.insert(0, os.path.join(cache_dir, 'DiffDock'))
-            diffdock = Repo(os.path.join(cache_dir, 'DiffDock'))
+            sys.path.insert(0, os.path.join(cache_dir, "DiffDock"))
+            diffdock = Repo(os.path.join(cache_dir, "DiffDock"))
             diffdock_root = diffdock.git.rev_parse("--show-toplevel")
         from inference import run_diffdock
         run_diffdock(args, diffdock_root)
 
-        # out_dir = os.path.join(args.outdir, f'{args.name}_DiffDock_out')
-        # rec = args.protein.split('.')[-2]
-        # out_rec = rec.split('/')[-1]
-        # convert_rec = f'obabel {rec}.pdb -O {out_rec}.pdbqt'.split(' ')
+        # out_dir = os.path.join(args.outdir, f"{args.name}_DiffDock_out")
+        # rec = args.protein.split(".")[-2]
+        # out_rec = rec.split("/")[-1]
+        # convert_rec = f"obabel {rec}.pdb -O {out_rec}.pdbqt".split(" ")
         # subprocess.run(convert_rec, stdout=subprocess.DEVNULL)
         # for file in os.listdir(out_dir):
-        #     if 'confidence' in file:
-        #         file_pre = file.split('.sdf')[-2]
-        #         convert_lig = f'obabel {out_dir}/{file} -O {file_pre}.pdbqt'.split(' ')
+        #     if "confidence" in file:
+        #         file_pre = file.split(".sdf")[-2]
+        #         convert_lig = f"obabel {out_dir}/{file} -O {file_pre}.pdbqt".split(" ")
         #         subprocess.run(convert_lig, stdout=subprocess.DEVNULL)
-
-        #         smina_cmd = f'smina --score_only -r {out_rec}.pdbqt -l {file_pre}.pdbqt'.split(' ')
+        # 
+        #         smina_cmd = f"smina --score_only -r {out_rec}.pdbqt -l {file_pre}.pdbqt".split(" ")
         #         result = subprocess.run(smina_cmd, stdout=subprocess.PIPE)
-
-        #         result = re.search("Affinity: \w+.\w+", result.stdout.decode('utf-8'))
+        # 
+        #         result = re.search("Affinity: \w+.\w+", result.stdout.decode("utf-8"))
         #         affinity = result.group()
-        #         affinity = re.search('\d+\.\d+', affinity).group()
+        #         affinity = re.search("\d+\.\d+", affinity).group()
