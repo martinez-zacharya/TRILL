@@ -237,6 +237,7 @@ def run(args, logger, profiler):
         logging.getLogger("pytorch_lightning.utilities.rank_zero").addHandler(logging.NullHandler())
         logging.getLogger("pytorch_lightning.accelerators.cuda").addHandler(logging.NullHandler())
         if not os.path.exists(os.path.join(cache_dir, "EpHod_Models")):
+            print("Downloading EpHod models...")
             cmd = ("curl", "-o", "saved_models.tar.gz", "--progress-bar",
                    "https://zenodo.org/records/8011249/files/saved_models.tar.gz?download=1")
             result = subprocess.run(cmd)
