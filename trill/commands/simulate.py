@@ -1,5 +1,5 @@
 def setup(subparsers):
-    simulate = subparsers.add_parser('simulate', help='Use MD to relax protein structures')
+    simulate = subparsers.add_parser("simulate", help="Use MD to relax protein structures")
 
     simulate.add_argument(
         "receptor",
@@ -31,119 +31,119 @@ def setup(subparsers):
     )
 
     simulate.add_argument(
-        '--forcefield',
+        "--forcefield",
         type=str,
-        default='amber14-all.xml',
-        help='Force field to use. Default is amber14-all.xml'
+        default="amber14-all.xml",
+        help="Force field to use. Default is amber14-all.xml"
     )
 
     simulate.add_argument(
-        '--solvent',
+        "--solvent",
         type=str,
-        default='amber14/tip3pfb.xml',
-        help='Solvent model to use, the default is amber14/tip3pfb.xml'
+        default="amber14/tip3pfb.xml",
+        help="Solvent model to use, the default is amber14/tip3pfb.xml"
     )
     simulate.add_argument(
-        '--solvate',
+        "--solvate",
         default=False,
-        help='Add to solvate your simulation',
-        action='store_true'
+        help="Add to solvate your simulation",
+        action="store_true"
     )
 
     simulate.add_argument(
-        '--step_size',
-        help='Step size in femtoseconds. Default is 2',
+        "--step_size",
+        help="Step size in femtoseconds. Default is 2",
         type=float,
         default=2,
         action="store",
     )
     simulate.add_argument(
-        '--num_steps',
+        "--num_steps",
         type=int,
         default=5000,
-        help='Number of simulation steps'
+        help="Number of simulation steps"
     )
 
     simulate.add_argument(
-        '--reporting_interval',
+        "--reporting_interval",
         type=int,
         default=1000,
-        help='Reporting interval for simulation'
+        help="Reporting interval for simulation"
     )
 
     simulate.add_argument(
-        '--output_traj_dcd',
+        "--output_traj_dcd",
         type=str,
-        default='trajectory.dcd',
-        help='Output trajectory DCD file'
+        default="trajectory.dcd",
+        help="Output trajectory DCD file"
     )
 
     simulate.add_argument(
-        '--apply-harmonic-force',
-        help='Whether to apply a harmonic force to pull the molecule.',
+        "--apply-harmonic-force",
+        help="Whether to apply a harmonic force to pull the molecule.",
         type=bool,
         default=False,
         action="store",
     )
 
     simulate.add_argument(
-        '--force-constant',
-        help='Force constant for the harmonic force in kJ/mol/nm^2.',
+        "--force-constant",
+        help="Force constant for the harmonic force in kJ/mol/nm^2.",
         type=float,
         default=None,
         action="store",
     )
 
     simulate.add_argument(
-        '--z0',
-        help='The z-coordinate to pull towards in nm.',
+        "--z0",
+        help="The z-coordinate to pull towards in nm.",
         type=float,
         default=None,
         action="store",
     )
 
     simulate.add_argument(
-        '--molecule-atom-indices',
-        help='Comma-separated list of atom indices to which the harmonic force will be applied.',
+        "--molecule-atom-indices",
+        help="Comma-separated list of atom indices to which the harmonic force will be applied.",
         type=str,
         default="0,1,2",  # Replace with your default indices
         action="store",
     )
 
     simulate.add_argument(
-        '--equilibration_steps',
-        help='Steps you want to take for NVT and NPT equilibration. Each step is 0.002 picoseconds',
+        "--equilibration_steps",
+        help="Steps you want to take for NVT and NPT equilibration. Each step is 0.002 picoseconds",
         type=int,
         default=300,
         action="store",
     )
 
     simulate.add_argument(
-        '--periodic_box',
-        help='Give, in nm, one of the dimensions to build the periodic boundary.',
+        "--periodic_box",
+        help="Give, in nm, one of the dimensions to build the periodic boundary.",
         type=int,
         default=10,
         action="store",
     )
     # simulate.add_argument(
-    #     '--martini_top',
-    #     help='Specify the path to the MARTINI topology file you want to use.',
+    #     "--martini_top",
+    #     help="Specify the path to the MARTINI topology file you want to use.",
     #     type=str,
     #     default=False,
     #     action="store",
     # )
     simulate.add_argument(
-        '--just_relax',
-        help='Just relaxes the input structure(s) and outputs the fixed and relaxed structure(s). The forcefield that '
-             'is used is amber14.',
+        "--just_relax",
+        help="Just relaxes the input structure(s) and outputs the fixed and relaxed structure(s). The forcefield that "
+             "is used is amber14.",
         action="store_true",
         default=False,
     )
 
     simulate.add_argument(
-        '--reporter_interval',
-        help='Set interval to save PDB and energy snapshot. Note that the higher the number, the bigger the output '
-             'files will be and the slower the simulation. Default is 1000',
+        "--reporter_interval",
+        help="Set interval to save PDB and energy snapshot. Note that the higher the number, the bigger the output "
+             "files will be and the slower the simulation. Default is 1000",
         action="store",
         default=1000,
     )
@@ -156,11 +156,11 @@ def run(args, logger, profiler):
     from trill.utils.simulation_utils import relax_structure, run_simulation
 
     if args.just_relax:
-        args.forcefield = 'amber14-all.xml'
-        args.solvent = 'amber14/tip3pfb.xml'
+        args.forcefield = "amber14-all.xml"
+        args.solvent = "amber14/tip3pfb.xml"
         pdb_list = []
-        if args.receptor.endswith('.txt'):
-            with open(args.receptor, 'r') as infile:
+        if args.receptor.endswith(".txt"):
+            with open(args.receptor, "r") as infile:
                 for path in infile:
                     path = path.strip()
                     if not path:
@@ -172,7 +172,7 @@ def run(args, logger, profiler):
         fixed_pdb_files = fixer_of_pdbs(args)
         relax_structure(args, fixed_pdb_files)
     else:
-        # # print('Currently, Simulate only supports relaxing a structure! Stay tuned for more MD related features...')
+        # # print("Currently, Simulate only supports relaxing a structure! Stay tuned for more MD related features...")
         # if args.martini_top:
         #     args.output_traj_dcd = os.path.join(args.outdir, args.output_traj_dcd)
         #     run_simulation(args)
