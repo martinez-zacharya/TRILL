@@ -219,7 +219,7 @@ def run(args, logger, profiler):
                 fasta.write(f">{lig_name}\n")
                 fasta.write(f"{seq}\n")
 
-        model_import_name = f"esm.pretrained.esm2_t33_650M_UR50D()"
+        model_import_name = "esm.pretrained.esm2_t33_650M_UR50D()"
         args.per_AA = True
         args.avg = False
         model = ESM(eval(model_import_name), 0.0001, args)
