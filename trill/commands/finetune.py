@@ -147,7 +147,7 @@ def run(args, logger, profiler):
                 convert_zero_checkpoint_to_fp32_state_dict(output_path, f"{output_path[0:-3]}_fp32.pt")
             except Exception as e:
                 print(
-                    f"Exception {e} has occured on attempted save of your deepspeed trained model. If this has to do "
+                    f"Exception {e} has occurred on attempted save of your deepspeed trained model. If this has to do "
                     f"with CPU RAM, please try "
                     f"pytorch_lightning.utilities.deepspeedconvert_zero_checkpoint_to_fp32_state_dict("
                     f"your_checkpoint.ckpt, full_model.pt")
@@ -195,7 +195,10 @@ def run(args, logger, profiler):
                 convert_zero_checkpoint_to_fp32_state_dict(output_path, f"{output_path[0:-3]}_fp32.pt")
             except Exception as e:
                 print(
-                    f"Exception {e} has occured on attempted save of your deepspeed trained model. If this has to do with CPU RAM, please try pytorch_lightning.utilities.deepspeedconvert_zero_checkpoint_to_fp32_state_dict(your_checkpoint.ckpt, full_model.pt")
+                    f"Exception {e} has occurred on attempted save of your deepspeed trained model. If this has to do "
+                    f"with CPU RAM, please try "
+                    f"pytorch_lightning.utilities.deepspeedconvert_zero_checkpoint_to_fp32_state_dict("
+                    f"your_checkpoint.ckpt, full_model.pt")
         elif str(args.strategy) in {"fsdp", "FSDP", "FullyShardedDataParallel"}:
             pass
         else:
@@ -234,7 +237,7 @@ def run(args, logger, profiler):
                 convert_zero_checkpoint_to_fp32_state_dict(output_path, f"{output_path[0:-3]}_fp32.pt")
             except Exception as e:
                 print(
-                    f"Exception {e} has occured on attempted save of your deepspeed trained model. If this has to do "
+                    f"Exception {e} has occurred on attempted save of your deepspeed trained model. If this has to do "
                     f"with CPU RAM, please try "
                     f"pytorch_lightning.utilities.deepspeedconvert_zero_checkpoint_to_fp32_state_dict("
                     f"your_checkpoint.ckpt, full_model.pt")
