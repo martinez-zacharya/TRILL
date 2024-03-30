@@ -8,7 +8,7 @@ def setup(subparsers):
         help="Predict thermostability/optimal enzymatic pH using TemStaPro/EpHod or choose custom to train/use your "
              "own XGBoost or Isolation Forest classifier. Note for training XGBoost, you need to submit roughly equal "
              "amounts of each class as part of your query.",
-        choices=["TemStaPro", "EpHod", "XGBoost", "iForest"]
+        choices=("TemStaPro", "EpHod", "XGBoost", "iForest")
     )
     classify.add_argument(
         "query",
@@ -33,8 +33,8 @@ def setup(subparsers):
              "classifier. Default is esm2_t12_35M",
         default="esm2_t12_35M",
         action="store",
-        choices=["esm2_t6_8M", "esm2_t12_35M", "esm2_t30_150M", "esm2_t33_650M", "esm2_t36_3B", "esm2_t48_15B",
-                 "ProtT5-XL", "ProstT5", "Ankh", "Ankh-Large"]
+        choices=("esm2_t6_8M", "esm2_t12_35M", "esm2_t30_150M", "esm2_t33_650M", "esm2_t36_3B", "esm2_t48_15B",
+                 "ProtT5-XL", "ProstT5", "Ankh", "Ankh-Large")
     )
     classify.add_argument(
         "--train_split",
@@ -129,7 +129,7 @@ def setup(subparsers):
         help="XGBoost: Change the scoring method used for calculated F1. Default is with no averaging.",
         action="store",
         default=None,
-        choices=["macro", "weighted", "micro", "None"]
+        choices=("macro", "weighted", "micro", "None")
     )
 
 
@@ -191,8 +191,8 @@ def run(args, logger, profiler):
         else:
             temstapro_models = Repo(os.path.join(cache_dir, "TemStaPro_models"))
             temstapro_models_root = temstapro_models.git.rev_parse("--show-toplevel")
-        THRESHOLDS = ["40", "45", "50", "55", "60", "65"]
-        SEEDS = ["41", "42", "43", "44", "45"]
+        THRESHOLDS = ("40", "45", "50", "55", "60", "65")
+        SEEDS = ("41", "42", "43", "44", "45")
         if not args.preComputed_Embs:
             emb_df = pd.read_csv(os.path.join(args.outdir, f"{args.name}_ProtT5_AVG.csv"))
         else:
@@ -222,12 +222,12 @@ def run(args, logger, profiler):
                 mean_prediction /= len(SEEDS)
                 binary_pred = builtins.round(mean_prediction)
                 inferences[f"{seq}$%#{thresh}"] = (mean_prediction, binary_pred)
-        inference_df = pd.DataFrame.from_dict(inferences, orient="index", columns=["Mean_Pred", "Binary_Pred"])
+        inference_df = pd.DataFrame.from_dict(inferences, orient="index", columns=("Mean_Pred", "Binary_Pred"))
         inference_df = inference_df.reset_index(names="RawLab")
         inference_df["Protein"] = inference_df["RawLab"].apply(lambda x: x.split("$%#")[0])
         inference_df["Threshold"] = inference_df["RawLab"].apply(lambda x: x.split("$%#")[-1])
         inference_df = inference_df.drop(columns="RawLab")
-        inference_df = inference_df[["Protein", "Threshold", "Mean_Pred", "Binary_Pred"]]
+        inference_df = inference_df[("Protein", "Threshold", "Mean_Pred", "Binary_Pred")]
         inference_df.to_csv(os.path.join(args.outdir, f"{args.name}_TemStaPro_preds.csv"), index=False)
         if not args.save_emb:
             os.remove(os.path.join(args.outdir, f"{args.name}_ProtT5_AVG.csv"))
@@ -236,8 +236,8 @@ def run(args, logger, profiler):
         logging.getLogger("pytorch_lightning.utilities.rank_zero").addHandler(logging.NullHandler())
         logging.getLogger("pytorch_lightning.accelerators.cuda").addHandler(logging.NullHandler())
         if not os.path.exists(os.path.join(cache_dir, "EpHod_Models")):
-            cmd = ["curl", "-o", "saved_models.tar.gz", "--progress-bar",
-                   "https://zenodo.org/record/8011249/files/saved_models.tar.gz?download=1"]
+            cmd = ("curl", "-o", "saved_models.tar.gz", "--progress-bar",
+                   "https://zenodo.org/record/8011249/files/saved_models.tar.gz?download=1")
             result = subprocess.run(cmd)
 
             cmd = f"mv saved_models.tar.gz {cache_dir}/".split()
@@ -382,7 +382,7 @@ def run(args, logger, profiler):
             #     print(f"{value}: {count}")
 
             df["Predicted_Class"] = preds
-            out_df = df[["Label", "Predicted_Class"]]
+            out_df = df[("Label", "Predicted_Class")]
             out_df.to_csv(os.path.join(args.outdir, f"{args.name}_iForest_predictions.csv"), index=False)
         if not args.save_emb and not args.preComputed_Embs:
             os.remove(os.path.join(args.outdir, f"{args.name}_{args.emb_model}_AVG.csv"))
