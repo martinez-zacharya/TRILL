@@ -109,7 +109,7 @@ def run(args, logger, profiler):
             "wget -nc http://files.ipd.uw.edu/pub/RFdiffusion/12fc204edeae5b57713c5ad7dcb97d39/Base_epoch8_ckpt.pt"
         )
         for command in commands:
-            if not os.path.isfile(os.path.join(cache_dir, "RFDiffusion_weights", f"{command.split('/')[-1]}")):
+            if not os.path.isfile(os.path.join(cache_dir, "RFDiffusion_weights", command.split('/')[-1])):
                 subprocess.run(command.split(" "))
                 subprocess.run(("mv", command.split("/")[-1], os.path.join(cache_dir, "RFDiffusion_weights")))
 
