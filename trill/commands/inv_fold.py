@@ -129,7 +129,7 @@ def run(args, logger, profiler):
         dataloader = torch.utils.data.DataLoader(data, batch_size=1, shuffle=False)
         sample_df, native_seq_df = ESM_IF1(dataloader, genIters=int(args.num_return_sequences), temp=float(args.temp),
                                            GPUs=int(args.GPUs))
-        pdb_name = args.query.split(".")[-2].split("/")[-1]
+        pdb_name = os.path.splitext(os.path.basename(args.query))[0]
         with open(os.path.join(args.outdir, f"{args.name}_ESM-IF1_gen.fasta"), "w+") as fasta:
             for ix, row in native_seq_df.iterrows():
                 fasta.write(f">{pdb_name}_chain-{row[1]} \n")
@@ -142,12 +142,12 @@ def run(args, logger, profiler):
             print("Cloning forked ProteinMPNN")
             os.makedirs(os.path.join(cache_dir, "ProteinMPNN/"))
             proteinmpnn = Repo.clone_from("https://github.com/martinez-zacharya/ProteinMPNN",
-                                          (os.path.join(cache_dir, "ProteinMPNN/")))
+                                          (os.path.join(cache_dir, "ProteinMPNN", "")))
             mpnn_git_root = proteinmpnn.git.rev_parse("--show-toplevel")
             subprocess.run(("pip", "install", "-e", mpnn_git_root))
-            sys.path.insert(0, (os.path.join(cache_dir, "ProteinMPNN/")))
+            sys.path.insert(0, (os.path.join(cache_dir, "ProteinMPNN", "")))
         else:
-            sys.path.insert(0, (os.path.join(cache_dir, "ProteinMPNN/")))
+            sys.path.insert(0, (os.path.join(cache_dir, "ProteinMPNN", "")))
         from mpnnrun import run_mpnn
         print("ProteinMPNN generation starting...")
         run_mpnn(args)
@@ -155,12 +155,12 @@ def run(args, logger, profiler):
     elif args.model == "ProstT5":
         model = ProstT5(args)
         os.makedirs("foldseek_intermediates")
-        create_db_cmd = f"foldseek createdb {os.path.abspath(args.query)} DB".split()
+        create_db_cmd = ("foldseek", "createdb", os.path.abspath(args.query), "DB")
         subprocess.run(create_db_cmd, cwd="foldseek_intermediates")
         lndb_cmd = f"foldseek lndb DB_h DB_ss_h".split()
         subprocess.run(lndb_cmd, cwd="foldseek_intermediates")
-        convert_cmd = (f"foldseek convert2fasta foldseek_intermediates/DB_ss {os.path.join(args.outdir, args.name)}_ss"
-                       f".3di").split()
+        convert_cmd = ("foldseek", "convert2fasta", os.path.join("foldseek_intermediates", "DB_ss"),
+                       os.path.join(args.outdir, args.name) + "_ss.3di")
         subprocess.run(convert_cmd)
         shutil.rmtree("foldseek_intermediates")
 
