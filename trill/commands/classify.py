@@ -209,7 +209,8 @@ def run(args, logger, profiler):
             threshold_inferences = {}
             for seed in SEEDS:
                 clf = MLP_C2H2(1024, 512, 256)
-                clf.load_state_dict(torch.load(f"{temstapro_models_root}/mean_major_imbal-{thresh}_s{seed}.pt"))
+                clf.load_state_dict(torch.load(os.path.join(
+                    temstapro_models_root, f"mean_major_imbal-{thresh}_s{seed}.pt")))
                 clf.eval()
                 if int(args.GPUs) > 0:
                     clf.to("cuda")
@@ -270,8 +271,8 @@ def run(args, logger, profiler):
             os.makedirs(args.outdir)
 
         # Prediction output file
-        phout_file = f"{args.outdir}/{args.name}_EpHod.csv"
-        embed_file = f"{args.outdir}/{args.name}_ESM1v_embeddings.csv"
+        phout_file = os.path.join(args.outdir, f"{args.name}_EpHod.csv")
+        embed_file = os.path.join(args.outdir, f"{args.name}_ESM1v_embeddings.csv")
         ephod_model = eu.EpHodModel(args)
         num_batches = int(np.ceil(numseqs / args.batch_size))
         all_ypred, all_emb_ephod = [], []
@@ -301,8 +302,17 @@ def run(args, logger, profiler):
     elif args.classifier == "XGBoost":
         outfile = os.path.join(args.outdir, f"{args.name}_XGBoost.out")
         if not args.preComputed_Embs:
-            embed_command = f"trill {args.name} {args.GPUs} --outdir {args.outdir} embed {args.emb_model} {args.query} --avg"
-            subprocess.run(embed_command.split(" "), check=True)
+            embed_command = (
+                "trill",
+                args.name,
+                args.GPUs,
+                "--outdir", args.outdir,
+                "embed",
+                args.emb_model,
+                args.query,
+                "--avg"
+            )
+            subprocess.run(embed_command, check=True)
             df = pd.read_csv(os.path.join(args.outdir, f"{args.name}_{args.emb_model}_AVG.csv"))
         else:
             df = pd.read_csv(args.preComputed_Embs)
@@ -347,8 +357,16 @@ def run(args, logger, profiler):
     elif args.classifier == "iForest":
         # Load embeddings
         if not args.preComputed_Embs:
-            embed_command = f"trill {args.name} {args.GPUs} --outdir {args.outdir} embed {args.emb_model} {args.query} --avg".split(
-                " ")
+            embed_command = (
+                "trill",
+                args.name,
+                args.GPUs,
+                "--outdir", args.outdir,
+                "embed",
+                args.emb_model,
+                args.query,
+                "--avg"
+            )
             subprocess.run(embed_command, check=True)
             df = pd.read_csv(os.path.join(args.outdir, f"{args.name}_{args.emb_model}_AVG.csv"))
         else:
