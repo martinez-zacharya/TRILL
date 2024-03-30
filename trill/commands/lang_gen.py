@@ -139,52 +139,38 @@ def run(args, logger, profiler):
             raise RuntimeError
         model_import_name = f"esm.pretrained.{args.esm2_arch}()"
         with open(os.path.join(args.outdir, f"{args.name}_{args.esm2_arch}_Gibbs.fasta"), "w+") as fasta:
-            if args.finetuned != False:
-                model = ESM_Gibbs(eval(model_import_name), args)
-                if args.finetuned != False:
-                    model = weights_update(model=ESM_Gibbs(eval(model_import_name), args),
-                                           checkpoint=torch.load(args.finetuned))
-                    tuned_name = args.finetuned.split("/")[-1]
-                if int(args.GPUs) > 0:
-                    model.model = model.model.cuda()
-                for i in range(args.num_return_sequences):
-                    out = model.generate(args.seed_seq, mask=True, n_samples=1, max_len=args.max_length,
-                                         in_order=args.random_fill, num_positions=int(args.num_positions),
-                                         temperature=float(args.temp))
-                    out = "".join(out)
-                    fasta.write(f">{args.name}_{tuned_name[0:-3]}_Gibbs_{i} \n")
-                    fasta.write(f"{out}\n")
-                    fasta.flush()
+            model = ESM_Gibbs(eval(model_import_name), args)
+            if int(args.GPUs) > 0:
+                model.model = model.model.cuda()
+
+            if args.finetuned:
+                model = weights_update(model=ESM_Gibbs(eval(model_import_name), args),
+                                       checkpoint=torch.load(args.finetuned))
+                tuned_name = args.finetuned.split("/")[-1]
             else:
-                model = ESM_Gibbs(eval(model_import_name), args)
                 tuned_name = f"{args.esm2_arch}___"
-                if int(args.GPUs) > 0:
-                    model.model = model.model.cuda()
-                for i in range(args.num_return_sequences):
-                    out = model.generate(args.seed_seq, mask=True, n_samples=1, max_len=args.max_length,
-                                         in_order=args.random_fill, num_positions=int(args.num_positions),
-                                         temperature=float(args.temp))
-                    out = "".join(out)
-                    fasta.write(f">{args.name}_{tuned_name[0:-3]}_Gibbs_{i} \n")
-                    fasta.write(f"{out}\n")
-                    fasta.flush()
+
+            for i in range(args.num_return_sequences):
+                out = model.generate(args.seed_seq, mask=True, n_samples=1, max_len=args.max_length,
+                                     in_order=args.random_fill, num_positions=int(args.num_positions),
+                                     temperature=float(args.temp))
+                out = "".join(out)
+                fasta.write(f">{args.name}_{tuned_name[0:-3]}_Gibbs_{i} \n")
+                fasta.write(f"{out}\n")
+                fasta.flush()
 
     elif args.model == "ZymCTRL":
         model = ZymCTRL(args)
-        if args.finetuned != False:
+        if args.finetuned:
             model = model.load_from_checkpoint(args.finetuned, args=args, strict=False)
         with open(os.path.join(args.outdir, f"{args.name}_ZymCTRL.fasta"), "w+") as fasta:
             for i in tqdm(range(int(args.num_return_sequences))):
-                if int(args.GPUs) == 0:
-                    generated_output = model.generator(str(args.ctrl_tag), device=torch.device("cpu"),
-                                                       temperature=float(args.temp), max_length=int(args.max_length),
-                                                       repetition_penalty=float(args.repetition_penalty),
-                                                       do_sample=args.do_sample, top_k=int(args.top_k))
-                else:
-                    generated_output = model.generator(str(args.ctrl_tag), device=torch.device("cuda"),
-                                                       temperature=float(args.temp), max_length=int(args.max_length),
-                                                       repetition_penalty=float(args.repetition_penalty),
-                                                       do_sample=args.do_sample, top_k=int(args.top_k))
+                generated_output = model.generator(str(args.ctrl_tag),
+                                                   device=torch.device("cpu" if int(args.GPUs) == 0 else "cuda"),
+                                                   temperature=float(args.temp), max_length=int(args.max_length),
+                                                   repetition_penalty=float(args.repetition_penalty),
+                                                   do_sample=args.do_sample, top_k=int(args.top_k))
+
                 fasta.write(f">{args.name}_{args.ctrl_tag}_ZymCTRL_{i}_PPL={generated_output[0][1]} \n")
                 fasta.write(f"{generated_output[0][0]}\n")
                 fasta.flush()
