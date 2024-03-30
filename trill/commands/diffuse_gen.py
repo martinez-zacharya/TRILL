@@ -133,4 +133,4 @@ def run(args, logger, profiler):
     #     run_rfdiff((f"{rfdiff_git_root}/config/inference/symmetry.yaml"), args)
     # else:
     #     run_rfdiff((f"{rfdiff_git_root}/config/inference/base.yaml"), args)
-    run_rfdiff((f"{rfdiff_git_root}/config/inference/base.yaml"), args)
+    run_rfdiff(f"{rfdiff_git_root}/config/inference/base.yaml", args)
