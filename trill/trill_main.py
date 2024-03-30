@@ -1,58 +1,15 @@
+import argparse
 import importlib
+import os
+import sys
+import time
 
 import pytorch_lightning as pl
 import torch
-import argparse
-import esm
-import time
-import gc
-import subprocess
-import os
-from git import Repo
-from torch import inf
-import sys
-import xgboost as xgb
-from sklearn.model_selection import train_test_split
-import torch.nn as nn
-import torch.nn.functional as F
-import pandas as pd
-from Bio import SeqIO
-import requests
+from pyfiglet import Figlet
 from pytorch_lightning.loggers import TensorBoardLogger
 from pytorch_lightning.profilers import PyTorchProfiler
-import shutil
-from sklearn.metrics import precision_recall_fscore_support
-from tqdm import tqdm
-import numpy as np
-from rdkit import Chem
-# from fairscale.nn.data_parallel import FullyShardedDataParallel as FSDP
-# from fairscale.nn.wrap import enable_wrap, wrap
-import builtins
-from pytorch_lightning.utilities.deepspeed import convert_zero_checkpoint_to_fp32_state_dict
-from trill.utils.lightning_models import ESM, ProtGPT2, CustomWriter, ESM_Gibbs, ProtT5, ZymCTRL, ProstT5, Custom3DiDataset, Ankh
-from trill.utils.update_weights import weights_update
-from trill.utils.dock_utils import perform_docking, fixer_of_pdbs, write_docking_results_to_file
-from trill.utils.simulation_utils import relax_structure, run_simulation
-from transformers import AutoTokenizer, EsmForProteinFolding, set_seed
-from pytorch_lightning.callbacks import ModelCheckpoint
-# from trill.utils.strategy_tuner import tune_esm_inference, tune_esm_train
-from trill.utils.protgpt2_utils import ProtGPT2_wrangle
-from trill.utils.esm_utils import ESM_IF1_Wrangle, ESM_IF1, convert_outputs_to_pdb, parse_and_save_all_predictions
-from trill.utils.visualize import reduce_dims, viz
-from trill.utils.MLP import MLP_C2H2, inference_epoch
-from sklearn.ensemble import IsolationForest
-import skops.io as sio
-from sklearn.preprocessing import LabelEncoder
-import trill.utils.ephod_utils as eu
-from trill.utils.classify_utils import generate_class_key_csv, prep_data, log_results, xg_test, sweep, train_model, custom_xg_test
-from trill.utils.fetch_embs import convert_embeddings_to_csv, download_embeddings
-from esm.inverse_folding.util import load_coords
-import logging
-from pyfiglet import Figlet
-import bokeh
-from Bio import PDB
-from icecream import ic
-import pkg_resources
+from transformers import set_seed
 
 os.environ['CUDA_LAUNCH_BLOCKING'] = '1'
 os.environ["TOKENIZERS_PARALLELISM"] = "false"
