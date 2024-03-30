@@ -45,7 +45,7 @@ def setup(subparsers):
 
     # diffuse_gen.add_argument(
     #     "--sym_type",
-    #     help="Define resiudes that binder must interact with. For example, --hotspots A30,A33,A34 , where A is the "
+    #     help="Define residues that binder must interact with. For example, --hotspots A30,A33,A34 , where A is the "
     #          "chain and the numbers are the residue indices.",
     #     action="store",
     #     default=None
@@ -69,7 +69,7 @@ def setup(subparsers):
 
     diffuse_gen.add_argument(
         "--hotspots",
-        help="Define resiudes that binder must interact with. For example, --hotspots A30,A33,A34 , where A is the "
+        help="Define residues that binder must interact with. For example, --hotspots A30,A33,A34 , where A is the "
              "chain and the numbers are the residue indices.",
         action="store",
         default=None
