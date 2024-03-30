@@ -99,8 +99,8 @@ def run(args, logger, profiler):
                                                     add_special_tokens=False, padding=True)["input_ids"]
                         prot_len = len(batch_input_ids[0])
                     else:
-                        tokenized_input = tokenizer(batch_input_ids, return_tensors="pt", add_special_tokens=False)[
-                            "input_ids"]
+                        tokenized_input = tokenizer(batch_input_ids, return_tensors="pt",
+                                                    add_special_tokens=False)["input_ids"]
                         prot_len = len(batch_input_ids[0])
                     tokenized_input = tokenized_input.clone().detach()
                     try:
