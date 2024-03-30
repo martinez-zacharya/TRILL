@@ -6,7 +6,7 @@ def setup(subparsers):
         help="prepare_class_key: Pepare a csv for use with the classify command. Takes a directory or text file with "
              "list of paths for fasta files. Each file will be a unique class, so if your directory contains 5 fasta "
              "files, there will be 5 classes in the output key csv.",
-        choices=["prepare_class_key", "fetch_embeddings"]
+        choices=("prepare_class_key", "fetch_embeddings")
     )
 
     utils.add_argument(
@@ -24,20 +24,20 @@ def setup(subparsers):
     utils.add_argument(
         "--uniprotDB",
         help="UniProt embedding dataset to download.",
-        choices=["UniProtKB",
+        choices=("UniProtKB",
                  "A.thaliana",
                  "C.elegans",
                  "E.coli",
                  "H.sapiens",
                  "M.musculus",
                  "R.norvegicus",
-                 "SARS-CoV-2"],
+                 "SARS-CoV-2"),
         action="store",
     )
     utils.add_argument(
         "--rep",
         help="The representation to download.",
-        choices=["per_AA", "avg"],
+        choices=("per_AA", "avg"),
         action="store"
     )
 
