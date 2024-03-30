@@ -1,13 +1,13 @@
 def setup(subparsers):
     fold = subparsers.add_parser(
-        'fold',
-        help='Predict 3D protein structures using ESMFold or obtain 3Di structure for use with Foldseek to perform '
-             'remote homology detection')
+        "fold",
+        help="Predict 3D protein structures using ESMFold or obtain 3Di structure for use with Foldseek to perform "
+             "remote homology detection")
 
     fold.add_argument(
         "model",
         help="Choose your desired model.",
-        choices=['ESMFold', 'ProstT5']
+        choices=["ESMFold", "ProstT5"]
     )
     fold.add_argument(
         "--strategy",
@@ -54,15 +54,15 @@ def run(args, logger, profiler):
     from trill.utils.esm_utils import convert_outputs_to_pdb
     from trill.utils.lightning_models import CustomWriter, ProstT5
 
-    if args.model == 'ESMFold':
+    if args.model == "ESMFold":
         data = esm.data.FastaBatchedDataset.from_file(args.query)
         tokenizer = AutoTokenizer.from_pretrained("facebook/esmfold_v1")
         if int(args.GPUs) == 0:
-            model = EsmForProteinFolding.from_pretrained('facebook/esmfold_v1', low_cpu_mem_usage=True,
-                                                         torch_dtype='auto')
+            model = EsmForProteinFolding.from_pretrained("facebook/esmfold_v1", low_cpu_mem_usage=True,
+                                                         torch_dtype="auto")
         else:
-            model = EsmForProteinFolding.from_pretrained('facebook/esmfold_v1', device_map='sequential',
-                                                         torch_dtype='auto')
+            model = EsmForProteinFolding.from_pretrained("facebook/esmfold_v1", device_map="sequential",
+                                                         torch_dtype="auto")
             model = model.cuda()
             model.esm = model.esm.half()
             model = model.cuda()
@@ -77,18 +77,18 @@ def run(args, logger, profiler):
                 if int(args.GPUs) == 0:
                     if int(args.batch_size) > 1:
                         tokenized_input = tokenizer(batch_input_ids, return_tensors="pt",
-                                                    add_special_tokens=False, padding=True)['input_ids']
+                                                    add_special_tokens=False, padding=True)["input_ids"]
                     else:
                         tokenized_input = tokenizer(batch_input_ids, return_tensors="pt",
-                                                    add_special_tokens=False)['input_ids']
+                                                    add_special_tokens=False)["input_ids"]
                     tokenized_input = tokenized_input.clone().detach()
                     prot_len = len(batch_input_ids[0])
                     try:
                         output = model(tokenized_input)
                         output = {key: val.cpu() for key, val in output.items()}
                     except RuntimeError as e:
-                        if 'out of memory' in str(e):
-                            print(f'Protein too long to fold for current hardware: {prot_len} amino acids long)')
+                        if "out of memory" in str(e):
+                            print(f"Protein too long to fold for current hardware: {prot_len} amino acids long)")
                             print(e)
                         else:
                             print(e)
@@ -96,11 +96,11 @@ def run(args, logger, profiler):
                 else:
                     if int(args.batch_size) > 1:
                         tokenized_input = tokenizer(batch_input_ids, return_tensors="pt",
-                                                    add_special_tokens=False, padding=True)['input_ids']
+                                                    add_special_tokens=False, padding=True)["input_ids"]
                         prot_len = len(batch_input_ids[0])
                     else:
                         tokenized_input = tokenizer(batch_input_ids, return_tensors="pt", add_special_tokens=False)[
-                            'input_ids']
+                            "input_ids"]
                         prot_len = len(batch_input_ids[0])
                     tokenized_input = tokenized_input.clone().detach()
                     try:
@@ -108,8 +108,8 @@ def run(args, logger, profiler):
                         output = model(tokenized_input)
                         output = {key: val.cpu() for key, val in output.items()}
                     except RuntimeError as e:
-                        if 'out of memory' in str(e):
-                            print(f'Protein too long to fold for current hardware: {prot_len} amino acids long)')
+                        if "out of memory" in str(e):
+                            print(f"Protein too long to fold for current hardware: {prot_len} amino acids long)")
                             print(e)
                         else:
                             print(e)
@@ -135,11 +135,11 @@ def run(args, logger, profiler):
                                  num_nodes=int(args.nodes))
         else:
             trainer = pl.Trainer(enable_checkpointing=False, devices=int(args.GPUs), callbacks=[pred_writer],
-                                 accelerator='gpu', logger=logger, num_nodes=int(args.nodes))
+                                 accelerator="gpu", logger=logger, num_nodes=int(args.nodes))
 
         reps = trainer.predict(model, dataloader)
         cwd_files = os.listdir(args.outdir)
-        pt_files = [file for file in cwd_files if 'predictions_' in file]
+        pt_files = [file for file in cwd_files if "predictions_" in file]
         pred_embeddings = []
         if args.batch_size == 1 or int(args.GPUs) > 1:
             for pt in pt_files:
@@ -152,9 +152,9 @@ def run(args, logger, profiler):
                             processed_sublists = process_sublist(sublist)
                             for sub in processed_sublists:
                                 pred_embeddings.append(tuple([sub[0], sub[1]]))
-            embedding_df = pd.DataFrame(pred_embeddings, columns=['3Di', 'Label'])
-            finaldf = embedding_df['3Di'].apply(pd.Series)
-            finaldf['Label'] = embedding_df['Label']
+            embedding_df = pd.DataFrame(pred_embeddings, columns=["3Di", "Label"])
+            finaldf = embedding_df["3Di"].apply(pd.Series)
+            finaldf["Label"] = embedding_df["Label"]
         else:
             embs = []
             for rep in reps:
@@ -162,11 +162,11 @@ def run(args, logger, profiler):
                 inner_labels = [item[1] for item in rep]
                 for emb_lab in zip(inner_embeddings, inner_labels):
                     embs.append(emb_lab)
-            embedding_df = pd.DataFrame(embs, columns=['3Di', 'Label'])
-            finaldf = embedding_df['3Di'].apply(pd.Series)
-            finaldf['Label'] = embedding_df['Label']
+            embedding_df = pd.DataFrame(embs, columns=["3Di", "Label"])
+            finaldf = embedding_df["3Di"].apply(pd.Series)
+            finaldf["Label"] = embedding_df["Label"]
 
-        outname = os.path.join(args.outdir, f'{args.name}_{args.model}.csv')
-        finaldf.to_csv(outname, index=False, header=['3Di', 'Label'])
+        outname = os.path.join(args.outdir, f"{args.name}_{args.model}.csv")
+        finaldf.to_csv(outname, index=False, header=["3Di", "Label"])
         for file in pt_files:
             os.remove(os.path.join(args.outdir, file))
