@@ -237,7 +237,7 @@ def run(args, logger, profiler):
         trainer.predict(model, loader)
         parse_and_save_all_predictions(args)
         master_embs = []
-        emb_file = torch.load(f"{args.outdir}/predictions_0.pt")
+        emb_file = torch.load(os.path.join(args.outdir, "predictions_0.pt"))
         for entry in emb_file[0]:
             emb = entry[0][0][0]
             master_embs.append(emb)
@@ -269,19 +269,32 @@ def run(args, logger, profiler):
         run_diffdock(args, diffdock_root)
 
         # out_dir = os.path.join(args.outdir, f"{args.name}_DiffDock_out")
-        # rec = args.protein.split(".")[-2]
-        # out_rec = rec.split("/")[-1]
-        # convert_rec = f"obabel {rec}.pdb -O {out_rec}.pdbqt".split(" ")
+        # rec = os.path.splitext(os.path.basename(args.protein))[0]
+        # out_rec = rec.split(os.path.sep)[-1]
+        # convert_rec = (
+        #     "obabel",
+        #     f"{rec}.pdb",
+        #     "-O", f"{out_rec}.pdbqt"
+        # )
         # subprocess.run(convert_rec, stdout=subprocess.DEVNULL)
         # for file in os.listdir(out_dir):
         #     if "confidence" in file:
-        #         file_pre = file.split(".sdf")[-2]
-        #         convert_lig = f"obabel {out_dir}/{file} -O {file_pre}.pdbqt".split(" ")
+        #         file_pre = os.path.splitext(file)[0]
+        #         convert_lig = (
+        #             "obabel",
+        #             os.path.join(out_dir, file),
+        #             "-O", f"{file_pre}.pdbqt"
+        #         )
         #         subprocess.run(convert_lig, stdout=subprocess.DEVNULL)
-        # 
-        #         smina_cmd = f"smina --score_only -r {out_rec}.pdbqt -l {file_pre}.pdbqt".split(" ")
+        #
+        #         smina_cmd = (
+        #             "smina",
+        #             "--score_only",
+        #             "-r", f"{out_rec}.pdbqt",
+        #             "-l", f"{file_pre}.pdbqt"
+        #         )
         #         result = subprocess.run(smina_cmd, stdout=subprocess.PIPE)
-        # 
+        #
         #         result = re.search("Affinity: \w+.\w+", result.stdout.decode("utf-8"))
         #         affinity = result.group()
         #         affinity = re.search("\d+\.\d+", affinity).group()
