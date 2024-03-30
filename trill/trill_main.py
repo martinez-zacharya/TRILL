@@ -105,11 +105,6 @@ def main(args):
 
     args = parser.parse_args()
 
-    home_dir = os.path.expanduser("~")
-    cache_dir = os.path.join(home_dir, ".trill_cache")
-    if not os.path.exists(cache_dir):
-        os.makedirs(cache_dir)
-
     pl.seed_everything(int(args.RNG_seed))
     set_seed(int(args.RNG_seed))
 
