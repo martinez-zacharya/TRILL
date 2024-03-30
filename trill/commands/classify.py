@@ -241,10 +241,11 @@ def run(args, logger, profiler):
                    "https://zenodo.org/record/8011249/files/saved_models.tar.gz?download=1")
             result = subprocess.run(cmd)
 
-            shutil.move("saved_models.tar.gz", os.path.join(cache_dir, ""))
+            shutil.move("saved_models.tar.gz", cache_dir)
             tarfile = os.path.join(cache_dir, "saved_models.tar.gz")
-            shutil.unpack_archive(tarfile)
+            shutil.unpack_archive(tarfile, cache_dir)
             os.remove(tarfile)
+            shutil.move(os.path.join(cache_dir, "saved_models"), os.path.join(cache_dir, "EpHod_Models"))
         else:
             headers, sequences = eu.read_fasta(args.query)
             accessions = [head.split()[0] for head in headers]
