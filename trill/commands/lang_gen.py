@@ -1,10 +1,10 @@
 def setup(subparsers):
-    lang_gen = subparsers.add_parser('lang_gen', help='Generate proteins using large language models')
+    lang_gen = subparsers.add_parser("lang_gen", help="Generate proteins using large language models")
 
     lang_gen.add_argument(
         "model",
         help="Choose desired language model",
-        choices=['ESM2', 'ProtGPT2', 'ZymCTRL']
+        choices=["ESM2", "ProtGPT2", "ZymCTRL"]
     )
     lang_gen.add_argument(
         "--finetuned",
@@ -16,13 +16,13 @@ def setup(subparsers):
         "--esm2_arch",
         help="ESM2_Gibbs: Choose which ESM2 architecture your finetuned model is",
         action="store",
-        default='esm2_t12_35M_UR50D',
+        default="esm2_t12_35M_UR50D",
     )
     lang_gen.add_argument(
         "--temp",
         help="Choose sampling temperature.",
         action="store",
-        default='1',
+        default="1",
     )
 
     lang_gen.add_argument(
@@ -41,7 +41,7 @@ def setup(subparsers):
     lang_gen.add_argument(
         "--seed_seq",
         help="Sequence to seed generation, the default is M.",
-        default='M',
+        default="M",
     )
     lang_gen.add_argument(
         "--max_length",
@@ -101,9 +101,9 @@ def run(args, logger, profiler):
     from trill.utils.lightning_models import ProtGPT2, ESM_Gibbs, ZymCTRL
     from trill.utils.update_weights import weights_update
 
-    if args.model == 'ProtGPT2':
+    if args.model == "ProtGPT2":
         model = ProtGPT2(args)
-        if args.finetuned != False:
+        if args.finetuned:
             model = model.load_from_checkpoint(args.finetuned, args=args, strict=False)
         tokenizer = AutoTokenizer.from_pretrained("nferruz/ProtGPT2")
         generated_output = []
@@ -111,7 +111,7 @@ def run(args, logger, profiler):
         batch_size = int(args.batch_size)
         num_rounds = (total_sequences_needed + batch_size - 1) // batch_size
 
-        with open(os.path.join(args.outdir, f'{args.name}_ProtGPT2.fasta'), 'w+') as fasta:
+        with open(os.path.join(args.outdir, f"{args.name}_ProtGPT2.fasta"), "w+") as fasta:
             for round in tqdm(range(num_rounds)):
                 num_sequences_this_round = batch_size if (round * batch_size + batch_size) <= total_sequences_needed \
                     else total_sequences_needed % batch_size
@@ -127,64 +127,64 @@ def run(args, logger, profiler):
                 )
 
                 for i, generated_output in enumerate(generated_outputs):
-                    fasta.write(f'>{args.name}_ProtGPT2_{round * batch_size + i} \n')
-                    fasta.write(f'{generated_output}\n')
+                    fasta.write(f">{args.name}_ProtGPT2_{round * batch_size + i} \n")
+                    fasta.write(f"{generated_output}\n")
                     fasta.flush()
 
-    elif args.model == 'ESM2':
+    elif args.model == "ESM2":
         if int(args.GPUs) >= 1:
             print(
                 "*** Gibbs sampling on GPUs is currently down. For some reason, TRILL doesn't use generate different "
                 "proteins regardless if a finetuned model is passed, but it works correctly on CPU... ***")
             raise RuntimeError
-        model_import_name = f'esm.pretrained.{args.esm2_arch}()'
-        with open(os.path.join(args.outdir, f'{args.name}_{args.esm2_arch}_Gibbs.fasta'), 'w+') as fasta:
+        model_import_name = f"esm.pretrained.{args.esm2_arch}()"
+        with open(os.path.join(args.outdir, f"{args.name}_{args.esm2_arch}_Gibbs.fasta"), "w+") as fasta:
             if args.finetuned != False:
                 model = ESM_Gibbs(eval(model_import_name), args)
                 if args.finetuned != False:
                     model = weights_update(model=ESM_Gibbs(eval(model_import_name), args),
                                            checkpoint=torch.load(args.finetuned))
-                    tuned_name = args.finetuned.split('/')[-1]
+                    tuned_name = args.finetuned.split("/")[-1]
                 if int(args.GPUs) > 0:
                     model.model = model.model.cuda()
                 for i in range(args.num_return_sequences):
                     out = model.generate(args.seed_seq, mask=True, n_samples=1, max_len=args.max_length,
                                          in_order=args.random_fill, num_positions=int(args.num_positions),
                                          temperature=float(args.temp))
-                    out = ''.join(out)
-                    fasta.write(f'>{args.name}_{tuned_name[0:-3]}_Gibbs_{i} \n')
-                    fasta.write(f'{out}\n')
+                    out = "".join(out)
+                    fasta.write(f">{args.name}_{tuned_name[0:-3]}_Gibbs_{i} \n")
+                    fasta.write(f"{out}\n")
                     fasta.flush()
             else:
                 model = ESM_Gibbs(eval(model_import_name), args)
-                tuned_name = f'{args.esm2_arch}___'
+                tuned_name = f"{args.esm2_arch}___"
                 if int(args.GPUs) > 0:
                     model.model = model.model.cuda()
                 for i in range(args.num_return_sequences):
                     out = model.generate(args.seed_seq, mask=True, n_samples=1, max_len=args.max_length,
                                          in_order=args.random_fill, num_positions=int(args.num_positions),
                                          temperature=float(args.temp))
-                    out = ''.join(out)
-                    fasta.write(f'>{args.name}_{tuned_name[0:-3]}_Gibbs_{i} \n')
-                    fasta.write(f'{out}\n')
+                    out = "".join(out)
+                    fasta.write(f">{args.name}_{tuned_name[0:-3]}_Gibbs_{i} \n")
+                    fasta.write(f"{out}\n")
                     fasta.flush()
 
-    elif args.model == 'ZymCTRL':
+    elif args.model == "ZymCTRL":
         model = ZymCTRL(args)
         if args.finetuned != False:
             model = model.load_from_checkpoint(args.finetuned, args=args, strict=False)
-        with open(os.path.join(args.outdir, f'{args.name}_ZymCTRL.fasta'), 'w+') as fasta:
+        with open(os.path.join(args.outdir, f"{args.name}_ZymCTRL.fasta"), "w+") as fasta:
             for i in tqdm(range(int(args.num_return_sequences))):
                 if int(args.GPUs) == 0:
-                    generated_output = model.generator(str(args.ctrl_tag), device=torch.device('cpu'),
+                    generated_output = model.generator(str(args.ctrl_tag), device=torch.device("cpu"),
                                                        temperature=float(args.temp), max_length=int(args.max_length),
                                                        repetition_penalty=float(args.repetition_penalty),
                                                        do_sample=args.do_sample, top_k=int(args.top_k))
                 else:
-                    generated_output = model.generator(str(args.ctrl_tag), device=torch.device('cuda'),
+                    generated_output = model.generator(str(args.ctrl_tag), device=torch.device("cuda"),
                                                        temperature=float(args.temp), max_length=int(args.max_length),
                                                        repetition_penalty=float(args.repetition_penalty),
                                                        do_sample=args.do_sample, top_k=int(args.top_k))
-                fasta.write(f'>{args.name}_{args.ctrl_tag}_ZymCTRL_{i}_PPL={generated_output[0][1]} \n')
-                fasta.write(f'{generated_output[0][0]}\n')
+                fasta.write(f">{args.name}_{args.ctrl_tag}_ZymCTRL_{i}_PPL={generated_output[0][1]} \n")
+                fasta.write(f"{generated_output[0][0]}\n")
                 fasta.flush()
