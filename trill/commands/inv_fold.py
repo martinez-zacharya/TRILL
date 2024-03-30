@@ -77,25 +77,25 @@ def setup(subparsers):
     inv_fold.add_argument("--batch_size", type=int, default=1,
                           help="ProteinMPNN: Batch size; can set higher for titan, quadro GPUs, reduce this if "
                                "running out of GPU memory")
-    inv_fold.add_argument("--pdb_path_chains", type=str, default='',
+    inv_fold.add_argument("--pdb_path_chains", type=str, default="",
                           help="ProteinMPNN: Define which chains need to be designed for a single PDB ")
-    inv_fold.add_argument("--chain_id_jsonl", type=str, default='',
+    inv_fold.add_argument("--chain_id_jsonl", type=str, default="",
                           help="ProteinMPNN: Path to a dictionary specifying which chains need to be designed and "
                                "which ones are fixed, if not specied all chains will be designed.")
-    inv_fold.add_argument("--fixed_positions_jsonl", type=str, default='',
+    inv_fold.add_argument("--fixed_positions_jsonl", type=str, default="",
                           help="ProteinMPNN: Path to a dictionary with fixed positions")
-    inv_fold.add_argument("--omit_AAs", type=list, default='X',
+    inv_fold.add_argument("--omit_AAs", type=list, default="X",
                           help="ProteinMPNN: Specify which amino acids should be omitted in the generated sequence, "
-                               "e.g. 'AC' would omit alanine and cystine.")
-    inv_fold.add_argument("--bias_AA_jsonl", type=str, default='',
+                               "e.g. \"AC\" would omit alanine and cystine.")
+    inv_fold.add_argument("--bias_AA_jsonl", type=str, default="",
                           help="ProteinMPNN: Path to a dictionary which specifies AA composion bias if neededi, "
                                "e.g. {A: -1.1, F: 0.7} would make A less likely and F more likely.")
-    inv_fold.add_argument("--bias_by_res_jsonl", default='',
+    inv_fold.add_argument("--bias_by_res_jsonl", default="",
                           help="ProteinMPNN: Path to dictionary with per position bias.")
-    inv_fold.add_argument("--omit_AA_jsonl", type=str, default='',
+    inv_fold.add_argument("--omit_AA_jsonl", type=str, default="",
                           help="ProteinMPNN: Path to a dictionary which specifies which amino acids need to be omited "
                                "from design at specific chain indices")
-    inv_fold.add_argument("--pssm_jsonl", type=str, default='', help="ProteinMPNN: Path to a dictionary with pssm")
+    inv_fold.add_argument("--pssm_jsonl", type=str, default="", help="ProteinMPNN: Path to a dictionary with pssm")
     inv_fold.add_argument("--pssm_multi", type=float, default=0.0,
                           help="ProteinMPNN: A value between [0.0, 1.0], 0.0 means do not use pssm, 1.0 ignore MPNN "
                                "predictions")
@@ -154,13 +154,13 @@ def run(args, logger, profiler):
 
     elif args.model == "ProstT5":
         model = ProstT5(args)
-        os.makedirs('foldseek_intermediates')
-        create_db_cmd = f'foldseek createdb {os.path.abspath(args.query)} DB'.split()
-        subprocess.run(create_db_cmd, cwd='foldseek_intermediates')
-        lndb_cmd = f'foldseek lndb DB_h DB_ss_h'.split()
-        subprocess.run(lndb_cmd, cwd='foldseek_intermediates')
-        convert_cmd = (f'foldseek convert2fasta foldseek_intermediates/DB_ss {os.path.join(args.outdir, args.name)}_ss'
-                       f'.3di').split()
+        os.makedirs("foldseek_intermediates")
+        create_db_cmd = f"foldseek createdb {os.path.abspath(args.query)} DB".split()
+        subprocess.run(create_db_cmd, cwd="foldseek_intermediates")
+        lndb_cmd = f"foldseek lndb DB_h DB_ss_h".split()
+        subprocess.run(lndb_cmd, cwd="foldseek_intermediates")
+        convert_cmd = (f"foldseek convert2fasta foldseek_intermediates/DB_ss {os.path.join(args.outdir, args.name)}_ss"
+                       f".3di").split()
         subprocess.run(convert_cmd)
         shutil.rmtree("foldseek_intermediates")
 
