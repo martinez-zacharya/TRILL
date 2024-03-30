@@ -89,7 +89,7 @@ def setup(subparsers):
     )
 
 
-def run(args, logger, profiler):
+def run(args):
     import os
 
     import esm
@@ -102,6 +102,10 @@ def run(args, logger, profiler):
     from trill.utils.lightning_models import ESM, ProtGPT2, ZymCTRL
     from trill.utils.protgpt2_utils import ProtGPT2_wrangle
     from trill.utils.update_weights import weights_update
+    from .commands_common import get_logger, get_profiler
+
+    logger = get_logger(args)
+    profiler = get_profiler(args)
 
     data = esm.data.FastaBatchedDataset.from_file(args.query)
     len_data = len(data)

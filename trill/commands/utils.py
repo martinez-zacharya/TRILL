@@ -42,7 +42,7 @@ def setup(subparsers):
     )
 
 
-def run(args, logger, profiler):
+def run(args):
     import os
 
     from trill.utils.classify_utils import generate_class_key_csv

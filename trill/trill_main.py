@@ -7,8 +7,6 @@ import time
 import pytorch_lightning as pl
 import torch
 from pyfiglet import Figlet
-from pytorch_lightning.loggers import TensorBoardLogger
-from pytorch_lightning.profilers import PyTorchProfiler
 from transformers import set_seed
 
 os.environ['CUDA_LAUNCH_BLOCKING'] = '1'
@@ -121,18 +119,8 @@ def main(args):
         #data = esm.data.FastaBatchedDataset.from_file(args.query)
         # tune_esm_inference(data)
         # tune_esm_train(data, int(args.GPUs))
-    
-    else:    
-        if args.logger == True:
-            logger = TensorBoardLogger("logs")
-        else:
-            logger = False
-        if args.profiler:
-            profiler = PyTorchProfiler(filename='test-logs')
-        else:
-            profiler = None
 
-    commands[args.command].run(args, logger, profiler)
+    commands[args.command].run(args)
     
     end = time.time()
     print("Finished!")

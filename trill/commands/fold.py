@@ -41,7 +41,7 @@ def process_sublist(sublist):
     return []
 
 
-def run(args, logger, profiler):
+def run(args):
     import os
 
     import esm
@@ -53,6 +53,9 @@ def run(args, logger, profiler):
 
     from trill.utils.esm_utils import convert_outputs_to_pdb
     from trill.utils.lightning_models import CustomWriter, ProstT5
+    from .commands_common import get_logger
+
+    logger = get_logger(args)
 
     if args.model == "ESMFold":
         data = esm.data.FastaBatchedDataset.from_file(args.query)

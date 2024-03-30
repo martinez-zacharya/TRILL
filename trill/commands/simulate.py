@@ -149,7 +149,7 @@ def setup(subparsers):
     )
 
 
-def run(args, logger, profiler):
+def run(args):
     import os
 
     from trill.utils.dock_utils import fixer_of_pdbs

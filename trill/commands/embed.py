@@ -45,7 +45,7 @@ def setup(subparsers):
     )
 
 
-def run(args, logger, profiler):
+def run(args):
     import os
 
     import esm
@@ -55,6 +55,10 @@ def run(args, logger, profiler):
     from trill.utils.esm_utils import parse_and_save_all_predictions
     from trill.utils.lightning_models import ESM, CustomWriter, ProtT5, ProstT5, Ankh
     from trill.utils.update_weights import weights_update
+
+    from .commands_common import get_logger
+
+    logger = get_logger(args)
 
     if not args.query.endswith((".fasta", ".faa", ".fa")):
         raise Exception(f"Input query file - {args.query} is not a valid file format.\

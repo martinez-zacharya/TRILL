@@ -142,7 +142,7 @@ def setup(subparsers):
     )
 
 
-def run(args, logger, profiler):
+def run(args):
     import os
     import subprocess
     import sys
@@ -158,7 +158,9 @@ def run(args, logger, profiler):
     from trill.utils.dock_utils import perform_docking, write_docking_results_to_file
     from trill.utils.esm_utils import parse_and_save_all_predictions
     from trill.utils.lightning_models import ESM, CustomWriter
-    from .commands_common import cache_dir
+    from .commands_common import cache_dir, get_logger
+
+    logger = get_logger(args)
 
     ligands = []
     if isinstance(args.ligand, list) and len(args.ligand) > 1:

@@ -133,7 +133,7 @@ def setup(subparsers):
     )
 
 
-def run(args, logger, profiler):
+def run(args):
     import builtins
     import logging
     import os
@@ -159,7 +159,9 @@ def run(args, logger, profiler):
     from trill.utils.classify_utils import prep_data, log_results, xg_test, sweep, train_model, custom_xg_test
     from trill.utils.esm_utils import parse_and_save_all_predictions
     from trill.utils.lightning_models import ProtT5
-    from .commands_common import cache_dir
+    from .commands_common import cache_dir, get_logger
+
+    logger = get_logger(args)
 
     class CustomDataset(torch.utils.data.Dataset):
         def __init__(self, data):

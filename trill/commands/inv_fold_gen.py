@@ -108,7 +108,7 @@ def setup(subparsers):
                               help="ProteinMPNN: Path to a dictionary with tied positions")
 
 
-def run(args, logger, profiler):
+def run(args):
     import os
     import shutil
     import subprocess
@@ -121,7 +121,9 @@ def run(args, logger, profiler):
 
     from trill.utils.esm_utils import ESM_IF1_Wrangle, ESM_IF1
     from trill.utils.lightning_models import ProstT5, Custom3DiDataset
-    from .commands_common import cache_dir
+    from .commands_common import cache_dir, get_logger
+
+    logger = get_logger(args)
 
     if args.model == "ESM-IF1":
         if args.query is None:
