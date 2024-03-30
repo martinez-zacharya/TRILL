@@ -3,7 +3,7 @@ def setup(subparsers):
     inv_fold.add_argument(
         "model",
         help="Select which model to generate proteins using inverse folding.",
-        choices=["ESM-IF1", "ProteinMPNN", "ProstT5"]
+        choices=("ESM-IF1", "ProteinMPNN", "ProstT5")
     )
 
     inv_fold.add_argument(
@@ -123,7 +123,7 @@ def run(args, logger, profiler):
     from .commands_common import cache_dir
 
     if args.model == "ESM-IF1":
-        if args.query == None:
+        if args.query is None:
             raise Exception("A PDB or CIF file is needed for generating new proteins with ESM-IF1")
         data = ESM_IF1_Wrangle(args.query)
         dataloader = torch.utils.data.DataLoader(data, batch_size=1, shuffle=False)
@@ -144,7 +144,7 @@ def run(args, logger, profiler):
             proteinmpnn = Repo.clone_from("https://github.com/martinez-zacharya/ProteinMPNN",
                                           (os.path.join(cache_dir, "ProteinMPNN/")))
             mpnn_git_root = proteinmpnn.git.rev_parse("--show-toplevel")
-            subprocess.run(["pip", "install", "-e", mpnn_git_root])
+            subprocess.run(("pip", "install", "-e", mpnn_git_root))
             sys.path.insert(0, (os.path.join(cache_dir, "ProteinMPNN/")))
         else:
             sys.path.insert(0, (os.path.join(cache_dir, "ProteinMPNN/")))
