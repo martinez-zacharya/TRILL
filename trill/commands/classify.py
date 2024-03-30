@@ -1,10 +1,13 @@
 def setup(subparsers):
-    classify = subparsers.add_parser('classify',
-                                     help='Classify proteins using either pretrained classifiers or train/test your own.')
+    classify = subparsers.add_parser(
+        'classify',
+        help='Classify proteins using either pretrained classifiers or train/test your own.')
 
     classify.add_argument(
         "classifier",
-        help="Predict thermostability/optimal enzymatic pH using TemStaPro/EpHod or choose custom to train/use your own XGBoost or Isolation Forest classifier. Note for training XGBoost, you need to submit roughly equal amounts of each class as part of your query.",
+        help="Predict thermostability/optimal enzymatic pH using TemStaPro/EpHod or choose custom to train/use your "
+             "own XGBoost or Isolation Forest classifier. Note for training XGBoost, you need to submit roughly equal "
+             "amounts of each class as part of your query.",
         choices=['TemStaPro', 'EpHod', 'XGBoost', 'iForest']
     )
     classify.add_argument(
@@ -14,7 +17,8 @@ def setup(subparsers):
     )
     classify.add_argument(
         "--key",
-        help="Input a CSV, with your class mappings for your embeddings where the first column is the label and the second column is the class.",
+        help="Input a CSV, with your class mappings for your embeddings where the first column is the label and the "
+             "second column is the class.",
         action="store"
     )
     classify.add_argument(
@@ -25,7 +29,8 @@ def setup(subparsers):
     )
     classify.add_argument(
         "--emb_model",
-        help="Select desired protein language model for embedding your query proteins to then train your custom classifier. Default is esm2_t12_35M",
+        help="Select desired protein language model for embedding your query proteins to then train your custom "
+             "classifier. Default is esm2_t12_35M",
         default='esm2_t12_35M',
         action="store",
         choices=['esm2_t6_8M', 'esm2_t12_35M', 'esm2_t30_150M', 'esm2_t33_650M', 'esm2_t36_3B', 'esm2_t48_15B',
@@ -33,12 +38,15 @@ def setup(subparsers):
     )
     classify.add_argument(
         "--train_split",
-        help="Choose your train-test percentage split for training and evaluating your custom classifier. For example, --train .6 would split your input sequences into two groups, one with 60%% of the sequences to train and the other with 40%% for evaluating",
+        help="Choose your train-test percentage split for training and evaluating your custom classifier. For "
+             "example, --train .6 would split your input sequences into two groups, one with 60%% of the sequences to "
+             "train and the other with 40%% for evaluating",
         action="store",
     )
     classify.add_argument(
         "--preTrained",
-        help="Enter the path to your pre-trained XGBoost binary classifier that you've trained with TRILL. This will be a .json file.",
+        help="Enter the path to your pre-trained XGBoost binary classifier that you've trained with TRILL. This will "
+             "be a .json file.",
         action="store",
     )
 
@@ -58,7 +66,8 @@ def setup(subparsers):
 
     classify.add_argument(
         "--xg_gamma",
-        help="XGBoost: sets gamma for XGBoost, which is a hyperparameter that sets 'Minimum loss reduction required to make a further partition on a leaf node of the tree.'",
+        help="XGBoost: sets gamma for XGBoost, which is a hyperparameter that sets 'Minimum loss reduction required "
+             "to make a further partition on a leaf node of the tree.'",
         action="store",
         default=0.4
     )
@@ -92,7 +101,8 @@ def setup(subparsers):
     )
     classify.add_argument(
         "--if_contamination",
-        help="iForest: The amount of outliers in the data. Default is automatically determined, but you can set it between (0 , 0.5])",
+        help="iForest: The amount of outliers in the data. Default is automatically determined, but you can set it "
+             "between (0 , 0.5])",
         action="store",
         default='auto'
     )
