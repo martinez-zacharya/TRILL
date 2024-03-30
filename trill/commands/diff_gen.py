@@ -1,14 +1,14 @@
 def setup(subparsers):
-    diffuse_gen = subparsers.add_parser("diff_gen", help="Generate proteins using RFDiffusion")
+    diff_gen = subparsers.add_parser("diff_gen", help="Generate proteins using RFDiffusion")
 
-    diffuse_gen.add_argument(
+    diff_gen.add_argument(
         "--contigs",
         help="Generate proteins between these sizes in AAs for RFDiffusion. For example, --contig 100-200, "
              "will result in proteins in this range",
         action="store",
     )
 
-    diffuse_gen.add_argument(
+    diff_gen.add_argument(
         "--RFDiffusion_Override",
         help="Change RFDiffusion model. For example, --RFDiffusion_Override ActiveSite will use ActiveSite_ckpt.pt "
              "for holding small motifs in place. ",
@@ -16,34 +16,34 @@ def setup(subparsers):
         default=False
     )
 
-    diffuse_gen.add_argument(
+    diff_gen.add_argument(
         "--num_return_sequences",
         help="Number of sequences for RFDiffusion to generate. Default is 5",
         default=5,
         type=int,
     )
 
-    diffuse_gen.add_argument(
+    diff_gen.add_argument(
         "--Inpaint",
         help="Residues to inpaint.",
         action="store",
         default=None
     )
 
-    diffuse_gen.add_argument(
+    diff_gen.add_argument(
         "--query",
         help="Input pdb file for motif scaffolding, partial diffusion etc.",
         action="store",
     )
 
-    # diffuse_gen.add_argument(
+    # diff_gen.add_argument(
     #     "--sym",
     #     help="Use this flag to generate symmetrical oligomers.",
     #     action="store_true",
     #     default=False
     # )
 
-    # diffuse_gen.add_argument(
+    # diff_gen.add_argument(
     #     "--sym_type",
     #     help="Define residues that binder must interact with. For example, --hotspots A30,A33,A34 , where A is the "
     #          "chain and the numbers are the residue indices.",
@@ -51,7 +51,7 @@ def setup(subparsers):
     #     default=None
     # )
 
-    diffuse_gen.add_argument(
+    diff_gen.add_argument(
         "--partial_T",
         help="Adjust partial diffusion sampling value.",
         action="store",
@@ -59,7 +59,7 @@ def setup(subparsers):
         type=int
     )
 
-    diffuse_gen.add_argument(
+    diff_gen.add_argument(
         "--partial_diff_fix",
         help="Pass the residues that you want to keep fixed for your input pdb during partial diffusion. Note that "
              "the residues should be 0-indexed.",
@@ -67,7 +67,7 @@ def setup(subparsers):
         default=None
     )
 
-    diffuse_gen.add_argument(
+    diff_gen.add_argument(
         "--hotspots",
         help="Define residues that binder must interact with. For example, --hotspots A30,A33,A34 , where A is the "
              "chain and the numbers are the residue indices.",
@@ -75,7 +75,7 @@ def setup(subparsers):
         default=None
     )
 
-    # diffuse_gen.add_argument(
+    # diff_gen.add_argument(
     #     "--RFDiffusion_yaml",
     #     help="Specify RFDiffusion params using a yaml file. Easiest option for complicated runs",
     #     action="store",

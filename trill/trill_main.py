@@ -144,7 +144,7 @@ def main(args):
         "finetune",
         "inv_fold_gen",
         "lang_gen",
-        "diffuse_gen",
+        "diff_gen",
     ]:
         commands[command] = importlib.import_module(f"trill.commands.{command}")
         commands[command].setup(subparsers)
