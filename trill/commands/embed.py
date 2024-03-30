@@ -1,12 +1,12 @@
 def setup(subparsers):
-    embed = subparsers.add_parser('embed', help='Embed proteins of interest')
+    embed = subparsers.add_parser("embed", help="Embed proteins of interest")
 
     embed.add_argument(
         "model",
         help="Choose protein language model to embed query proteins",
         action="store",
-        choices=['esm2_t6_8M', 'esm2_t12_35M', 'esm2_t30_150M', 'esm2_t33_650M', 'esm2_t36_3B', 'esm2_t48_15B',
-                 'ProtT5-XL', 'ProstT5', 'Ankh', 'Ankh-Large']
+        choices=["esm2_t6_8M", "esm2_t12_35M", "esm2_t30_150M", "esm2_t33_650M", "esm2_t36_3B", "esm2_t48_15B",
+                 "ProtT5-XL", "ProstT5", "Ankh", "Ankh-Large"]
     )
 
     embed.add_argument(
@@ -56,11 +56,11 @@ def run(args, logger, profiler):
     from trill.utils.lightning_models import ESM, CustomWriter, ProtT5, ProstT5, Ankh
     from trill.utils.update_weights import weights_update
 
-    if args.query.endswith(('.fasta', '.faa', '.fa')) == False:
-        raise Exception(f'Input query file - {args.query} is not a valid file format.\
-        File needs to be a protein fasta (.fa, .fasta, .faa)')
+    if args.query.endswith((".fasta", ".faa", ".fa")) == False:
+        raise Exception(f"Input query file - {args.query} is not a valid file format.\
+        File needs to be a protein fasta (.fa, .fasta, .faa)")
     if not args.avg and not args.per_AA:
-        print('You need to select whether you want the average sequence embeddings or the per AA embeddings, or both!')
+        print("You need to select whether you want the average sequence embeddings or the per AA embeddings, or both!")
         raise RuntimeError
     if args.model == "ProtT5-XL":
         model = ProtT5(args)
@@ -72,10 +72,10 @@ def run(args, logger, profiler):
                                  num_nodes=int(args.nodes))
         else:
             trainer = pl.Trainer(enable_checkpointing=False, precision=16, devices=int(args.GPUs),
-                                 callbacks=[pred_writer], accelerator='gpu', logger=logger, num_nodes=int(args.nodes))
+                                 callbacks=[pred_writer], accelerator="gpu", logger=logger, num_nodes=int(args.nodes))
         reps = trainer.predict(model, dataloader)
         cwd_files = os.listdir(args.outdir)
-        pt_files = [file for file in cwd_files if 'predictions_' in file]
+        pt_files = [file for file in cwd_files if "predictions_" in file]
         parse_and_save_all_predictions(args)
 
         for file in pt_files:
@@ -91,16 +91,16 @@ def run(args, logger, profiler):
                                  num_nodes=int(args.nodes))
         else:
             trainer = pl.Trainer(enable_checkpointing=False, precision=16, devices=int(args.GPUs),
-                                 callbacks=[pred_writer], accelerator='gpu', logger=logger, num_nodes=int(args.nodes))
+                                 callbacks=[pred_writer], accelerator="gpu", logger=logger, num_nodes=int(args.nodes))
 
         reps = trainer.predict(model, dataloader)
         cwd_files = os.listdir(args.outdir)
-        pt_files = [file for file in cwd_files if 'predictions_' in file]
+        pt_files = [file for file in cwd_files if "predictions_" in file]
         parse_and_save_all_predictions(args)
         for file in pt_files:
             os.remove(os.path.join(args.outdir, file))
 
-    elif args.model == 'Ankh' or args.model == 'Ankh-Large':
+    elif args.model == "Ankh" or args.model == "Ankh-Large":
         model = Ankh(args)
         data = esm.data.FastaBatchedDataset.from_file(args.query)
         dataloader = torch.utils.data.DataLoader(data, shuffle=False, batch_size=int(args.batch_size),
@@ -111,17 +111,17 @@ def run(args, logger, profiler):
                                  num_nodes=int(args.nodes))
         else:
             trainer = pl.Trainer(enable_checkpointing=False, devices=int(args.GPUs), callbacks=[pred_writer],
-                                 accelerator='gpu', logger=logger, num_nodes=int(args.nodes))
+                                 accelerator="gpu", logger=logger, num_nodes=int(args.nodes))
 
         reps = trainer.predict(model, dataloader)
         cwd_files = os.listdir(args.outdir)
-        pt_files = [file for file in cwd_files if 'predictions_' in file]
+        pt_files = [file for file in cwd_files if "predictions_" in file]
         parse_and_save_all_predictions(args)
         for file in pt_files:
             os.remove(os.path.join(args.outdir, file))
 
     else:
-        model_import_name = f'esm.pretrained.{args.model}_UR50D()'
+        model_import_name = f"esm.pretrained.{args.model}_UR50D()"
         model = ESM(eval(model_import_name), 0.0001, args)
         data = esm.data.FastaBatchedDataset.from_file(args.query)
         dataloader = torch.utils.data.DataLoader(data, shuffle=False, batch_size=int(args.batch_size), num_workers=0,
@@ -132,7 +132,7 @@ def run(args, logger, profiler):
                                  num_nodes=int(args.nodes))
         else:
             trainer = pl.Trainer(enable_checkpointing=False, precision=16, devices=int(args.GPUs),
-                                 callbacks=[pred_writer], accelerator='gpu', logger=logger, num_nodes=int(args.nodes))
+                                 callbacks=[pred_writer], accelerator="gpu", logger=logger, num_nodes=int(args.nodes))
         if args.finetuned:
             model = weights_update(model=ESM(eval(model_import_name), 0.0001, args),
                                    checkpoint=torch.load(args.finetuned))
@@ -141,6 +141,6 @@ def run(args, logger, profiler):
         parse_and_save_all_predictions(args)
 
         cwd_files = os.listdir(args.outdir)
-        pt_files = [file for file in cwd_files if 'predictions_' in file]
+        pt_files = [file for file in cwd_files if "predictions_" in file]
         for file in pt_files:
             os.remove(os.path.join(args.outdir, file))
