@@ -1,118 +1,145 @@
 def setup(subparsers):
-    dock = subparsers.add_parser('dock',
-                                 help='Perform molecular docking with proteins and ligands. Note that you should relax your protein receptor with Simulate or another method before docking.')
+    dock = subparsers.add_parser(
+        'dock',
+        help='Perform molecular docking with proteins and ligands. Note that you should relax your protein receptor '
+             'with Simulate or another method before docking.')
 
-    dock.add_argument("algorithm",
-                      help="Note that while LightDock can dock protein ligands, DiffDock, Smina, and Vina can only do small-molecules.",
-                      choices=['DiffDock', 'Vina', 'Smina', 'LightDock', 'GeoDock']
-                      )
+    dock.add_argument(
+        "algorithm",
+        help="Note that while LightDock can dock protein ligands, DiffDock, Smina, and Vina can only do "
+             "small-molecules.",
+        choices=['DiffDock', 'Vina', 'Smina', 'LightDock', 'GeoDock']
+    )
 
-    dock.add_argument("protein",
-                      help="Protein of interest to be docked with ligand",
-                      action="store"
-                      )
+    dock.add_argument(
+        "protein",
+        help="Protein of interest to be docked with ligand",
+        action="store"
+    )
 
-    dock.add_argument("ligand",
-                      help="Ligand to dock protein with. Note that with Autodock Vina, you can dock multiple ligands at one time. Simply provide them one after another before any other optional TRILL arguments are added. Also, if a .txt file is provided with each line providing the absolute path to different ligands, TRILL will dock each ligand one at a time.",
-                      action="store",
-                      nargs='*'
-                      )
+    dock.add_argument(
+        "ligand",
+        help="Ligand to dock protein with. Note that with Autodock Vina, you can dock multiple ligands at one time. "
+             "Simply provide them one after another before any other optional TRILL arguments are added. Also, "
+             "if a .txt file is provided with each line providing the absolute path to different ligands, TRILL will "
+             "dock each ligand one at a time.",
+        action="store",
+        nargs='*'
+    )
 
-    # dock.add_argument("--force_ligand",
-    #     help="If you are not doing blind docking, TRILL will automatically assume your ligand is a small molecule if the MW is less than 800. To get around this, you can force TRILL to read the ligand as either type.",
+    # dock.add_argument(
+    #     "--force_ligand",
+    #     help="If you are not doing blind docking, TRILL will automatically assume your ligand is a small molecule if "
+    #          "the MW is less than 800. To get around this, you can force TRILL to read the ligand as either type.",
     #     default=False,
-    #     choices = ['small', 'protein']
-    #     )
+    #     choices=['small', 'protein']
+    # )
 
-    dock.add_argument("--save_visualisation",
-                      help="DiffDock: Save a pdb file with all of the steps of the reverse diffusion.",
-                      action="store_true",
-                      default=False
-                      )
+    dock.add_argument(
+        "--save_visualisation",
+        help="DiffDock: Save a pdb file with all of the steps of the reverse diffusion.",
+        action="store_true",
+        default=False
+    )
 
-    dock.add_argument("--samples_per_complex",
-                      help="DiffDock: Number of samples to generate.",
-                      type=int,
-                      action="store",
-                      default=10
-                      )
+    dock.add_argument(
+        "--samples_per_complex",
+        help="DiffDock: Number of samples to generate.",
+        type=int,
+        action="store",
+        default=10
+    )
 
-    dock.add_argument("--no_final_step_noise",
-                      help="DiffDock: Use no noise in the final step of the reverse diffusion",
-                      action="store_true",
-                      default=False
-                      )
+    dock.add_argument(
+        "--no_final_step_noise",
+        help="DiffDock: Use no noise in the final step of the reverse diffusion",
+        action="store_true",
+        default=False
+    )
 
-    dock.add_argument("--inference_steps",
-                      help="DiffDock: Number of denoising steps",
-                      type=int,
-                      action="store",
-                      default=20
-                      )
+    dock.add_argument(
+        "--inference_steps",
+        help="DiffDock: Number of denoising steps",
+        type=int,
+        action="store",
+        default=20
+    )
 
-    dock.add_argument("--actual_steps",
-                      help="DiffDock: Number of denoising steps that are actually performed",
-                      type=int,
-                      action="store",
-                      default=None
-                      )
-    dock.add_argument("--min_radius",
-                      help="Smina/Vina + Fpocket: Minimum radius of alpha spheres in a pocket. Default is 3Å.",
-                      type=float,
-                      action="store",
-                      default=3.0
-                      )
+    dock.add_argument(
+        "--actual_steps",
+        help="DiffDock: Number of denoising steps that are actually performed",
+        type=int,
+        action="store",
+        default=None
+    )
+    dock.add_argument(
+        "--min_radius",
+        help="Smina/Vina + Fpocket: Minimum radius of alpha spheres in a pocket. Default is 3Å.",
+        type=float,
+        action="store",
+        default=3.0
+    )
 
-    dock.add_argument("--max_radius",
-                      help="Smina/Vina + Fpocket: Maximum radius of alpha spheres in a pocket. Default is 6Å.",
-                      type=float,
-                      action="store",
-                      default=6.0
-                      )
+    dock.add_argument(
+        "--max_radius",
+        help="Smina/Vina + Fpocket: Maximum radius of alpha spheres in a pocket. Default is 6Å.",
+        type=float,
+        action="store",
+        default=6.0
+    )
 
-    dock.add_argument("--min_alpha_spheres",
-                      help="Smina/Vina + Fpocket: Minimum number of alpha spheres a pocket must contain to be considered. Default is 35.",
-                      type=int,
-                      action="store",
-                      default=35
-                      )
+    dock.add_argument(
+        "--min_alpha_spheres",
+        help="Smina/Vina + Fpocket: Minimum number of alpha spheres a pocket must contain to be considered. Default "
+             "is 35.",
+        type=int,
+        action="store",
+        default=35
+    )
 
-    dock.add_argument("--exhaustiveness",
-                      help="Smina/Vina: Change computational effort.",
-                      type=int,
-                      action="store",
-                      default=8
-                      )
+    dock.add_argument(
+        "--exhaustiveness",
+        help="Smina/Vina: Change computational effort.",
+        type=int,
+        action="store",
+        default=8
+    )
 
-    dock.add_argument("--blind",
-                      help="Smina/Vina: Perform blind docking and skip binding pocket prediction with fpocket",
-                      action="store_true",
-                      default=False
-                      )
-    dock.add_argument("--anm",
-                      help="LightDock: If selected, backbone flexibility is modeled using Anisotropic Network Model (via ProDy)",
-                      action="store_true",
-                      default=False
-                      )
+    dock.add_argument(
+        "--blind",
+        help="Smina/Vina: Perform blind docking and skip binding pocket prediction with fpocket",
+        action="store_true",
+        default=False
+    )
+    dock.add_argument(
+        "--anm",
+        help="LightDock: If selected, backbone flexibility is modeled using Anisotropic Network Model (via ProDy)",
+        action="store_true",
+        default=False
+    )
 
-    dock.add_argument("--swarms",
-                      help="LightDock: The number of swarms of the simulations, default is 25",
-                      action="store",
-                      type=int,
-                      default=25
-                      )
+    dock.add_argument(
+        "--swarms",
+        help="LightDock: The number of swarms of the simulations, default is 25",
+        action="store",
+        type=int,
+        default=25
+    )
 
-    dock.add_argument("--sim_steps",
-                      help="LightDock: The number of steps of the simulation. Default is 100",
-                      action="store",
-                      type=int,
-                      default=100
-                      )
-    dock.add_argument("--restraints",
-                      help="LightDock: If restraints_file is provided, residue restraints will be considered during the setup and the simulation",
-                      action="store",
-                      default=None
-                      )
+    dock.add_argument(
+        "--sim_steps",
+        help="LightDock: The number of steps of the simulation. Default is 100",
+        action="store",
+        type=int,
+        default=100
+    )
+    dock.add_argument(
+        "--restraints",
+        help="LightDock: If restraints_file is provided, residue restraints will be considered during the setup and "
+             "the simulation",
+        action="store",
+        default=None
+    )
 
 
 def run(args, logger, profiler):
