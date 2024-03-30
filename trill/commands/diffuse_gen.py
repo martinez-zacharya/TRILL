@@ -74,6 +74,7 @@ def run(args, logger, profiler):
     import sys
 
     from git import Repo
+    from run_inference import run_rfdiff
 
     from .commands_common import cache_dir
 
@@ -113,7 +114,6 @@ def run(args, logger, profiler):
         git_repo = Repo(os.path.join(cache_dir, 'RFDiffusion'), search_parent_directories=True)
         rfdiff_git_root = git_repo.git.rev_parse("--show-toplevel")
 
-    from run_inference import run_rfdiff
     # if args.sym:
     #     run_rfdiff((f'{rfdiff_git_root}/config/inference/symmetry.yaml'), args)
     # else:
