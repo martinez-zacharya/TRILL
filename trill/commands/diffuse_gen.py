@@ -88,6 +88,7 @@ def run(args, logger, profiler):
     import subprocess
     import sys
 
+    import requests
     from git import Repo
     from run_inference import run_rfdiff
 
@@ -110,7 +111,9 @@ def run(args, logger, profiler):
         )
         for url in urls:
             if not os.path.isfile(os.path.join(cache_dir, "RFDiffusion_weights", url.split('/')[-1])):
-                subprocess.run(("wget", "-nc", url, "-O", os.path.join(cache_dir, "RFDiffusion_weights", url.split("/")[-1])))
+                response = requests.get(url)
+                with open(os.path.join(cache_dir, "RFDiffusion_weights", url.split('/')[-1]), "wb") as fp:
+                    fp.write(response.content)
 
     if not os.path.exists(os.path.join(cache_dir, "RFDiffusion")):
         print("Cloning forked RFDiffusion")
