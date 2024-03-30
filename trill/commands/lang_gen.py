@@ -27,7 +27,8 @@ def setup(subparsers):
 
     lang_gen.add_argument(
         "--ctrl_tag",
-        help="ZymCTRL: Choose an Enzymatic Commision (EC) control tag for conditional protein generation based on the tag. You can find all ECs here https://www.brenda-enzymes.org/index.php",
+        help="ZymCTRL: Choose an Enzymatic Commision (EC) control tag for conditional protein generation based on the "
+             "tag. You can find all ECs here https://www.brenda-enzymes.org/index.php",
         action="store",
     )
     lang_gen.add_argument(
@@ -74,16 +75,20 @@ def setup(subparsers):
         dest="num_return_sequences",
         type=int,
     )
-    lang_gen.add_argument("--random_fill",
-                          help="ESM2_Gibbs: Randomly select positions to fill each iteration for Gibbs sampling with ESM2. If not called then fill the positions in order",
-                          action="store_false",
-                          default=True,
-                          )
-    lang_gen.add_argument("--num_positions",
-                          help="ESM2_Gibbs: Generate new AAs for this many positions each iteration for Gibbs sampling with ESM2. If 0, then generate for all target positions each round.",
-                          action="store",
-                          default=0,
-                          )
+    lang_gen.add_argument(
+        "--random_fill",
+        help="ESM2_Gibbs: Randomly select positions to fill each iteration for Gibbs sampling with ESM2. If not "
+             "called then fill the positions in order",
+        action="store_false",
+        default=True,
+    )
+    lang_gen.add_argument(
+        "--num_positions",
+        help="ESM2_Gibbs: Generate new AAs for this many positions each iteration for Gibbs sampling with ESM2. If 0, "
+             "then generate for all target positions each round.",
+        action="store",
+        default=0,
+    )
 
 
 def run(args, logger, profiler):
@@ -108,8 +113,8 @@ def run(args, logger, profiler):
 
         with open(os.path.join(args.outdir, f'{args.name}_ProtGPT2.fasta'), 'w+') as fasta:
             for round in tqdm(range(num_rounds)):
-                num_sequences_this_round = batch_size if (
-                                                                     round * batch_size + batch_size) <= total_sequences_needed else total_sequences_needed % batch_size
+                num_sequences_this_round = batch_size if (round * batch_size + batch_size) <= total_sequences_needed \
+                    else total_sequences_needed % batch_size
 
                 generated_outputs = model.generate(
                     seed_seq=args.seed_seq,
@@ -129,7 +134,8 @@ def run(args, logger, profiler):
     elif args.model == 'ESM2':
         if int(args.GPUs) >= 1:
             print(
-                "*** Gibbs sampling on GPUs is currently down. For some reason, TRILL doesn't use generate different proteins regardless if a finetuned model is passed, but it works correctly on CPU... ***")
+                "*** Gibbs sampling on GPUs is currently down. For some reason, TRILL doesn't use generate different "
+                "proteins regardless if a finetuned model is passed, but it works correctly on CPU... ***")
             raise RuntimeError
         model_import_name = f'esm.pretrained.{args.esm2_arch}()'
         with open(os.path.join(args.outdir, f'{args.name}_{args.esm2_arch}_Gibbs.fasta'), 'w+') as fasta:
