@@ -1,5 +1,5 @@
 def setup(subparsers):
-    visualize = subparsers.add_parser('visualize', help='Reduce dimensionality of embeddings to 2D')
+    visualize = subparsers.add_parser("visualize", help="Reduce dimensionality of embeddings to 2D")
 
     visualize.add_argument(
         "embeddings",
@@ -11,7 +11,7 @@ def setup(subparsers):
         "--method",
         help="Method for reducing dimensions of embeddings. Default is PCA",
         action="store",
-        choices=['PCA', 'UMAP', 'tSNE'],
+        choices=["PCA", "UMAP", "tSNE"],
         default="PCA"
     )
     visualize.add_argument(
@@ -32,6 +32,6 @@ def run(args, logger, profiler):
 
     reduced_df, incsv = reduce_dims(args.name, args.embeddings, args.method)
     layout = viz(reduced_df, args)
-    bokeh.io.output_file(filename=os.path.join(args.outdir, f'{args.name}_{args.method}_{incsv}.html'), title=args.name)
-    bokeh.io.save(layout, filename=os.path.join(args.outdir, f'{args.name}_{args.method}_{incsv}.html'),
+    bokeh.io.output_file(filename=os.path.join(args.outdir, f"{args.name}_{args.method}_{incsv}.html"), title=args.name)
+    bokeh.io.save(layout, filename=os.path.join(args.outdir, f"{args.name}_{args.method}_{incsv}.html"),
                   title=args.name)
