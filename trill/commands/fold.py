@@ -1,28 +1,33 @@
 def setup(subparsers):
-    fold = subparsers.add_parser('fold',
-                                 help='Predict 3D protein structures using ESMFold or obtain 3Di structure for use with Foldseek to perform remote homology detection')
+    fold = subparsers.add_parser(
+        'fold',
+        help='Predict 3D protein structures using ESMFold or obtain 3Di structure for use with Foldseek to perform '
+             'remote homology detection')
 
-    fold.add_argument("model",
-                      help="Choose your desired model.",
-                      choices=['ESMFold', 'ProstT5']
-                      )
-
-    fold.add_argument("query",
-                      help="Input fasta file",
-                      action="store"
-                      )
-    fold.add_argument("--strategy",
-                      help="ESMFold: Choose a specific strategy if you are running out of CUDA memory. You can also pass either 64, or 32 for model.trunk.set_chunk_size(x)",
-                      action="store",
-                      default=None,
-                      )
-
+    fold.add_argument(
+        "model",
+        help="Choose your desired model.",
+        choices=['ESMFold', 'ProstT5']
+    )
+    fold.add_argument(
+        "--strategy",
+        help="ESMFold: Choose a specific strategy if you are running out of CUDA memory. You can also pass either 64, "
+             "or 32 for model.trunk.set_chunk_size(x)",
+        action="store",
+        default=None,
+    )
     fold.add_argument(
         "--batch_size",
         help="ESMFold: Change batch-size number for folding proteins. Default is 1",
         action="store",
         default=1,
         dest="batch_size",
+    )
+
+    fold.add_argument(
+        "query",
+        help="Input fasta file",
+        action="store"
     )
 
 
@@ -71,12 +76,11 @@ def run(args, logger, profiler):
                 batch_input_ids = sequences[i: i + int(args.batch_size)]
                 if int(args.GPUs) == 0:
                     if int(args.batch_size) > 1:
-                        tokenized_input = \
-                        tokenizer(batch_input_ids, return_tensors="pt", add_special_tokens=False, padding=True)[
-                            'input_ids']
+                        tokenized_input = tokenizer(batch_input_ids, return_tensors="pt",
+                                                    add_special_tokens=False, padding=True)['input_ids']
                     else:
-                        tokenized_input = tokenizer(batch_input_ids, return_tensors="pt", add_special_tokens=False)[
-                            'input_ids']
+                        tokenized_input = tokenizer(batch_input_ids, return_tensors="pt",
+                                                    add_special_tokens=False)['input_ids']
                     tokenized_input = tokenized_input.clone().detach()
                     prot_len = len(batch_input_ids[0])
                     try:
@@ -91,9 +95,8 @@ def run(args, logger, profiler):
                             pass
                 else:
                     if int(args.batch_size) > 1:
-                        tokenized_input = \
-                        tokenizer(batch_input_ids, return_tensors="pt", add_special_tokens=False, padding=True)[
-                            'input_ids']
+                        tokenized_input = tokenizer(batch_input_ids, return_tensors="pt",
+                                                    add_special_tokens=False, padding=True)['input_ids']
                         prot_len = len(batch_input_ids[0])
                     else:
                         tokenized_input = tokenizer(batch_input_ids, return_tensors="pt", add_special_tokens=False)[
