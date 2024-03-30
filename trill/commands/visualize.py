@@ -11,7 +11,7 @@ def setup(subparsers):
         "--method",
         help="Method for reducing dimensions of embeddings. Default is PCA",
         action="store",
-        choices=["PCA", "UMAP", "tSNE"],
+        choices=("PCA", "UMAP", "tSNE"),
         default="PCA"
     )
     visualize.add_argument(
