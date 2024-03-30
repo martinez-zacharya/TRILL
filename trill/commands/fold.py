@@ -66,7 +66,7 @@ def run(args, logger, profiler):
             model = model.cuda()
             model.esm = model.esm.half()
             model = model.cuda()
-        if args.strategy != None:
+        if args.strategy is not None:
             model.trunk.set_chunk_size(int(args.strategy))
         fold_df = pd.DataFrame(list(data), columns=["Entry", "Sequence"])
         sequences = fold_df.Sequence.tolist()
