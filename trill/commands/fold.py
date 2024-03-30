@@ -7,7 +7,7 @@ def setup(subparsers):
     fold.add_argument(
         "model",
         help="Choose your desired model.",
-        choices=["ESMFold", "ProstT5"]
+        choices=("ESMFold", "ProstT5")
     )
     fold.add_argument(
         "--strategy",
@@ -68,7 +68,7 @@ def run(args, logger, profiler):
             model = model.cuda()
         if args.strategy is not None:
             model.trunk.set_chunk_size(int(args.strategy))
-        fold_df = pd.DataFrame(list(data), columns=["Entry", "Sequence"])
+        fold_df = pd.DataFrame(list(data), columns=("Entry", "Sequence"))
         sequences = fold_df.Sequence.tolist()
         with torch.no_grad():
             for input_ids in tqdm(range(0, len(sequences), int(args.batch_size))):
@@ -113,7 +113,6 @@ def run(args, logger, profiler):
                             print(e)
                         else:
                             print(e)
-                            pass
                 output = convert_outputs_to_pdb(output)
                 if int(args.batch_size) > 1:
                     start_idx = i
@@ -131,10 +130,10 @@ def run(args, logger, profiler):
         dataloader = torch.utils.data.DataLoader(data, shuffle=False, batch_size=int(args.batch_size), num_workers=0)
         pred_writer = CustomWriter(output_dir=args.outdir, write_interval="epoch")
         if int(args.GPUs) == 0:
-            trainer = pl.Trainer(enable_checkpointing=False, callbacks=[pred_writer], logger=logger,
+            trainer = pl.Trainer(enable_checkpointing=False, callbacks=(pred_writer,), logger=logger,
                                  num_nodes=int(args.nodes))
         else:
-            trainer = pl.Trainer(enable_checkpointing=False, devices=int(args.GPUs), callbacks=[pred_writer],
+            trainer = pl.Trainer(enable_checkpointing=False, devices=int(args.GPUs), callbacks=(pred_writer,),
                                  accelerator="gpu", logger=logger, num_nodes=int(args.nodes))
 
         reps = trainer.predict(model, dataloader)
@@ -152,7 +151,7 @@ def run(args, logger, profiler):
                             processed_sublists = process_sublist(sublist)
                             for sub in processed_sublists:
                                 pred_embeddings.append(tuple([sub[0], sub[1]]))
-            embedding_df = pd.DataFrame(pred_embeddings, columns=["3Di", "Label"])
+            embedding_df = pd.DataFrame(pred_embeddings, columns=("3Di", "Label"))
             finaldf = embedding_df["3Di"].apply(pd.Series)
             finaldf["Label"] = embedding_df["Label"]
         else:
@@ -162,11 +161,11 @@ def run(args, logger, profiler):
                 inner_labels = [item[1] for item in rep]
                 for emb_lab in zip(inner_embeddings, inner_labels):
                     embs.append(emb_lab)
-            embedding_df = pd.DataFrame(embs, columns=["3Di", "Label"])
+            embedding_df = pd.DataFrame(embs, columns=("3Di", "Label"))
             finaldf = embedding_df["3Di"].apply(pd.Series)
             finaldf["Label"] = embedding_df["Label"]
 
         outname = os.path.join(args.outdir, f"{args.name}_{args.model}.csv")
-        finaldf.to_csv(outname, index=False, header=["3Di", "Label"])
+        finaldf.to_csv(outname, index=False, header=("3Di", "Label"))
         for file in pt_files:
             os.remove(os.path.join(args.outdir, file))
