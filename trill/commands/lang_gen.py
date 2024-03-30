@@ -146,7 +146,7 @@ def run(args, logger, profiler):
             if args.finetuned:
                 model = weights_update(model=ESM_Gibbs(eval(model_import_name), args),
                                        checkpoint=torch.load(args.finetuned))
-                tuned_name = args.finetuned.split("/")[-1]
+                tuned_name = os.path.basename(args.finetuned)
             else:
                 tuned_name = f"{args.esm2_arch}___"
 
