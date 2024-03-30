@@ -137,6 +137,7 @@ def run(args, logger, profiler):
     import builtins
     import logging
     import os
+    import shutil
     import subprocess
     import sys
 
@@ -240,17 +241,14 @@ def run(args, logger, profiler):
                    "https://zenodo.org/record/8011249/files/saved_models.tar.gz?download=1")
             result = subprocess.run(cmd)
 
-            cmd = f"mv saved_models.tar.gz {cache_dir}/".split()
-
-            subprocess.run(cmd)
+            shutil.move("saved_models.tar.gz", os.path.join(cache_dir, ""))
             tarfile = os.path.join(cache_dir, "saved_models.tar.gz")
-            _ = subprocess.call(f"tar -xvzf {tarfile}", shell=True)
-            _ = subprocess.call(f"rm -rfv {tarfile}", shell=True)
+            shutil.unpack_archive(tarfile)
+            os.remove(tarfile)
         else:
             headers, sequences = eu.read_fasta(args.query)
             accessions = [head.split()[0] for head in headers]
-            headers, sequences, accessions = [np.array(item) for item in \
-                                              (headers, sequences, accessions)]
+            headers, sequences, accessions = [np.array(item) for item in (headers, sequences, accessions)]
             assert len(accessions) == len(headers) == len(sequences), "Fasta file has unequal headers and sequences"
             numseqs = len(sequences)
 
@@ -263,8 +261,7 @@ def run(args, logger, profiler):
             if max(lengths) > 1022:
                 print(warning)
                 locs = np.argwhere(lengths <= 1022).flatten()
-                headers, sequences, accessions = [array[locs] for array in \
-                                                  (headers, sequences, accessions)]
+                headers, sequences, accessions = [array[locs] for array in (headers, sequences, accessions)]
                 numseqs = len(sequences)
 
         if not os.path.exists(args.outdir):
