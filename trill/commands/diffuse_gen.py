@@ -109,7 +109,7 @@ def run(args, logger, profiler):
             "wget -nc http://files.ipd.uw.edu/pub/RFdiffusion/12fc204edeae5b57713c5ad7dcb97d39/Base_epoch8_ckpt.pt"
         )
         for command in commands:
-            if not os.path.isfile(os.path.join(cache_dir, f"RFDiffusion_weights/{command.split('/')[-1]}")):
+            if not os.path.isfile(os.path.join(cache_dir, "RFDiffusion_weights", f"{command.split('/')[-1]}")):
                 subprocess.run(command.split(" "))
                 subprocess.run(("mv", command.split("/")[-1], os.path.join(cache_dir, "RFDiffusion_weights")))
 
@@ -117,11 +117,10 @@ def run(args, logger, profiler):
         print("Cloning forked RFDiffusion")
         os.makedirs(os.path.join(cache_dir, "RFDiffusion"))
         rfdiff = Repo.clone_from("https://github.com/martinez-zacharya/RFDiffusion",
-                                 os.path.join(cache_dir, "RFDiffusion/"))
+                                 os.path.join(cache_dir, "RFDiffusion", ""))
         rfdiff_git_root = rfdiff.git.rev_parse("--show-toplevel")
         subprocess.run(("pip", "install", "-e", rfdiff_git_root))
-        command = f"pip install {rfdiff_git_root}/env/SE3Transformer".split(" ")
-        subprocess.run(command)
+        subprocess.run(("pip", "install", os.path.join(rfdiff_git_root, "env", "SE3Transformer")))
         sys.path.insert(0, os.path.join(cache_dir, "RFDiffusion"))
 
     else:
@@ -130,7 +129,7 @@ def run(args, logger, profiler):
         rfdiff_git_root = git_repo.git.rev_parse("--show-toplevel")
 
     # if args.sym:
-    #     run_rfdiff((f"{rfdiff_git_root}/config/inference/symmetry.yaml"), args)
+    #     run_rfdiff(os.path.join(rfdiff_git_root, "config", "inference", "symmetry.yaml"), args)
     # else:
-    #     run_rfdiff((f"{rfdiff_git_root}/config/inference/base.yaml"), args)
-    run_rfdiff(f"{rfdiff_git_root}/config/inference/base.yaml", args)
+    #     run_rfdiff(os.path.join(rfdiff_git_root, "config", "inference", "base.yaml"), args)
+    run_rfdiff(os.path.join(rfdiff_git_root, "config", "inference", "base.yaml"), args)
