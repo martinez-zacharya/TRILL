@@ -5,8 +5,8 @@ def setup(subparsers):
         "model",
         help="Choose protein language model to embed query proteins",
         action="store",
-        choices=["esm2_t6_8M", "esm2_t12_35M", "esm2_t30_150M", "esm2_t33_650M", "esm2_t36_3B", "esm2_t48_15B",
-                 "ProtT5-XL", "ProstT5", "Ankh", "Ankh-Large"]
+        choices=("esm2_t6_8M", "esm2_t12_35M", "esm2_t30_150M", "esm2_t33_650M", "esm2_t36_3B", "esm2_t48_15B",
+                 "ProtT5-XL", "ProstT5", "Ankh", "Ankh-Large")
     )
 
     embed.add_argument(
@@ -56,7 +56,7 @@ def run(args, logger, profiler):
     from trill.utils.lightning_models import ESM, CustomWriter, ProtT5, ProstT5, Ankh
     from trill.utils.update_weights import weights_update
 
-    if args.query.endswith((".fasta", ".faa", ".fa")) == False:
+    if not args.query.endswith((".fasta", ".faa", ".fa")):
         raise Exception(f"Input query file - {args.query} is not a valid file format.\
         File needs to be a protein fasta (.fa, .fasta, .faa)")
     if not args.avg and not args.per_AA:
