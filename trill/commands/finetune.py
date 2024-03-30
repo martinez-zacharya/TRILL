@@ -6,8 +6,8 @@ def setup(subparsers):
         help="Choose the protein language model to finetune. Note that ESM2 is trained with the MLM objective, "
              "while ProtGPT2/ZymCTRL are trained with the CLM objective.",
         action="store",
-        choices=["esm2_t6_8M", "esm2_t12_35M", "esm2_t30_150M", "esm2_t33_650M", "esm2_t36_3B", "esm2_t48_15B",
-                 "ProtGPT2", "ZymCTRL"]
+        choices=("esm2_t6_8M", "esm2_t12_35M", "esm2_t30_150M", "esm2_t33_650M", "esm2_t36_3B", "esm2_t48_15B",
+                 "ProtGPT2", "ZymCTRL")
     )
 
     finetune.add_argument(
