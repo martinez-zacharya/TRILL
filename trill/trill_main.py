@@ -85,7 +85,7 @@ def main(args):
     subparsers = parser.add_subparsers(dest='command')
 
     commands = {}
-    for command in [
+    for command in {
         "embed",
         "finetune",
         "inv_fold_gen",
@@ -97,7 +97,7 @@ def main(args):
         "simulate",
         "dock",
         "utils",
-    ]:
+    }:
         commands[command] = importlib.import_module(f"trill.commands.{command}")
         commands[command].setup(subparsers)
 
