@@ -3,18 +3,21 @@ def setup(subparsers):
 
     simulate.add_argument(
         "receptor",
-        help="Receptor of interest to be simulated. Must be either pdb file or a .txt file with the absolute path for each pdb, separated by a new-line.",
+        help="Receptor of interest to be simulated. Must be either pdb file or a .txt file with the absolute path for "
+             "each pdb, separated by a new-line.",
         action="store",
     )
 
-    simulate.add_argument("--ligand",
-                          help="Ligand of interest to be simulated with input receptor",
-                          action="store",
-                          )
+    simulate.add_argument(
+        "--ligand",
+        help="Ligand of interest to be simulated with input receptor",
+        action="store",
+    )
 
     simulate.add_argument(
         "--constraints",
-        help="Specifies which bonds and angles should be implemented with constraints. Allowed values are None, HBonds, AllBonds, or HAngles.",
+        help="Specifies which bonds and angles should be implemented with constraints. Allowed values are None, "
+             "HBonds, AllBonds, or HAngles.",
         choices=["None", "HBonds", "AllBonds", "HAngles"],
         default="None",
         action="store",
@@ -122,23 +125,25 @@ def setup(subparsers):
         default=10,
         action="store",
     )
-    #     simulate.add_argument(
-    #         '--martini_top',
-    #         help='Specify the path to the MARTINI topology file you want to use.',
-    #         type=str,
-    #         default=False,
-    #         action="store",
+    # simulate.add_argument(
+    #     '--martini_top',
+    #     help='Specify the path to the MARTINI topology file you want to use.',
+    #     type=str,
+    #     default=False,
+    #     action="store",
     # )
     simulate.add_argument(
         '--just_relax',
-        help='Just relaxes the input structure(s) and outputs the fixed and relaxed structure(s). The forcefield that is used is amber14.',
+        help='Just relaxes the input structure(s) and outputs the fixed and relaxed structure(s). The forcefield that '
+             'is used is amber14.',
         action="store_true",
         default=False,
     )
 
     simulate.add_argument(
         '--reporter_interval',
-        help='Set interval to save PDB and energy snapshot. Note that the higher the number, the bigger the output files will be and the slower the simulation. Default is 1000',
+        help='Set interval to save PDB and energy snapshot. Note that the higher the number, the bigger the output '
+             'files will be and the slower the simulation. Default is 1000',
         action="store",
         default=1000,
     )
