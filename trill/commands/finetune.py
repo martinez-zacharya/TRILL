@@ -50,7 +50,7 @@ def setup(subparsers):
 
     finetune.add_argument(
         "--mask_fraction",
-        help="ESM: Change fraction of animo acids masked for MLM training. Default is 0.15",
+        help="ESM: Change fraction of amino acids masked for MLM training. Default is 0.15",
         action="store",
         default=0.15,
     )
