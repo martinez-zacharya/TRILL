@@ -45,6 +45,7 @@ import trill.utils.ephod_utils as eu
 from trill.utils.classify_utils import generate_class_key_csv, prep_data, log_results, xg_test, sweep, train_model, custom_xg_test
 from trill.utils.fetch_embs import convert_embeddings_to_csv, download_embeddings
 from esm.inverse_folding.util import load_coords
+from trill.utils.rosettafold_aa import rfaa_setup
 import logging
 from pyfiglet import Figlet
 import bokeh
@@ -1548,6 +1549,8 @@ def main(args):
             for file in pt_files:
                 os.remove(os.path.join(args.outdir,file))
 
+        elif args.model == "RFAA":
+            rfaa_setup(args, cache_dir)
     elif args.command == 'dock':
         ligands = []
         if isinstance(args.ligand, list) and len(args.ligand) > 1:
