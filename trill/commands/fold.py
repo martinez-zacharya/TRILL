@@ -53,7 +53,8 @@ def run(args):
 
     from trill.utils.esm_utils import convert_outputs_to_pdb
     from trill.utils.lightning_models import CustomWriter, ProstT5
-    from .commands_common import get_logger
+    from trill.utils.rosettafold_aa import rfaa_setup
+    from .commands_common import cache_dir, get_logger
 
     logger = get_logger(args)
 
@@ -172,3 +173,6 @@ def run(args):
         finaldf.to_csv(outname, index=False, header=("3Di", "Label"))
         for file in pt_files:
             os.remove(os.path.join(args.outdir, file))
+
+    elif args.model == "RFAA":
+        rfaa_setup(args, cache_dir)
