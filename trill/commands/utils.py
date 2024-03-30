@@ -3,7 +3,9 @@ def setup(subparsers):
 
     utils.add_argument(
         "tool",
-        help="prepare_class_key: Pepare a csv for use with the classify command. Takes a directory or text file with list of paths for fasta files. Each file will be a unique class, so if your directory contains 5 fasta files, there will be 5 classes in the output key csv.",
+        help="prepare_class_key: Pepare a csv for use with the classify command. Takes a directory or text file with "
+             "list of paths for fasta files. Each file will be a unique class, so if your directory contains 5 fasta "
+             "files, there will be 5 classes in the output key csv.",
         choices=["prepare_class_key", "fetch_embeddings"]
     )
 
@@ -15,7 +17,8 @@ def setup(subparsers):
 
     utils.add_argument(
         "--fasta_paths_txt",
-        help="Text file with absolute paths of fasta files to be used for creating the class key. Each unique path will be treated as a unique class, and all the sequences in that file will be in the same class.",
+        help="Text file with absolute paths of fasta files to be used for creating the class key. Each unique path "
+             "will be treated as a unique class, and all the sequences in that file will be in the same class.",
         action="store",
     )
     utils.add_argument(
