@@ -248,24 +248,24 @@ def run(args, logger, profiler):
             shutil.unpack_archive(tarfile, cache_dir)
             os.remove(tarfile)
             shutil.move(os.path.join(cache_dir, "saved_models"), os.path.join(cache_dir, "EpHod_Models"))
-        else:
-            headers, sequences = eu.read_fasta(args.query)
-            accessions = [head.split()[0] for head in headers]
-            headers, sequences, accessions = [np.array(item) for item in (headers, sequences, accessions)]
-            assert len(accessions) == len(headers) == len(sequences), "Fasta file has unequal headers and sequences"
+
+        headers, sequences = eu.read_fasta(args.query)
+        accessions = [head.split()[0] for head in headers]
+        headers, sequences, accessions = [np.array(item) for item in (headers, sequences, accessions)]
+        assert len(accessions) == len(headers) == len(sequences), "Fasta file has unequal headers and sequences"
+        numseqs = len(sequences)
+
+        # Check sequence lengths
+        lengths = np.array([len(seq) for seq in sequences])
+        long_count = np.sum(lengths > 1022)
+        warning = f"{long_count} sequences are longer than 1022 residues and will be omitted"
+
+        # Omit sequences longer than 1022
+        if max(lengths) > 1022:
+            print(warning)
+            locs = np.argwhere(lengths <= 1022).flatten()
+            headers, sequences, accessions = [array[locs] for array in (headers, sequences, accessions)]
             numseqs = len(sequences)
-
-            # Check sequence lengths
-            lengths = np.array([len(seq) for seq in sequences])
-            long_count = np.sum(lengths > 1022)
-            warning = f"{long_count} sequences are longer than 1022 residues and will be omitted"
-
-            # Omit sequences longer than 1022
-            if max(lengths) > 1022:
-                print(warning)
-                locs = np.argwhere(lengths <= 1022).flatten()
-                headers, sequences, accessions = [array[locs] for array in (headers, sequences, accessions)]
-                numseqs = len(sequences)
 
         if not os.path.exists(args.outdir):
             os.makedirs(args.outdir)
