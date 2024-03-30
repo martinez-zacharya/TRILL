@@ -9,10 +9,12 @@ def setup(subparsers):
                  'ProtT5-XL', 'ProstT5', 'Ankh', 'Ankh-Large']
     )
 
-    embed.add_argument("query",
-                       help="Input protein fasta file",
-                       action="store"
-                       )
+    embed.add_argument(
+        "query",
+        help="Input protein fasta file",
+        action="store"
+    )
+
     embed.add_argument(
         "--batch_size",
         help="Change batch-size number for embedding proteins. Default is 1, but with more RAM, you can do more",
@@ -28,6 +30,7 @@ def setup(subparsers):
         default=False,
         dest="finetuned",
     )
+
     embed.add_argument(
         "--per_AA",
         help="Add this flag to return the per amino acid representations.",
