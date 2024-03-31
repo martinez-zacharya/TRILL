@@ -1,22 +1,22 @@
 import os
-from tqdm import tqdm
-from openmm.app.forcefield import ForceField
-from openmm.app.pdbfile import PDBFile
-from openmm.app.simulation import Simulation
-from openmm.openmm import LangevinMiddleIntegrator, Platform, MonteCarloBarostat
-from openmm.unit import kelvin, picosecond, picoseconds, femtosecond
-from openmm.app import NoCutoff, element, Modeller, DCDReporter, StateDataReporter, CutoffPeriodic, PDBReporter, CutoffNonPeriodic
-from openmm import CustomExternalForce
-from utils.cuda_utils import set_platform_properties
-from openmm.app import Topology
-from openmm.vec3 import Vec3
-from openmm.unit import nanometer, elementary_charge, atmospheres
-from openmm.app import PDBFile, Topology
-import time
-# import martini_openmm as martini
-
 import sys
 import time
+
+from openmm import CustomExternalForce
+from openmm.app import NoCutoff, Modeller, StateDataReporter, CutoffPeriodic, PDBReporter
+from openmm.app import PDBFile, Topology
+from openmm.app.forcefield import ForceField
+from openmm.app.simulation import Simulation
+from openmm.openmm import LangevinMiddleIntegrator, MonteCarloBarostat
+from openmm.unit import kelvin, picosecond, picoseconds, femtosecond
+from openmm.unit import nanometer, atmospheres
+from openmm.vec3 import Vec3
+from tqdm import tqdm
+
+from .cuda_utils import set_platform_properties
+
+
+# import martini_openmm as martini
 
 class SilentOutputStream:
     def write(self, *args, **kwargs):

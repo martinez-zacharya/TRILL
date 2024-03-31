@@ -1,35 +1,21 @@
+import math
+import os
+import random
+# from colossalai.nn.optimizer import HybridAdam, CPUAdam
+import re
+
 import pytorch_lightning as pl
 import torch
-import esm
-import torch.nn as nn
 import torch.nn.functional as F
-import pandas as pd
-import sys
-import gc
-import os
-import math
-from tqdm import trange
-import random
-import numpy as np
-SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
-sys.path.append(os.path.dirname(SCRIPT_DIR))
-# sys.path.insert(0, 'utils')
-from utils.mask import maskInputs
-from utils.update_weights import weights_update
-from pytorch_lightning.loggers import TensorBoardLogger
-from pytorch_lightning.profilers import PyTorchProfiler
 from deepspeed.ops.adam import DeepSpeedCPUAdam
-from transformers import pipeline, AutoTokenizer, AutoModelForCausalLM, DataCollatorForLanguageModeling, T5EncoderModel, T5Tokenizer, AutoModelForSeq2SeqLM, AutoModel
-from esm.inverse_folding.multichain_util import sample_sequence_in_complex
-# from colossalai.nn.optimizer import HybridAdam, CPUAdam
-from deepspeed.ops.adam import FusedAdam
-from tqdm import tqdm
-import re
 from pytorch_lightning.callbacks import BasePredictionWriter
-import torch
 from torch.utils.data import Dataset
-from icecream import ic
-from trill.utils.esm_utils import Alphabet
+from tqdm import trange
+from transformers import pipeline, AutoTokenizer, AutoModelForCausalLM, DataCollatorForLanguageModeling, T5EncoderModel, \
+    T5Tokenizer, AutoModelForSeq2SeqLM
+
+from .esm_utils import Alphabet
+from .mask import maskInputs
 
 ESM_ALLOWED_AMINO_ACIDS = "ACDEFGHIKLMNPQRSTVWY"
 

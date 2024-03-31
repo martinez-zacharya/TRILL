@@ -1,8 +1,6 @@
 import pandas as pd
-import esm
-import torch
 from datasets import Dataset
-from transformers import DataCollatorForLanguageModeling, AutoTokenizer
+from transformers import DataCollatorForLanguageModeling
 
 
 def ProtGPT2_wrangle(data, tokenizer):

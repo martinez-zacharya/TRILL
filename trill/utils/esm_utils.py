@@ -1,27 +1,23 @@
-import esm
-from trill.utils.inverse_folding.util import load_structure, extract_coords_from_structure, score_sequence
-from trill.utils.inverse_folding.multichain_util import extract_coords_from_complex, score_sequence_in_complex
-import torch
-import numpy as np
-import pandas as pd
-from argparse import Namespace
-from tqdm import tqdm
-from transformers.models.esm.openfold_utils.protein import to_pdb, Protein as OFProtein
-from transformers.models.esm.openfold_utils.feats import atom14_to_atom37
-from trill.utils.inverse_folding.gvp_transformer import GVPTransformerModel, lightning_GVPTransformerModel
-import warnings
-import os
+import glob
 import itertools
 import os
-from typing import Sequence, Tuple, List, Union
-import pickle
 import re
-import shutil
-import torch
-from pathlib import Path
-from esm.constants import proteinseq_toks
+from argparse import Namespace
+from typing import Sequence, Tuple, List
 
-import glob
+import esm
+import numpy as np
+import pandas as pd
+import torch
+from esm.constants import proteinseq_toks
+from tqdm import tqdm
+from transformers.models.esm.openfold_utils.feats import atom14_to_atom37
+from transformers.models.esm.openfold_utils.protein import to_pdb, Protein as OFProtein
+
+from .inverse_folding.gvp_transformer import lightning_GVPTransformerModel
+from .inverse_folding.multichain_util import extract_coords_from_complex, score_sequence_in_complex
+from .inverse_folding.util import load_structure, score_sequence
+
 
 class coordDataset(torch.utils.data.Dataset):
     def __init__(self, input):

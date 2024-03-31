@@ -1,6 +1,7 @@
-import subprocess
 import os
+
 import requests
+
 
 def rfaa_setup(args, cache_dir):
     base_url = "http://files.ipd.uw.edu/pub/RF-All-Atom/weights/RFAA_paper_weights.pt"
