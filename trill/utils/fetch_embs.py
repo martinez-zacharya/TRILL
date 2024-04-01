@@ -1,9 +1,9 @@
-import requests
-import h5py
-import pandas as pd
-import argparse
 import os
+
+import h5py
 import numpy as np
+import pandas as pd
+import requests
 from tqdm import tqdm
 
 dataset_ids = {

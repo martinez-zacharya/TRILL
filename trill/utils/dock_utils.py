@@ -1,24 +1,20 @@
-import os
-import subprocess
-from rdkit import Chem
-import pandas as pd
-from openmm.app.pdbfile import PDBFile
-from openmm.app import NoCutoff, element
-import pdbfixer
-from tqdm import tqdm
-from multiprocessing import Pool
-from functools import partial
-import shutil
-from biobb_vs.fpocket.fpocket_filter import fpocket_filter
-from biobb_vs.fpocket.fpocket_select import fpocket_select
-from biobb_vs.fpocket.fpocket_run import fpocket_run
-from biobb_vs.utils.box import box
-import json
-from Bio.PDB import PDBParser, Superimposer, PDBIO
 import glob
-from io import StringIO 
+import os
+import shutil
+import subprocess
 import sys
-import numpy as np
+from io import StringIO
+
+import pdbfixer
+from Bio.PDB import PDBParser, Superimposer, PDBIO
+from biobb_vs.fpocket.fpocket_filter import fpocket_filter
+from biobb_vs.fpocket.fpocket_run import fpocket_run
+from biobb_vs.fpocket.fpocket_select import fpocket_select
+from biobb_vs.utils.box import box
+from openmm.app import element
+from openmm.app.pdbfile import PDBFile
+from rdkit import Chem
+from tqdm import tqdm
 
 
 class Capturing(list):

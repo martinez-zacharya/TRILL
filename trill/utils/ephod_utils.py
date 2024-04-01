@@ -7,25 +7,19 @@ Author: Japheth Gado
 
 
 
-import subprocess
-import os
 import builtins
-import pytorch_lightning as pl
-import torch
-from torch.utils.data import Dataset
-import torch.nn as nn
-from torch.nn.parallel import DataParallel
-import esm
-import logging
 import json
-import requests
+import logging
+import os
+import subprocess
 from collections import OrderedDict
 
-
-
-
-
-
+import esm
+import pytorch_lightning as pl
+import requests
+import torch
+import torch.nn as nn
+from torch.utils.data import Dataset
 
 
 def print(*args, **kwargs):
