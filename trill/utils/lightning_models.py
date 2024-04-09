@@ -661,7 +661,7 @@ class ProstT5(pl.LightningModule):
                 self.model = T5EncoderModel.from_pretrained("Rostlab/ProstT5", device_map="auto")
             else:
                 self.model = T5EncoderModel.from_pretrained("Rostlab/ProstT5", low_cpu_mem_usage=True)
-        elif self.command == 'fold' or self.command == 'inv_fold_gen':
+        elif self.command == 'fold' or self.command == 'inv_fold_gen' or self.command == 'classify':
             if int(args.GPUs) > 1:
                 self.model = AutoModelForSeq2SeqLM.from_pretrained("Rostlab/ProstT5", device_map="auto")
             else:
@@ -740,7 +740,7 @@ class ProstT5(pl.LightningModule):
 
             return aa_reps, avg_reps
 
-        elif self.command == 'fold':
+        elif self.command == 'fold' or self.command=='classify':
             label, _ = batch
             seqs = [" ".join(list(re.sub(r"[UZOB]", "X", sequence))) for sequence in batch[1]]
             seqs = [ "<AA2fold>" + " " + s for s in seqs]

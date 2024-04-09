@@ -3,11 +3,15 @@ import importlib
 import os
 import sys
 import time
+import calendar
 
 import pytorch_lightning as pl
 import torch
 from pyfiglet import Figlet
 from transformers import set_seed
+from loguru import logger
+
+from trill.utils.logging import setup_logger
 
 os.environ['CUDA_LAUNCH_BLOCKING'] = '1'
 os.environ["TOKENIZERS_PARALLELISM"] = "false"
@@ -20,6 +24,7 @@ for command in {
     "lang_gen",
     "diff_gen",
     "classify",
+    "regress",
     "fold",
     "visualize",
     "simulate",
@@ -121,9 +126,11 @@ def main(args):
     #     data = esm.data.FastaBatchedDataset.from_file(args.query)
     #     tune_esm_inference(data)
     #     tune_esm_train(data, int(args.GPUs))
-
+    gmt = time.gmtime()    
+    ts = calendar.timegm(gmt)
+    setup_logger(os.path.join(args.outdir, f"{args.name}_{ts}.log"))
+    logger.info(f'RNG seed set to {args.RNG_seed}')
     commands[args.command].run(args)
-
     end = time.time()
     print("Finished!")
     print(f"Time elapsed: {end - start} seconds")

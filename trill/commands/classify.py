@@ -6,9 +6,8 @@ def setup(subparsers):
     classify.add_argument(
         "classifier",
         help="Predict thermostability/optimal enzymatic pH using TemStaPro/EpHod or choose custom to train/use your "
-             "own XGBoost or Isolation Forest classifier. Note for training XGBoost, you need to submit roughly equal "
-             "amounts of each class as part of your query.",
-        choices=("TemStaPro", "EpHod", "XGBoost", "iForest")
+             "own XGBoost, LightGBM or Isolation Forest classifier. ESM2+MLP allows you to train an ESM2 model with a classification head end-to-end.",
+        choices=("TemStaPro", "EpHod", "XGBoost", "LightGBM", "iForest", "ESM2+MLP")
     )
     classify.add_argument(
         "query",
@@ -23,7 +22,7 @@ def setup(subparsers):
     )
     classify.add_argument(
         "--save_emb",
-        help="Save csv of ProtT5 embeddings",
+        help="Save csv of embeddings",
         action="store_true",
         default=False
     )
@@ -45,7 +44,7 @@ def setup(subparsers):
     )
     classify.add_argument(
         "--preTrained",
-        help="Enter the path to your pre-trained XGBoost binary classifier that you've trained with TRILL. This will "
+        help="Enter the path to your pre-trained classifier that you've trained with TRILL. This will "
              "be a .json file.",
         action="store",
     )
@@ -73,17 +72,45 @@ def setup(subparsers):
     )
 
     classify.add_argument(
-        "--xg_lr",
-        help="XGBoost: Sets the learning rate for XGBoost",
+        "--lr",
+        help="XGBoost/LightGBM/ESM2+MLP: Sets the learning rate. Default is 0.0001 for ESM2+MLP, 0.2 for XGBoost and LightGBM",
         action="store",
         default=0.2
     )
 
     classify.add_argument(
-        "--xg_max_depth",
-        help="XGBoost: Sets the maximum tree depth",
+        "--max_depth",
+        help="XGBoost/LightGBM: Sets the maximum tree depth",
         action="store",
         default=8
+    )
+
+    classify.add_argument(
+        "--num_leaves",
+        help="LightGBM: Sets the max number of leaves in one tree. Default is 31",
+        action="store",
+        default=31
+    )
+
+    classify.add_argument(
+        "--bagging_freq",
+        help="LightGBM: Int that allows for bagging, which enables random sampling of training data of traingin data. For example, if it is set to 3, LightGBM will randomly sample the --bagging_frac of the data every 3rd iteration. Default is 0",
+        action="store",
+        default=0
+    )
+
+    classify.add_argument(
+        "--bagging_frac",
+        help="LightGBM: Sets fraction of training data to be used when bagging. Must be 0 < --bagging_frac <= 1. Default is 1",
+        action="store",
+        default=1
+    )
+
+    classify.add_argument(
+        "--feature_frac",
+        help="LightGBM: Sets fraction of training features to be randomly sampled for use in training. Must be 0 < --feature_frac <= 1. Default is 1",
+        action="store",
+        default=1
     )
 
     classify.add_argument(
@@ -108,28 +135,35 @@ def setup(subparsers):
     )
     classify.add_argument(
         "--n_estimators",
-        help="XGBoost/iForest: Number of boosting rounds",
+        help="XGBoost/LightGBM: Number of boosting rounds",
         action="store",
         default=115
     )
     classify.add_argument(
         "--sweep",
-        help="XGBoost: Use this flag to perform cross-validated bayesian optimization over the hyperparameter space.",
+        help="XGBoost/LightGBM: Use this flag to perform cross-validated bayesian optimization over the hyperparameter space.",
         action="store_true",
         default=False
     )
     classify.add_argument(
         "--sweep_cv",
-        help="XGBoost: Change the number of folds used for cross-validation.",
+        help="XGBoost/LightGBM: Change the number of folds used for cross-validation.",
         action="store",
         default=3
     )
     classify.add_argument(
         "--f1_avg_method",
-        help="XGBoost: Change the scoring method used for calculated F1. Default is with no averaging.",
+        help="XGBoost/LightGBM: Change the scoring method used for calculated F1. Default is with no averaging.",
         action="store",
         default=None,
         choices=("macro", "weighted", "micro", "None")
+    )
+
+    classify.add_argument(
+        "--epochs",
+        help="ESM2+MLP: Set number of epochs to train ESM2+MLP classifier.",
+        action="store",
+        default=3
     )
 
 
@@ -153,15 +187,18 @@ def run(args):
     from sklearn.ensemble import IsolationForest
     from sklearn.preprocessing import LabelEncoder
     from tqdm import tqdm
-
+    from loguru import logger 
+    from icecream import ic
+    from sklearn.metrics import precision_recall_fscore_support
     import trill.utils.ephod_utils as eu
+    from trill.commands.fold import process_sublist
     from trill.utils.MLP import MLP_C2H2, inference_epoch
-    from trill.utils.classify_utils import prep_data, log_results, xg_test, sweep, train_model, custom_xg_test
-    from trill.utils.esm_utils import parse_and_save_all_predictions
-    from trill.utils.lightning_models import ProtT5
+    from trill.utils.classify_utils import prep_data, setup_esm2_hf, log_results, sweep, prep_hf_data, custom_esm2mlp_test, train_model, load_model, custom_model_test, fasta2foldseek, prep_foldseek_dbs, predict_and_evaluate
+    from trill.utils.esm_utils import parse_and_save_all_predictions, convert_outputs_to_pdb
+    from trill.utils.lightning_models import ProtT5, CustomWriter, ProstT5
     from .commands_common import cache_dir, get_logger
 
-    logger = get_logger(args)
+    ml_logger = get_logger(args)
 
     class CustomDataset(torch.utils.data.Dataset):
         def __init__(self, data):
@@ -172,8 +209,8 @@ def run(args):
 
         def __getitem__(self, idx):
             return self.data[idx]
-
     if args.sweep and not args.train_split:
+        logger.error("You need to provide a train-test fraction with --train_split!")
         raise Exception("You need to provide a train-test fraction with --train_split!")
     if args.classifier == "TemStaPro":
         if not args.preComputed_Embs:
@@ -182,9 +219,9 @@ def run(args):
             dataloader = torch.utils.data.DataLoader(data, shuffle=False, batch_size=1, num_workers=0)
             if int(args.GPUs) > 0:
                 trainer = pl.Trainer(enable_checkpointing=False, devices=int(args.GPUs), accelerator="gpu",
-                                     logger=logger, num_nodes=int(args.nodes))
+                                     logger=ml_logger, num_nodes=int(args.nodes))
             else:
-                trainer = pl.Trainer(enable_checkpointing=False, logger=logger, num_nodes=int(args.nodes))
+                trainer = pl.Trainer(enable_checkpointing=False, logger=ml_logger, num_nodes=int(args.nodes))
             reps = trainer.predict(model, dataloader)
             parse_and_save_all_predictions(args)
         if not os.path.exists(os.path.join(cache_dir, "TemStaPro_models")):
@@ -300,9 +337,49 @@ def run(args):
         all_ypred.rename(columns={"index": "Label"}, inplace=True)
         all_ypred.to_csv(phout_file, index=False)
 
+    elif args.classifier == 'ESM2+MLP':
+        if not args.preTrained:
+            command_line_args = sys.argv
+            command_line_str = " ".join(command_line_args)
+            outfile = os.path.join(args.outdir, f"{args.name}_{args.classifier}_{args.emb_model}.out")
+            logger.info("Prepping data for training ESM2+MLP...")
+            train_df, test_df, n_classes, le = prep_hf_data(args)
+            logger.info("Setting up ESM2+MLP...")
+            trainer, test_dataset = setup_esm2_hf(train_df, test_df, args, n_classes)
+            train_res = trainer.train()
+            test_res = trainer.predict(test_dataset = test_dataset)
+            trainer.model.save_pretrained(os.path.join(args.outdir, f'{args.name}_{args.emb_model}-MLP_{n_classes}-classifier.pt'), safe_serialization=False) 
+            preds = np.argmax(test_res[0], axis=1)
+            transformed_preds = le.inverse_transform(preds)
+            unique_c = np.unique(transformed_preds)
+            precision, recall, fscore, support = precision_recall_fscore_support(test_df['NewLab'].values, preds, average=args.f1_avg_method, labels=np.unique(test_df['NewLab']))
+            log_results(outfile, command_line_str, n_classes, args, classes=unique_c, precision=precision, recall=recall, fscore=fscore, support=support, le=le)
+        else:
+            trainer, dataset, label_list = custom_esm2mlp_test(args)
+            test_res = trainer.predict(test_dataset=dataset)
+            # Convert probabilities to a DataFrame
+            proba_df = pd.DataFrame(test_res[0])
+            
+            # Find the index of the maximum probability for each row (prediction)
+            test_preds = proba_df.idxmax(axis=1)
+            
+            # Add the original labels to the DataFrame
+            proba_df['Label'] = label_list
+            
+            # Save the probabilities to a CSV file
+            proba_file_name = f'{args.name}_ESM2-MLP_class_probs.csv'
+            proba_df.to_csv(os.path.join(args.outdir, proba_file_name), index=False)
+            
+            # Prepare and save the predictions to a CSV file
+            pred_df = pd.DataFrame(test_preds, columns=['Prediction'])
+            pred_df['Label'] = label_list
+            
+            pred_file_name = f'{args.name}_ESM2-MLP_predictions.csv'
+            pred_df.to_csv(os.path.join(args.outdir, pred_file_name), index=False)
 
-    elif args.classifier == "XGBoost":
-        outfile = os.path.join(args.outdir, f"{args.name}_XGBoost.out")
+
+    elif args.classifier != "iForest":
+        outfile = os.path.join(args.outdir, f"{args.name}_{args.classifier}.out")
         if not args.preComputed_Embs:
             embed_command = (
                 "trill",
@@ -321,7 +398,6 @@ def run(args):
 
         if args.train_split is not None:
             le = LabelEncoder()
-            # print(df)
             train_df, test_df, n_classes = prep_data(df, args)
             unique_c = np.unique(test_df["NewLab"])
             classes = train_df["NewLab"].unique()
@@ -332,26 +408,24 @@ def run(args):
 
             if args.sweep:
                 sweeped_clf = sweep(train_df, args)
-                precision, recall, fscore, support = xg_test(sweeped_clf, le, test_df, args)
-                log_results(outfile, command_line_str, n_classes, args, classes=unique_c, sweeped_clf=sweeped_clf,
-                            precision=precision, recall=recall, fscore=fscore, support=support)
+                precision, recall, fscore, support = predict_and_evaluate(sweeped_clf, le, test_df, args)
+                log_results(outfile, command_line_str, n_classes, args, classes=unique_c, sweeped_clf=sweeped_clf,precision=precision, recall=recall, fscore=fscore, support=support, le=le)
             else:
                 clf = train_model(train_df, args)
-                clf.save_model(os.path.join(args.outdir, f"{args.name}_XGBoost_{len(train_df.columns) - 2}.json"))
-                precision, recall, fscore, support = xg_test(clf, le, test_df, args)
-                log_results(outfile, command_line_str, n_classes, args, classes=classes, precision=precision,
-                            recall=recall, fscore=fscore, support=support)
+                clf.save_model(os.path.join(args.outdir, f"{args.name}_{args.classifier}_{len(train_df.columns) - 2}.json"))
+                precision, recall, fscore, support = predict_and_evaluate(clf, le, test_df, args)
+                log_results(outfile, command_line_str, n_classes, args, classes=classes, precision=precision,recall=recall, fscore=fscore, support=support, le=le)
 
             if not args.save_emb and not args.preComputed_Embs:
                 os.remove(os.path.join(args.outdir, f"{args.name}_{args.emb_model}_AVG.csv"))
 
         else:
             if not args.preTrained:
-                raise Exception("You need to provide a model with --args.preTrained to perform inference!")
+                logger.error("You need to provide a model with --preTrained to perform inference!")
+                raise Exception("You need to provide a model with --preTrained to perform inference!")
             else:
-                clf = xgb.XGBClassifier()
-                clf.load_model(args.preTrained)
-                custom_xg_test(clf, df, args)
+                clf = load_model(args)
+                custom_model_test(clf, df, args)
 
                 if not args.save_emb and not args.preComputed_Embs:
                     os.remove(os.path.join(args.outdir, f"{args.name}_{args.emb_model}_AVG.csv"))
@@ -405,3 +479,79 @@ def run(args):
             out_df.to_csv(os.path.join(args.outdir, f"{args.name}_iForest_predictions.csv"), index=False)
         if not args.save_emb and not args.preComputed_Embs:
             os.remove(os.path.join(args.outdir, f"{args.name}_{args.emb_model}_AVG.csv"))
+
+
+    # elif args.classifier == '3Di-search':
+    #     logger.info('Prepping Foldseek database from input')
+    #     from trill.utils.inverse_folding.util import get_3di_prostt5
+    #     model = ProstT5(args)
+    #     data = esm.data.FastaBatchedDataset.from_file(args.query)
+    #     get_3di_prostt5(args, args.outdir, cache_dir)
+        # dataloader = torch.utils.data.DataLoader(data, shuffle=False, batch_size=int(args.batch_size), num_workers=0)
+        # pred_writer = CustomWriter(output_dir=args.outdir, write_interval="epoch")
+        # if int(args.GPUs) == 0:
+        #     trainer = pl.Trainer(enable_checkpointing=False, callbacks=pred_writer, logger=ml_logger,
+        #                          num_nodes=int(args.nodes))
+        # else:
+        #     trainer = pl.Trainer(enable_checkpointing=False, devices=int(args.GPUs), callbacks=(pred_writer),
+        #                          accelerator="gpu", logger=ml_logger, num_nodes=int(args.nodes))
+        # logger.info("Beginning prediction of 3Di tokens with ProstT5")
+
+        # reps = trainer.predict(model, dataloader)
+        # cwd_files = os.listdir(args.outdir)
+        # pt_files = [file for file in cwd_files if "predictions_" in file]
+        # pred_embeddings = []
+        # if args.batch_size == 1 or int(args.GPUs) > 1:
+        #     for pt in pt_files:
+        #         preds = torch.load(os.path.join(args.outdir, pt))
+        #         for pred in preds:
+        #             for sublist in pred:
+        #                 if len(sublist) == 2 and args.batch_size == 1:
+        #                     pred_embeddings.append(tuple([sublist[0], sublist[1]]))
+        #                 else:
+        #                     processed_sublists = process_sublist(sublist)
+        #                     for sub in processed_sublists:
+        #                         pred_embeddings.append(tuple([sub[0], sub[1]]))
+        #     embedding_df = pd.DataFrame(pred_embeddings, columns=("3Di", "Label"))
+        #     finaldf = embedding_df["3Di"].apply(pd.Series)
+        #     finaldf["Label"] = embedding_df["Label"]
+        # else:
+        #     embs = []
+        #     for rep in reps:
+        #         inner_embeddings = [item[0] for item in rep]
+        #         inner_labels = [item[1] for item in rep]
+        #         for emb_lab in zip(inner_embeddings, inner_labels):
+        #             embs.append(emb_lab)
+        #     embedding_df = pd.DataFrame(embs, columns=("3Di", "Label"))
+        #     finaldf = embedding_df["3Di"].apply(pd.Series)
+        #     finaldf["Label"] = embedding_df["Label"]
+        # logger.info("Finished 3Di predictions")
+        # # outname = os.path.join(args.outdir, f"{args.name}_{args.model}.csv")
+        # # finaldf.to_csv(outname, index=False, header=("3Di", "Label"))
+        # for file in pt_files:
+        #     os.remove(os.path.join(args.outdir, file))
+        # aa_seqs = data[:][1]
+        # aa_seq_labs = data[:][0]
+        # tdi_labels = finaldf['Label'].to_list()
+        # tdis = finaldf[0].to_list()
+        # # Step 1: Create a mapping from labels to sequences
+        # label_to_seq = dict(zip(aa_seq_labs, aa_seqs))
+
+        # # Step 2: Replace tdi_labels with the corresponding sequences from aa_seqs in the master list
+        # # Only include items in master if their label (from tdi_labels) has a corresponding sequence in the mapping
+        # master = []
+        # for tdi_label, tdi in zip(tdi_labels, tdis):
+        #     if tdi_label in label_to_seq:
+        #         # Replace tdi_label with the corresponding sequence from aa_seqs
+        #         seq = label_to_seq[tdi_label]
+        #         # Add the tuple (sequence, tdi_label, tdi) to the master list
+        #         master.append((seq, tdi_label, tdi)) 
+        # with open(f'tmp_{args.name}_aa.fasta', 'w+') as aa_fasta:
+        #     with open(f'tmp_{args.name}_td.fasta', 'w+') as td_fasta:
+        #         for aa, lab, td in master:
+        #             aa_fasta.write(f'>{lab}\n')
+        #             aa_fasta.write(f'{aa}\n')
+        #             td_fasta.write(f'>{lab}\n')
+        #             td_fasta.write(f'{td}\n')
+
+        # prep_foldseek_dbs(args.query, os.path.join(args.outdir, f'test_ProstT5-3Di_outputs/{args.name}_ProstT5-3Di.fasta'), f'tmp_{args.name}_db')

@@ -58,5 +58,3 @@ def FineTuneDatabaseValidation(name, fastaInput):
 
 
 
-
-

@@ -3,7 +3,7 @@ def setup(subparsers):
     inv_fold_gen.add_argument(
         "model",
         help="Select which model to generate proteins using inverse folding.",
-        choices=("ESM-IF1", "ProteinMPNN", "ProstT5")
+        choices=("ESM-IF1", "ProteinMPNN", "ProstT5", "LigandMPNN",)
     )
 
     inv_fold_gen.add_argument(
@@ -16,7 +16,8 @@ def setup(subparsers):
         "--temp",
         help="Choose sampling temperature.",
         action="store",
-        default="1"
+        default="1",
+        type=float
     )
 
     inv_fold_gen.add_argument(
@@ -52,8 +53,12 @@ def setup(subparsers):
         action="store_false"
     )
     inv_fold_gen.add_argument("--mpnn_model", type=str, default="v_48_020",
-                              help="ProteinMPNN: v_48_002, v_48_010, v_48_020, v_48_030; v_48_010=version with 48 edges "
+                              help="ProteinMPNN Noise levels: v_48_002, v_48_010, v_48_020, v_48_030; v_48_010=version with 48 edges "
                                    "0.10A noise")
+    inv_fold_gen.add_argument("--lig_mpnn_model", type=str, default="",
+                              help="LigandMPNN: Soluble, Global_Membrane, Local_Membrane, Side-Chain_Packing")
+    inv_fold_gen.add_argument("--lig_mpnn_noise", type=str, default="010",
+                              help="LigandMPNN Noise levels: 002, 005, 010, 020, 030; 010 = .10A noise. Note that 002 is only available for Soluble and Side-Chain_packing models")
     inv_fold_gen.add_argument("--save_score", type=int, default=0,
                               help="ProteinMPNN: 0 for False, 1 for True; save score=-log_prob to npy files")
     inv_fold_gen.add_argument("--save_probs", type=int, default=0,
@@ -79,7 +84,7 @@ def setup(subparsers):
                               help="ProteinMPNN: Batch size; can set higher for titan, quadro GPUs, reduce this if "
                                    "running out of GPU memory")
     inv_fold_gen.add_argument("--pdb_path_chains", type=str, default="",
-                              help="ProteinMPNN: Define which chains need to be designed for a single PDB ")
+                              help="ProteinMPNN/LigandMPNN: Define which chains need to be designed for a single PDB ")
     inv_fold_gen.add_argument("--chain_id_jsonl", type=str, default="",
                               help="ProteinMPNN: Path to a dictionary specifying which chains need to be designed and "
                                    "which ones are fixed, if not specified all chains will be designed.")
@@ -89,7 +94,7 @@ def setup(subparsers):
                               help="ProteinMPNN: Specify which amino acids should be omitted in the generated sequence, "
                                    "e.g. \"AC\" would omit alanine and cysteine.")
     inv_fold_gen.add_argument("--bias_AA_jsonl", type=str, default="",
-                              help="ProteinMPNN: Path to a dictionary which specifies AA composition bias if needed, "
+                              help="ProteinMPNN/LigandMPNN: Path to a dictionary which specifies AA composition bias if needed, "
                                    "e.g. {A: -1.1, F: 0.7} would make A less likely and F more likely.")
     inv_fold_gen.add_argument("--bias_by_res_jsonl", default="",
                               help="ProteinMPNN: Path to dictionary with per position bias.")
@@ -107,6 +112,246 @@ def setup(subparsers):
     inv_fold_gen.add_argument("--tied_positions_jsonl", type=str, default="",
                               help="ProteinMPNN: Path to a dictionary with tied positions")
 
+    inv_fold_gen.add_argument(
+        "--fasta_seq_separation",
+        type=str,
+        default=":",
+        help="LigandMPNN: Symbol to use between sequences from different chains",
+    )
+    inv_fold_gen.add_argument("--verbose", type=int, default=1, help="LigandMPNN: Print stuff")
+
+    inv_fold_gen.add_argument(
+        "--pdb_path_multi",
+        type=str,
+        default="",
+        help="LigandMPNN: Path to json listing PDB paths. {'/path/to/pdb': ''} - only keys will be used.",
+    )
+
+    inv_fold_gen.add_argument(
+        "--fixed_residues",
+        type=str,
+        default="",
+        help="LigandMPNN: Provide fixed residues, A12 A13 A14 B2 B25",
+    )
+    inv_fold_gen.add_argument(
+        "--fixed_residues_multi",
+        type=str,
+        default="",
+        help="LigandMPNN: Path to json mapping of fixed residues for each pdb i.e., {'/path/to/pdb': 'A12 A13 A14 B2 B25'}",
+    )
+
+    inv_fold_gen.add_argument(
+        "--redesigned_residues",
+        type=str,
+        default="",
+        help="LigandMPNN: Provide to be redesigned residues, everything else will be fixed, A12 A13 A14 B2 B25",
+    )
+    inv_fold_gen.add_argument(
+        "--redesigned_residues_multi",
+        type=str,
+        default="",
+        help="LigandMPNN: Path to json mapping of redesigned residues for each pdb i.e., {'/path/to/pdb': 'A12 A13 A14 B2 B25'}",
+    )
+
+    inv_fold_gen.add_argument(
+        "--bias_AA",
+        type=str,
+        default="",
+        help="LigandMPNN: Bias generation of amino acids, e.g. 'A:-1.024,P:2.34,C:-12.34'",
+    )
+    inv_fold_gen.add_argument(
+        "--bias_AA_per_residue",
+        type=str,
+        default="",
+        help="LigandMPNN: Path to json mapping of bias {'A12': {'G': -0.3, 'C': -2.0, 'H': 0.8}, 'A13': {'G': -1.3}}",
+    )
+    inv_fold_gen.add_argument(
+        "--bias_AA_per_residue_multi",
+        type=str,
+        default="",
+        help="LigandMPNN: Path to json mapping of bias {'pdb_path': {'A12': {'G': -0.3, 'C': -2.0, 'H': 0.8}, 'A13': {'G': -1.3}}}",
+    )
+
+    # inv_fold_gen.add_argument(
+    #     "--omit_AA_per_residue",
+    #     type=str,
+    #     default="",
+    #     help="LigandMPNN: Path to json mapping of bias {'A12': 'APQ', 'A13': 'QST'}",
+    # )
+    inv_fold_gen.add_argument(
+        "--omit_AA_per_residue_multi",
+        type=str,
+        default="",
+        help="LigandMPNN: Path to json mapping of bias {'pdb_path': {'A12': 'QSPC', 'A13': 'AGE'}}",
+    )
+
+    inv_fold_gen.add_argument(
+        "--symmetry_residues",
+        type=str,
+        default="",
+        help="LigandMPNN: Add list of lists for which residues need to be symmetric, e.g. 'A12,A13,A14|C2,C3|A5,B6'",
+    )
+    inv_fold_gen.add_argument(
+        "--symmetry_weights",
+        type=str,
+        default="",
+        help="LigandMPNN: Add weights that match symmetry_residues, e.g. '1.01,1.0,1.0|-1.0,2.0|2.0,2.3'",
+    )
+    inv_fold_gen.add_argument(
+        "--homo_oligomer",
+        type=int,
+        default=0,
+        help="LigandMPNN: Setting this to 1 will automatically set --symmetry_residues and --symmetry_weights to do homooligomer design with equal weighting.",
+    )
+
+    inv_fold_gen.add_argument(
+        "--zero_indexed",
+        type=str,
+        default=0,
+        help="LigandMPNN: 1 - to start output PDB numbering with 0",
+    )
+    # inv_fold_gen.add_argument(
+    #     "--seed",
+    #     type=int,
+    #     default=0,
+    #     help="LigandMPNN: Set seed for torch, numpy, and python random.",
+    # )
+    # inv_fold_gen.add_argument(
+    #     "--batch_size",
+    #     type=int,
+    #     default=1,
+    #     help="LigandMPNN: Number of sequence to generate per one pass.",
+    # )
+    inv_fold_gen.add_argument(
+        "--number_of_batches",
+        type=int,
+        default=1,
+        help="LigandMPNN: Number of times to design sequence using a chosen batch size.",
+    )
+    # inv_fold_gen.add_argument(
+    #     "--temperature",
+    #     type=float,
+    #     default=0.1,
+    #     help="LigandMPNN: Temperature to sample sequences.",
+    # )
+    inv_fold_gen.add_argument(
+        "--save_stats", type=int, default=0, help="LigandMPNN: Save output statistics"
+    )
+
+    inv_fold_gen.add_argument(
+        "--ligand_mpnn_use_atom_context",
+        type=int,
+        default=1,
+        help="LigandMPNN: 1 - use atom context, 0 - do not use atom context.",
+    )
+    inv_fold_gen.add_argument(
+        "--ligand_mpnn_cutoff_for_score",
+        type=float,
+        default=8.0,
+        help="LigandMPNN: Cutoff in angstroms between protein and context atoms to select residues for reporting score.",
+    )
+    inv_fold_gen.add_argument(
+        "--ligand_mpnn_use_side_chain_context",
+        type=int,
+        default=0,
+        help="LigandMPNN: Flag to use side chain atoms as ligand context for the fixed residues",
+    )
+    inv_fold_gen.add_argument(
+        "--chains_to_design",
+        type=str,
+        default=None,
+        help="LigandMPNN: Specify which chains to redesign, all others will be kept fixed.",
+    )
+
+    inv_fold_gen.add_argument(
+        "--parse_these_chains_only",
+        type=str,
+        default="",
+        help="LigandMPNN: Provide chains letters for parsing backbones, 'ABCF'",
+    )
+
+    inv_fold_gen.add_argument(
+        "--transmembrane_buried",
+        type=str,
+        default="",
+        help="LigandMPNN: Provide buried residues when using checkpoint_per_residue_label_membrane_mpnn model, A12 A13 A14 B2 B25",
+    )
+    inv_fold_gen.add_argument(
+        "--transmembrane_interface",
+        type=str,
+        default="",
+        help="LigandMPNN: Provide interface residues when using checkpoint_per_residue_label_membrane_mpnn model, A12 A13 A14 B2 B25",
+    )
+
+    inv_fold_gen.add_argument(
+        "--global_transmembrane_label",
+        type=int,
+        default=0,
+        help="LigandMPNN: Provide global label for global_label_membrane_mpnn model. 1 - transmembrane, 0 - soluble",
+    )
+
+    inv_fold_gen.add_argument(
+        "--parse_atoms_with_zero_occupancy",
+        type=int,
+        default=0,
+        help="LigandMPNN: To parse atoms with zero occupancy in the PDB input files. 0 - do not parse, 1 - parse atoms with zero occupancy",
+    )
+
+    inv_fold_gen.add_argument(
+        "--pack_side_chains",
+        type=int,
+        default=0,
+        help="LigandMPNN: 1 - to run side chain packer, 0 - do not run it",
+    )
+
+    inv_fold_gen.add_argument(
+        "--number_of_packs_per_design",
+        type=int,
+        default=4,
+        help="LigandMPNN: Number of independent side chain packing samples to return per design",
+    )
+
+    inv_fold_gen.add_argument(
+        "--sc_num_denoising_steps",
+        type=int,
+        default=3,
+        help="LigandMPNN: Number of denoising/recycling steps to make for side chain packing",
+    )
+
+    inv_fold_gen.add_argument(
+        "--sc_num_samples",
+        type=int,
+        default=16,
+        help="LigandMPNN: Number of samples to draw from a mixture distribution and then take a sample with the highest likelihood.",
+    )
+
+    inv_fold_gen.add_argument(
+        "--repack_everything",
+        type=int,
+        default=0,
+        help="LigandMPNN: 1 - repacks side chains of all residues including the fixed ones; 0 - keeps the side chains fixed for fixed residues",
+    )
+
+    inv_fold_gen.add_argument(
+        "--force_hetatm",
+        type=int,
+        default=0,
+        help="LigandMPNN: To force ligand atoms to be written as HETATM to PDB file after packing.",
+    )
+
+    inv_fold_gen.add_argument(
+        "--packed_suffix",
+        type=str,
+        default="_packed",
+        help="LigandMPNN: Suffix for packed PDB paths",
+    )
+
+    inv_fold_gen.add_argument(
+        "--pack_with_ligand_context",
+        type=int,
+        default=1,
+        help="LigandMPNN: 1-pack side chains using ligand context, 0 - do not use it.",
+    )
 
 def run(args):
     import os
@@ -118,13 +363,16 @@ def run(args):
     import torch
     from Bio import PDB
     from git import Repo
+    from loguru import logger
 
     from trill.utils.esm_utils import ESM_IF1_Wrangle, ESM_IF1
     from trill.utils.lightning_models import ProstT5, Custom3DiDataset
+    from trill.utils.inverse_folding.util import download_ligmpnn_weights
+    from trill.utils.logging import setup_logger
     from .commands_common import cache_dir, get_logger
 
-    logger = get_logger(args)
-
+    ml_logger = get_logger(args)
+    
     if args.model == "ESM-IF1":
         if args.query is None:
             raise Exception("A PDB or CIF file is needed for generating new proteins with ESM-IF1")
@@ -142,7 +390,7 @@ def run(args):
                 fasta.write(f"{row[0]}\n")
     elif args.model == "ProteinMPNN":
         if not os.path.exists((os.path.join(cache_dir, "ProteinMPNN/"))):
-            print("Cloning forked ProteinMPNN")
+            logger.info("Cloning forked ProteinMPNN")
             os.makedirs(os.path.join(cache_dir, "ProteinMPNN/"))
             proteinmpnn = Repo.clone_from("https://github.com/martinez-zacharya/ProteinMPNN",
                                           (os.path.join(cache_dir, "ProteinMPNN", "")))
@@ -152,7 +400,7 @@ def run(args):
         else:
             sys.path.insert(0, (os.path.join(cache_dir, "ProteinMPNN", "")))
         from mpnnrun import run_mpnn
-        print("ProteinMPNN generation starting...")
+        logger.info("ProteinMPNN generation starting...")
         run_mpnn(args)
 
     elif args.model == "ProstT5":
@@ -176,9 +424,9 @@ def run(args):
             for chain in x:
                 chain_id_list.append(chain.id)
         if int(args.GPUs) == 0:
-            trainer = pl.Trainer(enable_checkpointing=False, logger=logger, num_nodes=int(args.nodes))
+            trainer = pl.Trainer(enable_checkpointing=False, logger=ml_logger, num_nodes=int(args.nodes))
         else:
-            trainer = pl.Trainer(enable_checkpointing=False, devices=int(args.GPUs), accelerator="gpu", logger=logger,
+            trainer = pl.Trainer(enable_checkpointing=False, devices=int(args.GPUs), accelerator="gpu", logger=ml_logger,
                                  num_nodes=int(args.nodes))
         with open(os.path.join(args.outdir, f"{args.name}_ProstT5_InvFold.fasta"), "w+") as fasta:
             for i in range(int(args.num_return_sequences)):
@@ -188,3 +436,26 @@ def run(args):
                     fasta.write(f">{args.name}_ProstT5_InvFold_Chain-{chain_id}_{i} \n")
                     fasta.write(f"{seq}\n")
                 fasta.flush()
+
+    elif args.model == 'LigandMPNN':
+        args.loguru = logger
+        if not os.path.exists((os.path.join(cache_dir, "LigandMPNN/"))):
+            logger.info("Cloning forked LigandMPNN")
+            os.makedirs(os.path.join(cache_dir, "LigandMPNN/"))
+            proteinmpnn = Repo.clone_from("https://github.com/martinez-zacharya/LigandMPNN",
+                                          (os.path.join(cache_dir, "LigandMPNN", "")))
+            mpnn_git_root = proteinmpnn.git.rev_parse("--show-toplevel")
+            subprocess.run(("pip", "install", "-e", mpnn_git_root))
+            sys.path.insert(0, (os.path.join(cache_dir, "LigandMPNN", "")))
+        else:
+            sys.path.insert(0, (os.path.join(cache_dir, "LigandMPNN", "")))
+        
+        logger.info("Looking for LigandMPNN model weights...")
+        if not os.path.exists((os.path.join(cache_dir, "LigandMPNN_weights"))):
+            logger.info("Downloading LigandMPNN model weights")
+            download_ligmpnn_weights(cache_dir)
+            logger.info(f"Finished downloading LigandMPNN model weights to {cache_dir}/LigandMPNN_weights")
+        logger.info("Found LigandMPNN model weights!")
+        from lig_mpnn_run import lig_mpnn
+        logger.info("LigandMPNN generation starting...")
+        lig_mpnn(args, cache_dir)
