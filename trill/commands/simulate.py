@@ -1,5 +1,5 @@
 def setup(subparsers):
-    simulate = subparsers.add_parser("simulate", help="Use MD to relax protein structures")
+    simulate = subparsers.add_parser("simulate", help="Use OpenMM to perform molecular dynamics")
 
     simulate.add_argument(
         "receptor",

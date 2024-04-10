@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "trill-proteins"
-version = "1.6.0"
+version = "1.7.0"
 description = "Sandbox for Computational Protein Design"
 authors = ["Zachary Martinez <martinez.zacharya@gmail.com>"]
 readme = "README.md"
@@ -16,6 +16,7 @@ python = "^3.8"
 urllib3 = "1.26.18"
 numpy = "^1.26.3"
 numba = "^0.58.1"
+loguru = "^0.7.2"
 llvmlite = "^0.41.0"
 pytest = "^7.2.0"
 fair-esm = "^2.0.0"

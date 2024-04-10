@@ -52,9 +52,9 @@ def setup(subparsers):
         default=True,
         action="store_false"
     )
-    inv_fold_gen.add_argument("--mpnn_model", type=str, default="v_48_020",
-                              help="ProteinMPNN Noise levels: v_48_002, v_48_010, v_48_020, v_48_030; v_48_010=version with 48 edges "
-                                   "0.10A noise")
+    # inv_fold_gen.add_argument("--mpnn_model", type=str, default="v_48_020",
+    #                           help="ProteinMPNN Noise levels: v_48_002, v_48_010, v_48_020, v_48_030; v_48_010=version with 48 edges "
+    #                                "0.10A noise")
     inv_fold_gen.add_argument("--lig_mpnn_model", type=str, default="",
                               help="LigandMPNN: Soluble, Global_Membrane, Local_Membrane, Side-Chain_Packing")
     inv_fold_gen.add_argument("--lig_mpnn_noise", type=str, default="010",
