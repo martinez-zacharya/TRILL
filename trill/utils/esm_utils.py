@@ -119,6 +119,7 @@ def convert_outputs_to_pdb(outputs):
             residue_index=resid,
             b_factors=outputs["plddt"][i],
             chain_index=outputs["chain_index"][i] if "chain_index" in outputs else None,
+            remark=f"pTM = {outputs['ptm'].item()}, mean pLDDT = {outputs['plddt'].mean()}",
         )
         pdbs.append(to_pdb(pred))
     return pdbs
