@@ -40,8 +40,8 @@ def setup(subparsers):
     simulate.add_argument(
         "--solvent",
         type=str,
-        default="amber14/tip3pfb.xml",
-        help="Solvent model to use, the default is amber14/tip3pfb.xml"
+        default="implicit/hct.xml",
+        help="Solvent model to use, the default is implicit/hct.xml"
     )
     simulate.add_argument(
         "--solvate",
@@ -172,11 +172,6 @@ def run(args):
         fixed_pdb_files = fixer_of_pdbs(args)
         relax_structure(args, fixed_pdb_files)
     else:
-        # # print("Currently, Simulate only supports relaxing a structure! Stay tuned for more MD related features...")
-        # if args.martini_top:
-        #     args.output_traj_dcd = os.path.join(args.outdir, args.output_traj_dcd)
-        #     run_simulation(args)
-        # else:
         fixed_pdb_files = fixer_of_pdbs(args)
 
         args.output_traj_dcd = os.path.join(args.outdir, args.output_traj_dcd)

@@ -97,7 +97,7 @@ def run(args):
     import torch
     from tqdm import tqdm
     from transformers import AutoTokenizer
-
+    from loguru import logger
     from trill.utils.lightning_models import ProtGPT2, ESM_Gibbs, ZymCTRL
     from trill.utils.update_weights import weights_update
 
@@ -133,7 +133,7 @@ def run(args):
 
     elif args.model == "ESM2":
         if int(args.GPUs) >= 1:
-            print(
+            logger.error(
                 "*** Gibbs sampling on GPUs is currently down. For some reason, TRILL doesn't use generate different "
                 "proteins regardless if a finetuned model is passed, but it works correctly on CPU... ***")
             raise RuntimeError

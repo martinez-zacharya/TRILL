@@ -55,16 +55,16 @@ def run(args):
     from trill.utils.esm_utils import parse_and_save_all_predictions
     from trill.utils.lightning_models import ESM, CustomWriter, ProtT5, ProstT5, Ankh
     from trill.utils.update_weights import weights_update
-
+    from loguru import logger
     from .commands_common import get_logger
 
-    logger = get_logger(args)
+    ml_logger = get_logger(args)
 
     if not args.query.endswith((".fasta", ".faa", ".fa")):
         raise Exception(f"Input query file - {args.query} is not a valid file format.\
         File needs to be a protein fasta (.fa, .fasta, .faa)")
     if not args.avg and not args.per_AA:
-        print("You need to select whether you want the average sequence embeddings or the per AA embeddings, or both!")
+        logger.error("You need to select whether you want the average sequence embeddings or the per AA embeddings, or both!")
         raise RuntimeError
     if args.model == "ProtT5-XL":
         model = ProtT5(args)
@@ -72,11 +72,11 @@ def run(args):
         dataloader = torch.utils.data.DataLoader(data, shuffle=False, batch_size=int(args.batch_size), num_workers=0)
         pred_writer = CustomWriter(output_dir=args.outdir, write_interval="epoch")
         if int(args.GPUs) == 0:
-            trainer = pl.Trainer(enable_checkpointing=False, callbacks=[pred_writer], logger=logger,
+            trainer = pl.Trainer(enable_checkpointing=False, callbacks=[pred_writer], logger=ml_logger,
                                  num_nodes=int(args.nodes))
         else:
             trainer = pl.Trainer(enable_checkpointing=False, precision=16, devices=int(args.GPUs),
-                                 callbacks=[pred_writer], accelerator="gpu", logger=logger, num_nodes=int(args.nodes))
+                                 callbacks=[pred_writer], accelerator="gpu", logger=ml_logger, num_nodes=int(args.nodes))
         reps = trainer.predict(model, dataloader)
         cwd_files = os.listdir(args.outdir)
         pt_files = [file for file in cwd_files if "predictions_" in file]
@@ -91,11 +91,11 @@ def run(args):
         dataloader = torch.utils.data.DataLoader(data, shuffle=False, batch_size=int(args.batch_size), num_workers=0)
         pred_writer = CustomWriter(output_dir=args.outdir, write_interval="epoch")
         if int(args.GPUs) == 0:
-            trainer = pl.Trainer(enable_checkpointing=False, callbacks=[pred_writer], logger=logger,
+            trainer = pl.Trainer(enable_checkpointing=False, callbacks=[pred_writer], logger=ml_logger,
                                  num_nodes=int(args.nodes))
         else:
             trainer = pl.Trainer(enable_checkpointing=False, precision=16, devices=int(args.GPUs),
-                                 callbacks=[pred_writer], accelerator="gpu", logger=logger, num_nodes=int(args.nodes))
+                                 callbacks=[pred_writer], accelerator="gpu", logger=ml_logger, num_nodes=int(args.nodes))
 
         reps = trainer.predict(model, dataloader)
         cwd_files = os.listdir(args.outdir)
@@ -111,11 +111,11 @@ def run(args):
                                                  num_workers=int(args.n_workers), persistent_workers=True)
         pred_writer = CustomWriter(output_dir=args.outdir, write_interval="epoch")
         if int(args.GPUs) == 0:
-            trainer = pl.Trainer(enable_checkpointing=False, callbacks=[pred_writer], logger=logger,
+            trainer = pl.Trainer(enable_checkpointing=False, callbacks=[pred_writer], logger=ml_logger,
                                  num_nodes=int(args.nodes))
         else:
             trainer = pl.Trainer(enable_checkpointing=False, devices=int(args.GPUs), callbacks=[pred_writer],
-                                 accelerator="gpu", logger=logger, num_nodes=int(args.nodes))
+                                 accelerator="gpu", logger=ml_logger, num_nodes=int(args.nodes))
 
         reps = trainer.predict(model, dataloader)
         cwd_files = os.listdir(args.outdir)
@@ -132,11 +132,11 @@ def run(args):
                                                  collate_fn=model.alphabet.get_batch_converter())
         pred_writer = CustomWriter(output_dir=args.outdir, write_interval="epoch")
         if int(args.GPUs) == 0:
-            trainer = pl.Trainer(enable_checkpointing=False, callbacks=[pred_writer], logger=logger,
+            trainer = pl.Trainer(enable_checkpointing=False, callbacks=[pred_writer], logger=ml_logger,
                                  num_nodes=int(args.nodes))
         else:
             trainer = pl.Trainer(enable_checkpointing=False, precision=16, devices=int(args.GPUs),
-                                 callbacks=[pred_writer], accelerator="gpu", logger=logger, num_nodes=int(args.nodes))
+                                 callbacks=[pred_writer], accelerator="gpu", logger=ml_logger, num_nodes=int(args.nodes))
         if args.finetuned:
             model = weights_update(model=ESM(eval(model_import_name), 0.0001, args),
                                    checkpoint=torch.load(args.finetuned))

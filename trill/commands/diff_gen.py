@@ -91,12 +91,12 @@ def run(args):
     import requests
     from git import Repo
     from run_inference import run_rfdiff
-
+    from loguru import logger
     from .commands_common import cache_dir
 
     # command = "conda install -c dglteam dgl-cuda11.7 -y -S -q".split(" ")
     # subprocess.run(command, check=True)
-    print("Finding RFDiffusion weights... \n")
+    logger.info("Finding RFDiffusion weights... \n")
     if not os.path.exists((os.path.join(cache_dir, "RFDiffusion_weights"))):
         os.makedirs(os.path.join(cache_dir, "RFDiffusion_weights"))
 
@@ -111,13 +111,13 @@ def run(args):
         )
         for url in urls:
             if not os.path.isfile(os.path.join(cache_dir, "RFDiffusion_weights", url.split('/')[-1])):
-                print(f"Fetching {url}...")
+                logger.info(f"Fetching {url}...")
                 response = requests.get(url)
                 with open(os.path.join(cache_dir, "RFDiffusion_weights", url.split('/')[-1]), "wb") as fp:
                     fp.write(response.content)
 
     if not os.path.exists(os.path.join(cache_dir, "RFDiffusion")):
-        print("Cloning forked RFDiffusion")
+        logger.info("Cloning forked RFDiffusion")
         os.makedirs(os.path.join(cache_dir, "RFDiffusion"))
         rfdiff = Repo.clone_from("https://github.com/martinez-zacharya/RFDiffusion",
                                  os.path.join(cache_dir, "RFDiffusion", ""))

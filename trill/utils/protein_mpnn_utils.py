@@ -1,5 +1,5 @@
 from __future__ import print_function
-
+from loguru import logger
 import itertools
 import json
 import time
@@ -492,7 +492,7 @@ class StructureDataset():
                         discard_count['too_long'] += 1
                 else:
                     if verbose:
-                        print(name, bad_chars, entry['seq'])
+                        logger.info(name, bad_chars, entry['seq'])
                     discard_count['bad_chars'] += 1
 
                 # Truncate early
@@ -501,9 +501,9 @@ class StructureDataset():
 
                 if verbose and (i + 1) % 1000 == 0:
                     elapsed = time.time() - start
-                    print('{} entries ({} loaded) in {:.1f} s'.format(len(self.data), i+1, elapsed))
+                    logger.info('{} entries ({} loaded) in {:.1f} s'.format(len(self.data), i+1, elapsed))
             if verbose:
-                print('discarded', discard_count)
+                logger.warning('discarded', discard_count)
     def __len__(self):
         return len(self.data)
 

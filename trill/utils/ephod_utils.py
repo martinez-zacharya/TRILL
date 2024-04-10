@@ -19,6 +19,7 @@ import pytorch_lightning as pl
 import requests
 import torch
 import torch.nn as nn
+from loguru import logger
 from torch.utils.data import Dataset
 
 
@@ -71,14 +72,14 @@ def download_models(get_from='zenodo'):
         # Download from Google drive
         glink = "https://drive.google.com/drive/folders/138cnx4hFrzNODGK6A_yd9wo7WupKpSjI?usp=share_link/"
         cmd = f"gdown --folder {glink}"
-        print('Downloading EpHod models from Google drive with gdown\n')
+        logger.info('Downloading EpHod models from Google drive with gdown\n')
         _ = subprocess.call(cmd, shell=True) # Download model from google drive 
 
     elif get_from == 'zenodo':
         
         # Download from Zenodo
         zlink = "https://zenodo.org/record/8011249/files/saved_models.tar.gz?download=1"
-        print('Downloading EpHod models from Zenodo with requests\n')
+        logger.info('Downloading EpHod models from Zenodo with requests\n')
         response = requests.get(zlink, stream=True)
         if response.status_code == 200:
             with requests.get(zlink, stream=True) as r:
@@ -88,7 +89,7 @@ def download_models(get_from='zenodo'):
                         if chunk:
                             f.write(chunk)
         else:
-            print(f"Request failed with status code {response.status_code}")
+            logger.warning(f"Request failed with status code {response.status_code}")
 
     
     else: 
@@ -105,8 +106,8 @@ def download_models(get_from='zenodo'):
     
     save_path = os.path.join(this_dir, 'saved_models') 
     cmd = f"mv -f ./saved_models {save_path}/"
-    print(cmd)
-    print(f'\nMoving downloaded models to {save_path}')
+    logger.info(cmd)
+    logger.info(f'\nMoving downloaded models to {save_path}')
     _ = subprocess.call(cmd, shell=True)
     error_msg = "RLAT model failed to download!"
     assert os.path.exists(f"{save_path}/RLAT/RLAT.pt"), error_msg

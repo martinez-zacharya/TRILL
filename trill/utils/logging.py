@@ -23,7 +23,7 @@ def get_message_color(level):
 def format_record(record):
     level = record["level"].name
     message_color = get_message_color(level)
-    return f"{prefix_color}(TRILL) {record['time']:YYYY-MM-DD HH:mm:ss} | {message_color}{record['level']} | {record['message']}{reset_color}\n"
+    return f"{prefix_color}(TRILL) {record['time']:YYYY-MM-DD HH:mm:ss} | {message_color}{record['level']} {reset_color}{prefix_color}| {message_color}{record['message']}{reset_color}\n"
 
 def setup_logger(file_path):
     logger.remove()  # Remove default handlers

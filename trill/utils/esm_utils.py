@@ -11,6 +11,7 @@ import pandas as pd
 import torch
 from esm.constants import proteinseq_toks
 from tqdm import tqdm
+from loguru import logger
 from transformers.models.esm.openfold_utils.feats import atom14_to_atom37
 from transformers.models.esm.openfold_utils.protein import to_pdb, Protein as OFProtein
 
@@ -87,7 +88,7 @@ def ESM_IF1(data, genIters, temp, GPUs):
                         model, alphabet, coords_4scoring, chain, sampled_seq)
 
                     except ValueError:
-                        print(f'{sampled_seq} could not be scored.')
+                        logger.warning(f'{sampled_seq} could not be scored.')
                         ll = 'NA'
                 sampled_seqs.append(tuple([sampled_seq, f'{chain}_{ll}']))
     sample_df = pd.DataFrame(sampled_seqs)

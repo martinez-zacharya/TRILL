@@ -1,7 +1,7 @@
 def setup(subparsers):
     classify = subparsers.add_parser(
         "regress",
-        help="Classify proteins using either pretrained classifiers or train/test your own.")
+        help="Train you own regressors on input protein sequences and some sort of score.")
 
     classify.add_argument(
         "regressor",

@@ -5,6 +5,7 @@ import numpy as np
 import pandas as pd
 import requests
 from tqdm import tqdm
+from loguru import logger
 
 dataset_ids = {
     'UniProtKB': 'uniprot_sprot',
@@ -36,7 +37,7 @@ def convert_embeddings_to_csv(h5_file_path, csv_file_path):
 
     df = df[[col for col in df if col != 'Label'] + ['Label']]
     df.to_csv(csv_file_path, index=False)
-    print(f'CSV file saved to {csv_file_path}')
+    logger.info(f'CSV file saved to {csv_file_path}')
 
 def download_embeddings(args):
     dataset_id = dataset_ids[args.uniprotDB]
@@ -68,8 +69,8 @@ def download_embeddings(args):
     progress_bar.close()
     
     if file_size != 0 and progress_bar.n != file_size:
-        print("ERROR, something went wrong")
+        logger.error("ERROR, something went wrong")
     
-    print(f'Embeddings file downloaded to {save_path}')
+    logger.info(f'Embeddings file downloaded to {save_path}')
     return save_path
 

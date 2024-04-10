@@ -99,14 +99,14 @@ def run(args):
     from pytorch_lightning.callbacks import ModelCheckpoint
     from pytorch_lightning.utilities.deepspeed import convert_zero_checkpoint_to_fp32_state_dict
     from transformers import AutoTokenizer
-
+    from loguru import logger
     from trill.utils.esm_utils import premasked_FastaBatchedDataset
     from trill.utils.lightning_models import ESM, ProtGPT2, ZymCTRL
     from trill.utils.protgpt2_utils import ProtGPT2_wrangle
     from trill.utils.update_weights import weights_update
     from .commands_common import get_logger, get_profiler
 
-    logger = get_logger(args)
+    ml_logger = get_logger(args)
     profiler = get_profiler(args)
 
     if not args.pre_masked_fasta:
@@ -123,22 +123,22 @@ def run(args):
             if args.save_on_epoch:
                 checkpoint_callback = ModelCheckpoint(every_n_epochs=1, save_top_k=-1)
                 if int(args.GPUs) == 0:
-                    trainer = pl.Trainer(profiler=profiler, max_epochs=int(args.epochs), logger=logger,
+                    trainer = pl.Trainer(profiler=profiler, max_epochs=int(args.epochs), logger=ml_logger,
                                          num_nodes=int(args.nodes), callbacks=(checkpoint_callback,),
                                          default_root_dir=f"{os.path.join(args.outdir, args.name)}_ckpt")
                 else:
                     trainer = pl.Trainer(devices=int(args.GPUs), profiler=profiler, accelerator="gpu",
-                                         max_epochs=int(args.epochs), logger=logger, num_nodes=int(args.nodes),
+                                         max_epochs=int(args.epochs), logger=ml_logger, num_nodes=int(args.nodes),
                                          precision=16, strategy=args.strategy, callbacks=(checkpoint_callback,),
                                          default_root_dir=f"{os.path.join(args.outdir, args.name)}_ckpt")
             else:
                 if int(args.GPUs) == 0:
-                    trainer = pl.Trainer(profiler=profiler, max_epochs=int(args.epochs), logger=logger,
+                    trainer = pl.Trainer(profiler=profiler, max_epochs=int(args.epochs), logger=ml_logger,
                                          num_nodes=int(args.nodes), enable_checkpointing=False)
                 else:
                     trainer = pl.Trainer(devices=int(args.GPUs), profiler=profiler, accelerator="gpu",
                                          default_root_dir=f"{os.path.join(args.outdir, args.name)}_ckpt",
-                                         max_epochs=int(args.epochs), logger=logger, num_nodes=int(args.nodes),
+                                         max_epochs=int(args.epochs), logger=ml_logger, num_nodes=int(args.nodes),
                                          precision=16, strategy=args.strategy, enable_checkpointing=False)
             trainer.fit(model=model, train_dataloaders=dataloader)
             if "deepspeed" in str(args.strategy):
@@ -151,7 +151,7 @@ def run(args):
                 try:
                     convert_zero_checkpoint_to_fp32_state_dict(output_path, f"{output_path[0:-3]}_fp32.pt")
                 except Exception as e:
-                    print(
+                    logger.info(
                         f"Exception {e} has occurred on attempted save of your deepspeed trained model. If this has to "
                         f"do with CPU RAM, please try "
                         f"pytorch_lightning.utilities.deepspeedconvert_zero_checkpoint_to_fp32_state_dict("
@@ -170,22 +170,22 @@ def run(args):
             if args.save_on_epoch:
                 checkpoint_callback = ModelCheckpoint(every_n_epochs=1, save_top_k=-1)
                 if int(args.GPUs) == 0:
-                    trainer = pl.Trainer(profiler=profiler, max_epochs=int(args.epochs), logger=logger,
+                    trainer = pl.Trainer(profiler=profiler, max_epochs=int(args.epochs), logger=ml_logger,
                                          num_nodes=int(args.nodes), callbacks=(checkpoint_callback,),
                                          default_root_dir=f"{os.path.join(args.outdir, args.name)}_ckpt")
                 else:
                     trainer = pl.Trainer(devices=int(args.GPUs), profiler=profiler, accelerator="gpu",
-                                         max_epochs=int(args.epochs), logger=logger, num_nodes=int(args.nodes),
+                                         max_epochs=int(args.epochs), logger=ml_logger, num_nodes=int(args.nodes),
                                          precision=16, strategy=args.strategy, callbacks=(checkpoint_callback,),
                                          default_root_dir=f"{os.path.join(args.outdir, args.name)}_ckpt")
             else:
                 if int(args.GPUs) == 0:
-                    trainer = pl.Trainer(profiler=profiler, max_epochs=int(args.epochs), logger=logger,
+                    trainer = pl.Trainer(profiler=profiler, max_epochs=int(args.epochs), logger=ml_logger,
                                          num_nodes=int(args.nodes), enable_checkpointing=False)
                 else:
                     trainer = pl.Trainer(devices=int(args.GPUs), profiler=profiler, accelerator="gpu",
                                          default_root_dir=f"{os.path.join(args.outdir, args.name)}_ckpt",
-                                         max_epochs=int(args.epochs), logger=logger, num_nodes=int(args.nodes),
+                                         max_epochs=int(args.epochs), logger=ml_logger, num_nodes=int(args.nodes),
                                          precision=16, strategy=args.strategy, enable_checkpointing=False)
             trainer.fit(model=model, train_dataloaders=dataloader)
             if "deepspeed" in str(args.strategy):
@@ -198,7 +198,7 @@ def run(args):
                 try:
                     convert_zero_checkpoint_to_fp32_state_dict(output_path, f"{output_path[0:-3]}_fp32.pt")
                 except Exception as e:
-                    print(
+                    logger.error(
                         f"Exception {e} has occured on attempted save of your deepspeed trained model. If this has to"
                         f"do with CPU RAM, please try "
                         f"pytorch_lightning.utilities.deepspeedconvert_zero_checkpoint_to_fp32_state_dict("
@@ -228,19 +228,19 @@ def run(args):
                     trainer = pl.Trainer(devices=int(args.GPUs), profiler=profiler, callbacks=(checkpoint_callback,),
                                          default_root_dir=f"{os.path.join(args.outdir, args.name)}_ckpt",
                                          accelerator="gpu", strategy=args.strategy, max_epochs=int(args.epochs),
-                                         logger=logger, num_nodes=int(args.nodes), precision=16)
+                                         logger=ml_logger, num_nodes=int(args.nodes), precision=16)
                 else:
                     trainer = pl.Trainer(devices=int(args.GPUs), profiler=profiler,
                                          default_root_dir=f"{os.path.join(args.outdir, args.name)}_ckpt",
                                          accelerator="gpu", strategy=args.strategy, max_epochs=int(args.epochs),
-                                         logger=logger, num_nodes=int(args.nodes), precision=16,
+                                         logger=ml_logger, num_nodes=int(args.nodes), precision=16,
                                          enable_checkpointing=False)
                 trainer.fit(model=model, train_dataloaders=dataloader)
                 trainer.save_checkpoint(output_path)
                 try:
                     convert_zero_checkpoint_to_fp32_state_dict(output_path, f"{output_path[0:-3]}_fp32.pt")
                 except Exception as e:
-                    print(
+                    logger.info(
                         f"Exception {e} has occurred on attempted save of your deepspeed trained model. If this has to"
                         f"do with CPU RAM, please try "
                         f"pytorch_lightning.utilities.deepspeedconvert_zero_checkpoint_to_fp32_state_dict("
@@ -252,20 +252,20 @@ def run(args):
                         trainer = pl.Trainer(profiler=profiler, max_epochs=int(args.epochs),
                                              callbacks=(checkpoint_callback,),
                                              default_root_dir=f"{os.path.join(args.outdir, args.name)}_ckpt",
-                                             logger=logger, num_nodes=int(args.nodes))
+                                             logger=ml_logger, num_nodes=int(args.nodes))
                     else:
                         trainer = pl.Trainer(devices=int(args.GPUs), profiler=profiler, accelerator="gpu",
                                              callbacks=(checkpoint_callback,),
                                              default_root_dir=f"{os.path.join(args.outdir, args.name)}_ckpt",
-                                             strategy=args.strategy, max_epochs=int(args.epochs), logger=logger,
+                                             strategy=args.strategy, max_epochs=int(args.epochs), logger=ml_logger,
                                              num_nodes=int(args.nodes), precision=16)
                 else:
                     if int(args.GPUs) == 0:
                         trainer = pl.Trainer(profiler=profiler, accelerator="cpu", max_epochs=int(args.epochs),
-                                             logger=logger, num_nodes=int(args.nodes), enable_checkpointing=False)
+                                             logger=ml_logger, num_nodes=int(args.nodes), enable_checkpointing=False)
                     else:
                         trainer = pl.Trainer(devices=int(args.GPUs), profiler=profiler, accelerator="gpu",
-                                             strategy=args.strategy, max_epochs=int(args.epochs), logger=logger,
+                                             strategy=args.strategy, max_epochs=int(args.epochs), logger=ml_logger,
                                              num_nodes=int(args.nodes), precision=16, enable_checkpointing=False)
                 trainer.fit(model=model, train_dataloaders=dataloader)
                 trainer.save_checkpoint(os.path.join(args.outdir, f"{args.name}_{args.model}_{args.epochs}.pt"))
@@ -322,19 +322,19 @@ def run(args):
                 checkpoint_callback = ModelCheckpoint(every_n_epochs=1, save_top_k=-1)
                 trainer = pl.Trainer(devices=int(args.GPUs), profiler=profiler, callbacks=(checkpoint_callback,),
                                      default_root_dir=f"{os.path.join(args.outdir, args.name)}_ckpt", accelerator="gpu",
-                                     strategy=args.strategy, max_epochs=int(args.epochs), logger=logger,
+                                     strategy=args.strategy, max_epochs=int(args.epochs), logger=ml_logger,
                                      num_nodes=int(args.nodes), precision=16)
             else:
                 trainer = pl.Trainer(devices=int(args.GPUs), profiler=profiler,
                                      default_root_dir=f"{os.path.join(args.outdir, args.name)}_ckpt", accelerator="gpu",
-                                     strategy=args.strategy, max_epochs=int(args.epochs), logger=logger,
+                                     strategy=args.strategy, max_epochs=int(args.epochs), logger=ml_logger,
                                      num_nodes=int(args.nodes), precision=16, enable_checkpointing=False)
             trainer.fit(model=model, train_dataloaders=dataloader)
             trainer.save_checkpoint(output_path)
             try:
                 convert_zero_checkpoint_to_fp32_state_dict(output_path, f"{output_path[0:-3]}_fp32.pt")
             except Exception as e:
-                print(
+                logger.info(
                     f"Exception {e} has occurred on attempted save of your deepspeed trained model. If this has to do "
                     f"with CPU RAM, please try "
                     f"pytorch_lightning.utilities.deepspeedconvert_zero_checkpoint_to_fp32_state_dict("
@@ -345,21 +345,21 @@ def run(args):
                 if int(args.GPUs) == 0:
                     trainer = pl.Trainer(profiler=profiler, max_epochs=int(args.epochs),
                                          callbacks=(checkpoint_callback,),
-                                         default_root_dir=f"{os.path.join(args.outdir, args.name)}_ckpt", logger=logger,
+                                         default_root_dir=f"{os.path.join(args.outdir, args.name)}_ckpt", logger=ml_logger,
                                          num_nodes=int(args.nodes))
                 else:
                     trainer = pl.Trainer(devices=int(args.GPUs), profiler=profiler, accelerator="gpu",
                                          callbacks=(checkpoint_callback,),
                                          default_root_dir=f"{os.path.join(args.outdir, args.name)}_ckpt",
-                                         strategy=args.strategy, max_epochs=int(args.epochs), logger=logger,
+                                         strategy=args.strategy, max_epochs=int(args.epochs), logger=ml_logger,
                                          num_nodes=int(args.nodes), precision=16)
             else:
                 if int(args.GPUs) == 0:
                     trainer = pl.Trainer(profiler=profiler, accelerator="cpu", max_epochs=int(args.epochs),
-                                         logger=logger, num_nodes=int(args.nodes), enable_checkpointing=False)
+                                         logger=ml_logger, num_nodes=int(args.nodes), enable_checkpointing=False)
                 else:
                     trainer = pl.Trainer(devices=int(args.GPUs), profiler=profiler, accelerator="gpu",
-                                         strategy=args.strategy, max_epochs=int(args.epochs), logger=logger,
+                                         strategy=args.strategy, max_epochs=int(args.epochs), logger=ml_logger,
                                          num_nodes=int(args.nodes), precision=16, enable_checkpointing=False)
             trainer.fit(model=model, train_dataloaders=dataloader)
             trainer.save_checkpoint(os.path.join(args.outdir, f"{args.name}_{args.model}_{args.epochs}.pt"))

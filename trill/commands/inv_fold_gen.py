@@ -3,7 +3,7 @@ def setup(subparsers):
     inv_fold_gen.add_argument(
         "model",
         help="Select which model to generate proteins using inverse folding.",
-        choices=("ESM-IF1", "ProteinMPNN", "ProstT5", "LigandMPNN",)
+        choices=("ESM-IF1", "ProstT5", "LigandMPNN",)
     )
 
     inv_fold_gen.add_argument(
@@ -59,58 +59,58 @@ def setup(subparsers):
                               help="LigandMPNN: Soluble, Global_Membrane, Local_Membrane, Side-Chain_Packing")
     inv_fold_gen.add_argument("--lig_mpnn_noise", type=str, default="010",
                               help="LigandMPNN Noise levels: 002, 005, 010, 020, 030; 010 = .10A noise. Note that 002 is only available for Soluble and Side-Chain_packing models")
-    inv_fold_gen.add_argument("--save_score", type=int, default=0,
-                              help="ProteinMPNN: 0 for False, 1 for True; save score=-log_prob to npy files")
-    inv_fold_gen.add_argument("--save_probs", type=int, default=0,
-                              help="ProteinMPNN: 0 for False, 1 for True; save MPNN predicted probabilities per "
-                                   "position")
-    inv_fold_gen.add_argument("--score_only", type=int, default=0,
-                              help="ProteinMPNN: 0 for False, 1 for True; score input backbone-sequence pairs")
-    inv_fold_gen.add_argument("--path_to_fasta", type=str, default="",
-                              help="ProteinMPNN: score provided input sequence in a fasta format; e.g. GGGGGG/PPPPS/WWW "
-                                   "for chains A, B, C sorted alphabetically and separated by /")
-    inv_fold_gen.add_argument("--conditional_probs_only", type=int, default=0,
-                              help="ProteinMPNN: 0 for False, 1 for True; output conditional probabilities p(s_i given "
-                                   "the rest of the sequence and backbone)")
-    inv_fold_gen.add_argument("--conditional_probs_only_backbone", type=int, default=0,
-                              help="ProteinMPNN: 0 for False, 1 for True; if true output conditional probabilities p(s_i "
-                                   "given backbone)")
-    inv_fold_gen.add_argument("--unconditional_probs_only", type=int, default=0,
-                              help="ProteinMPNN: 0 for False, 1 for True; output unconditional probabilities p(s_i given "
-                                   "backbone) in one forward pass")
-    inv_fold_gen.add_argument("--backbone_noise", type=float, default=0.00,
-                              help="ProteinMPNN: Standard deviation of Gaussian noise to add to backbone atoms")
-    inv_fold_gen.add_argument("--batch_size", type=int, default=1,
-                              help="ProteinMPNN: Batch size; can set higher for titan, quadro GPUs, reduce this if "
-                                   "running out of GPU memory")
-    inv_fold_gen.add_argument("--pdb_path_chains", type=str, default="",
-                              help="ProteinMPNN/LigandMPNN: Define which chains need to be designed for a single PDB ")
-    inv_fold_gen.add_argument("--chain_id_jsonl", type=str, default="",
-                              help="ProteinMPNN: Path to a dictionary specifying which chains need to be designed and "
-                                   "which ones are fixed, if not specified all chains will be designed.")
-    inv_fold_gen.add_argument("--fixed_positions_jsonl", type=str, default="",
-                              help="ProteinMPNN: Path to a dictionary with fixed positions")
-    inv_fold_gen.add_argument("--omit_AAs", type=list, default="X",
-                              help="ProteinMPNN: Specify which amino acids should be omitted in the generated sequence, "
-                                   "e.g. \"AC\" would omit alanine and cysteine.")
-    inv_fold_gen.add_argument("--bias_AA_jsonl", type=str, default="",
-                              help="ProteinMPNN/LigandMPNN: Path to a dictionary which specifies AA composition bias if needed, "
-                                   "e.g. {A: -1.1, F: 0.7} would make A less likely and F more likely.")
-    inv_fold_gen.add_argument("--bias_by_res_jsonl", default="",
-                              help="ProteinMPNN: Path to dictionary with per position bias.")
-    inv_fold_gen.add_argument("--omit_AA_jsonl", type=str, default="",
-                              help="ProteinMPNN: Path to a dictionary which specifies which amino acids need to be omitted "
-                                   "from design at specific chain indices")
-    inv_fold_gen.add_argument("--pssm_jsonl", type=str, default="", help="ProteinMPNN: Path to a dictionary with pssm")
-    inv_fold_gen.add_argument("--pssm_multi", type=float, default=0.0,
-                              help="ProteinMPNN: A value between [0.0, 1.0], 0.0 means do not use pssm, 1.0 ignore MPNN "
-                                   "predictions")
-    inv_fold_gen.add_argument("--pssm_threshold", type=float, default=0.0,
-                              help="ProteinMPNN: A value between -inf + inf to restrict per position AAs")
-    inv_fold_gen.add_argument("--pssm_log_odds_flag", type=int, default=0, help="ProteinMPNN: 0 for False, 1 for True")
-    inv_fold_gen.add_argument("--pssm_bias_flag", type=int, default=0, help="ProteinMPNN: 0 for False, 1 for True")
-    inv_fold_gen.add_argument("--tied_positions_jsonl", type=str, default="",
-                              help="ProteinMPNN: Path to a dictionary with tied positions")
+    # inv_fold_gen.add_argument("--save_score", type=int, default=0,
+    #                           help="ProteinMPNN: 0 for False, 1 for True; save score=-log_prob to npy files")
+    # inv_fold_gen.add_argument("--save_probs", type=int, default=0,
+    #                           help="ProteinMPNN: 0 for False, 1 for True; save MPNN predicted probabilities per "
+    #                                "position")
+    # inv_fold_gen.add_argument("--score_only", type=int, default=0,
+    #                           help="ProteinMPNN: 0 for False, 1 for True; score input backbone-sequence pairs")
+    # inv_fold_gen.add_argument("--path_to_fasta", type=str, default="",
+    #                           help="ProteinMPNN: score provided input sequence in a fasta format; e.g. GGGGGG/PPPPS/WWW "
+    #                                "for chains A, B, C sorted alphabetically and separated by /")
+    # inv_fold_gen.add_argument("--conditional_probs_only", type=int, default=0,
+    #                           help="ProteinMPNN: 0 for False, 1 for True; output conditional probabilities p(s_i given "
+    #                                "the rest of the sequence and backbone)")
+    # inv_fold_gen.add_argument("--conditional_probs_only_backbone", type=int, default=0,
+    #                           help="ProteinMPNN: 0 for False, 1 for True; if true output conditional probabilities p(s_i "
+    #                                "given backbone)")
+    # inv_fold_gen.add_argument("--unconditional_probs_only", type=int, default=0,
+    #                           help="ProteinMPNN: 0 for False, 1 for True; output unconditional probabilities p(s_i given "
+    #                                "backbone) in one forward pass")
+    # inv_fold_gen.add_argument("--backbone_noise", type=float, default=0.00,
+    #                           help="ProteinMPNN: Standard deviation of Gaussian noise to add to backbone atoms")
+    # inv_fold_gen.add_argument("--batch_size", type=int, default=1,
+    #                           help="ProteinMPNN: Batch size; can set higher for titan, quadro GPUs, reduce this if "
+    #                                "running out of GPU memory")
+    # inv_fold_gen.add_argument("--pdb_path_chains", type=str, default="",
+    #                           help="ProteinMPNN/LigandMPNN: Define which chains need to be designed for a single PDB ")
+    # inv_fold_gen.add_argument("--chain_id_jsonl", type=str, default="",
+    #                           help="ProteinMPNN: Path to a dictionary specifying which chains need to be designed and "
+    #                                "which ones are fixed, if not specified all chains will be designed.")
+    # inv_fold_gen.add_argument("--fixed_positions_jsonl", type=str, default="",
+    #                           help="ProteinMPNN: Path to a dictionary with fixed positions")
+    # inv_fold_gen.add_argument("--omit_AAs", type=list, default="X",
+    #                           help="ProteinMPNN: Specify which amino acids should be omitted in the generated sequence, "
+    #                                "e.g. \"AC\" would omit alanine and cysteine.")
+    # inv_fold_gen.add_argument("--bias_AA_jsonl", type=str, default="",
+    #                           help="ProteinMPNN/LigandMPNN: Path to a dictionary which specifies AA composition bias if needed, "
+    #                                "e.g. {A: -1.1, F: 0.7} would make A less likely and F more likely.")
+    # inv_fold_gen.add_argument("--bias_by_res_jsonl", default="",
+    #                           help="ProteinMPNN: Path to dictionary with per position bias.")
+    # inv_fold_gen.add_argument("--omit_AA_jsonl", type=str, default="",
+    #                           help="ProteinMPNN: Path to a dictionary which specifies which amino acids need to be omitted "
+    #                                "from design at specific chain indices")
+    # inv_fold_gen.add_argument("--pssm_jsonl", type=str, default="", help="ProteinMPNN: Path to a dictionary with pssm")
+    # inv_fold_gen.add_argument("--pssm_multi", type=float, default=0.0,
+    #                           help="ProteinMPNN: A value between [0.0, 1.0], 0.0 means do not use pssm, 1.0 ignore MPNN "
+    #                                "predictions")
+    # inv_fold_gen.add_argument("--pssm_threshold", type=float, default=0.0,
+    #                           help="ProteinMPNN: A value between -inf + inf to restrict per position AAs")
+    # inv_fold_gen.add_argument("--pssm_log_odds_flag", type=int, default=0, help="ProteinMPNN: 0 for False, 1 for True")
+    # inv_fold_gen.add_argument("--pssm_bias_flag", type=int, default=0, help="ProteinMPNN: 0 for False, 1 for True")
+    # inv_fold_gen.add_argument("--tied_positions_jsonl", type=str, default="",
+    #                           help="ProteinMPNN: Path to a dictionary with tied positions")
 
     inv_fold_gen.add_argument(
         "--fasta_seq_separation",
@@ -172,12 +172,12 @@ def setup(subparsers):
         help="LigandMPNN: Path to json mapping of bias {'pdb_path': {'A12': {'G': -0.3, 'C': -2.0, 'H': 0.8}, 'A13': {'G': -1.3}}}",
     )
 
-    # inv_fold_gen.add_argument(
-    #     "--omit_AA_per_residue",
-    #     type=str,
-    #     default="",
-    #     help="LigandMPNN: Path to json mapping of bias {'A12': 'APQ', 'A13': 'QST'}",
-    # )
+    inv_fold_gen.add_argument(
+        "--omit_AA_per_residue",
+        type=str,
+        default="",
+        help="LigandMPNN: Path to json mapping of bias {'A12': 'APQ', 'A13': 'QST'}",
+    )
     inv_fold_gen.add_argument(
         "--omit_AA_per_residue_multi",
         type=str,
@@ -388,20 +388,20 @@ def run(args):
             for ix, row in sample_df.iterrows():
                 fasta.write(f">{args.name}_ESM-IF1_chain-{row[1]} \n")
                 fasta.write(f"{row[0]}\n")
-    elif args.model == "ProteinMPNN":
-        if not os.path.exists((os.path.join(cache_dir, "ProteinMPNN/"))):
-            logger.info("Cloning forked ProteinMPNN")
-            os.makedirs(os.path.join(cache_dir, "ProteinMPNN/"))
-            proteinmpnn = Repo.clone_from("https://github.com/martinez-zacharya/ProteinMPNN",
-                                          (os.path.join(cache_dir, "ProteinMPNN", "")))
-            mpnn_git_root = proteinmpnn.git.rev_parse("--show-toplevel")
-            subprocess.run(("pip", "install", "-e", mpnn_git_root))
-            sys.path.insert(0, (os.path.join(cache_dir, "ProteinMPNN", "")))
-        else:
-            sys.path.insert(0, (os.path.join(cache_dir, "ProteinMPNN", "")))
-        from mpnnrun import run_mpnn
-        logger.info("ProteinMPNN generation starting...")
-        run_mpnn(args)
+    # elif args.model == "ProteinMPNN":
+    #     if not os.path.exists((os.path.join(cache_dir, "ProteinMPNN/"))):
+    #         logger.info("Cloning forked ProteinMPNN")
+    #         os.makedirs(os.path.join(cache_dir, "ProteinMPNN/"))
+    #         proteinmpnn = Repo.clone_from("https://github.com/martinez-zacharya/ProteinMPNN",
+    #                                       (os.path.join(cache_dir, "ProteinMPNN", "")))
+    #         mpnn_git_root = proteinmpnn.git.rev_parse("--show-toplevel")
+    #         subprocess.run(("pip", "install", "-e", mpnn_git_root))
+    #         sys.path.insert(0, (os.path.join(cache_dir, "ProteinMPNN", "")))
+    #     else:
+    #         sys.path.insert(0, (os.path.join(cache_dir, "ProteinMPNN", "")))
+    #     from mpnnrun import run_mpnn
+    #     logger.info("ProteinMPNN generation starting...")
+    #     run_mpnn(args)
 
     elif args.model == "ProstT5":
         model = ProstT5(args)

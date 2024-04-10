@@ -50,13 +50,13 @@ def run(args):
     import torch
     from tqdm import tqdm
     from transformers import AutoTokenizer, EsmForProteinFolding
-
+    from loguru import logger
     from trill.utils.esm_utils import convert_outputs_to_pdb
     from trill.utils.lightning_models import CustomWriter, ProstT5
-    from trill.utils.rosettafold_aa import rfaa_setup
+    # from trill.utils.rosettafold_aa import rfaa_setup
     from .commands_common import cache_dir, get_logger
 
-    logger = get_logger(args)
+    ml_logger = get_logger(args)
 
     if args.model == "ESMFold":
         data = esm.data.FastaBatchedDataset.from_file(args.query)
@@ -134,11 +134,11 @@ def run(args):
         dataloader = torch.utils.data.DataLoader(data, shuffle=False, batch_size=int(args.batch_size), num_workers=0)
         pred_writer = CustomWriter(output_dir=args.outdir, write_interval="epoch")
         if int(args.GPUs) == 0:
-            trainer = pl.Trainer(enable_checkpointing=False, callbacks=(pred_writer,), logger=logger,
+            trainer = pl.Trainer(enable_checkpointing=False, callbacks=(pred_writer,), logger=ml_logger,
                                  num_nodes=int(args.nodes))
         else:
             trainer = pl.Trainer(enable_checkpointing=False, devices=int(args.GPUs), callbacks=(pred_writer,),
-                                 accelerator="gpu", logger=logger, num_nodes=int(args.nodes))
+                                 accelerator="gpu", logger=ml_logger, num_nodes=int(args.nodes))
 
         reps = trainer.predict(model, dataloader)
         cwd_files = os.listdir(args.outdir)
@@ -174,5 +174,5 @@ def run(args):
         for file in pt_files:
             os.remove(os.path.join(args.outdir, file))
 
-    elif args.model == "RFAA":
-        rfaa_setup(args, cache_dir)
+    # elif args.model == "RFAA":
+    #     rfaa_setup(args, cache_dir)

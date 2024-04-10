@@ -154,13 +154,13 @@ def run(args):
     import torch
     from esm.inverse_folding.util import load_coords
     from git import Repo
-
+    from loguru import logger
     from trill.utils.dock_utils import perform_docking, write_docking_results_to_file
     from trill.utils.esm_utils import parse_and_save_all_predictions
     from trill.utils.lightning_models import ESM, CustomWriter
     from .commands_common import cache_dir, get_logger
 
-    logger = get_logger(args)
+    ml_logger = get_logger(args)
 
     ligands = []
     if isinstance(args.ligand, list) and len(args.ligand) > 1:
@@ -187,7 +187,7 @@ def run(args):
         write_docking_results_to_file(docking_results, args, protein_name, args.algorithm)
     elif args.algorithm == "LightDock":
         perform_docking(args, ligands)
-        print(f"LightDock run complete! Output files are in {args.outdir}")
+        logger.info(f"LightDock run complete! Output files are in {args.outdir}")
     elif args.algorithm == "GeoDock":
         try:
             pkg_resources.get_distribution("geodock")
@@ -230,11 +230,11 @@ def run(args):
                                              collate_fn=model.alphabet.get_batch_converter())
         pred_writer = CustomWriter(output_dir=args.outdir, write_interval="epoch")
         if int(args.GPUs) == 0:
-            trainer = pl.Trainer(enable_checkpointing=False, callbacks=[pred_writer], logger=logger,
+            trainer = pl.Trainer(enable_checkpointing=False, callbacks=[pred_writer], logger=ml_logger,
                                  num_nodes=int(args.nodes))
         else:
             trainer = pl.Trainer(enable_checkpointing=False, precision=16, devices=int(args.GPUs),
-                                 callbacks=[pred_writer], accelerator="gpu", logger=logger, num_nodes=int(args.nodes))
+                                 callbacks=[pred_writer], accelerator="gpu", logger=ml_logger, num_nodes=int(args.nodes))
 
         trainer.predict(model, loader)
         parse_and_save_all_predictions(args)
@@ -256,7 +256,7 @@ def run(args):
 
     elif args.algorithm == "DiffDock":
         if not os.path.exists(os.path.join(cache_dir, "DiffDock")):
-            print("Cloning forked DiffDock")
+            logger.info("Cloning forked DiffDock")
             os.makedirs(os.path.join(cache_dir, "DiffDock"))
             diffdock = Repo.clone_from("https://github.com/martinez-zacharya/DiffDock",
                                        os.path.join(cache_dir, "DiffDock"))

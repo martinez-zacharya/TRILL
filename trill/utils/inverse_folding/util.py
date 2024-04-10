@@ -337,7 +337,11 @@ def download_ligmpnn_weights(directory):
         "solublempnn_v_48_010.pt",
         "solublempnn_v_48_020.pt",
         "solublempnn_v_48_030.pt",
-        "ligandmpnn_sc_v_32_002_16.pt"
+        "ligandmpnn_sc_v_32_002_16.pt",
+        "proteinmpnn_v_48_002.pt",
+        "proteinmpnn_v_48_010.pt",
+        "proteinmpnn_v_48_020.pt",
+        "proteinmpnn_v_48_030.pt"
     ]
     
     # Create the directory if it does not exist

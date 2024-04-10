@@ -11,6 +11,7 @@ from deepspeed.ops.adam import DeepSpeedCPUAdam
 from pytorch_lightning.callbacks import BasePredictionWriter
 from torch.utils.data import Dataset
 from tqdm import trange
+from loguru import logger
 from transformers import pipeline, AutoTokenizer, AutoModelForCausalLM, DataCollatorForLanguageModeling, T5EncoderModel, \
     T5Tokenizer, AutoModelForSeq2SeqLM
 
@@ -130,7 +131,7 @@ class ProtGPT2(pl.LightningModule):
             # raise RuntimeError
             optimizer = DeepSpeedCPUAdam(self.model.parameters(), lr=self.lr)
         elif 'fsdp' in self.strat:
-            print("*** FSDP can't currently be used with TRILL and ProtGPT2 ***")
+            logger.warning("*** FSDP can't currently be used with TRILL and ProtGPT2 ***")
             raise RuntimeError
             # optimizer = torch.optim.Adam(self.trainer.model.parameters(), lr=self.lr)
         else:
@@ -618,7 +619,7 @@ class ZymCTRL(pl.LightningModule):
         if 'offload' in self.strat:
             optimizer = DeepSpeedCPUAdam(self.model.parameters(), lr=self.lr)
         elif 'fsdp' in self.strat:
-            print("*** FSDP can't currently be used with TRILL and ProtGPT2 ***")
+            logger.warning("*** FSDP can't currently be used with TRILL and ProtGPT2 ***")
             raise RuntimeError
             # optimizer = torch.optim.Adam(self.trainer.model.parameters(), lr=self.lr)
         else:
@@ -703,7 +704,7 @@ class ProstT5(pl.LightningModule):
         if 'offload' in self.strat:
             optimizer = DeepSpeedCPUAdam(self.model.parameters(), lr=self.lr)
         elif 'fsdp' in self.strat:
-            print("*** FSDP can't currently be used with TRILL and ProtGPT2 ***")
+            logger.warning("*** FSDP can't currently be used with TRILL and ProtGPT2 ***")
             raise RuntimeError
             # optimizer = torch.optim.Adam(self.trainer.model.parameters(), lr=self.lr)
         else:

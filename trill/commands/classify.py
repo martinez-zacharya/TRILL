@@ -277,7 +277,7 @@ def run(args):
         logging.getLogger("pytorch_lightning.utilities.rank_zero").addHandler(logging.NullHandler())
         logging.getLogger("pytorch_lightning.accelerators.cuda").addHandler(logging.NullHandler())
         if not os.path.exists(os.path.join(cache_dir, "EpHod_Models")):
-            print("Downloading EpHod models...")
+            logger.info("Downloading EpHod models...")
             cmd = ("curl", "-o", "saved_models.tar.gz", "--progress-bar",
                    "https://zenodo.org/records/8011249/files/saved_models.tar.gz?download=1")
             result = subprocess.run(cmd)
@@ -301,7 +301,7 @@ def run(args):
 
         # Omit sequences longer than 1022
         if max(lengths) > 1022:
-            print(warning)
+            logger.warning(warning)
             locs = np.argwhere(lengths <= 1022).flatten()
             headers, sequences, accessions = [array[locs] for array in (headers, sequences, accessions)]
             numseqs = len(sequences)
