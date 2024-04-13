@@ -124,12 +124,12 @@ def run(args):
                 checkpoint_callback = ModelCheckpoint(every_n_epochs=1, save_top_k=-1)
                 if int(args.GPUs) == 0:
                     trainer = pl.Trainer(profiler=profiler, max_epochs=int(args.epochs), logger=ml_logger,
-                                         num_nodes=int(args.nodes), callbacks=(checkpoint_callback,),
+                                         num_nodes=int(args.nodes), callbacks=[checkpoint_callback],
                                          default_root_dir=f"{os.path.join(args.outdir, args.name)}_ckpt")
                 else:
                     trainer = pl.Trainer(devices=int(args.GPUs), profiler=profiler, accelerator="gpu",
                                          max_epochs=int(args.epochs), logger=ml_logger, num_nodes=int(args.nodes),
-                                         precision=16, strategy=args.strategy, callbacks=(checkpoint_callback,),
+                                         precision=16, strategy=args.strategy, callbacks=[checkpoint_callback],
                                          default_root_dir=f"{os.path.join(args.outdir, args.name)}_ckpt")
             else:
                 if int(args.GPUs) == 0:
@@ -171,12 +171,12 @@ def run(args):
                 checkpoint_callback = ModelCheckpoint(every_n_epochs=1, save_top_k=-1)
                 if int(args.GPUs) == 0:
                     trainer = pl.Trainer(profiler=profiler, max_epochs=int(args.epochs), logger=ml_logger,
-                                         num_nodes=int(args.nodes), callbacks=(checkpoint_callback,),
+                                         num_nodes=int(args.nodes), callbacks=[checkpoint_callback],
                                          default_root_dir=f"{os.path.join(args.outdir, args.name)}_ckpt")
                 else:
                     trainer = pl.Trainer(devices=int(args.GPUs), profiler=profiler, accelerator="gpu",
                                          max_epochs=int(args.epochs), logger=ml_logger, num_nodes=int(args.nodes),
-                                         precision=16, strategy=args.strategy, callbacks=(checkpoint_callback,),
+                                         precision=16, strategy=args.strategy, callbacks=[checkpoint_callback],
                                          default_root_dir=f"{os.path.join(args.outdir, args.name)}_ckpt")
             else:
                 if int(args.GPUs) == 0:
@@ -225,7 +225,7 @@ def run(args):
                 output_path = os.path.join(args.outdir, f"{args.name}_{args.model}_{args.epochs}.pt")
                 if args.save_on_epoch:
                     checkpoint_callback = ModelCheckpoint(every_n_epochs=1, save_top_k=-1)
-                    trainer = pl.Trainer(devices=int(args.GPUs), profiler=profiler, callbacks=(checkpoint_callback,),
+                    trainer = pl.Trainer(devices=int(args.GPUs), profiler=profiler, callbacks=[checkpoint_callback],
                                          default_root_dir=f"{os.path.join(args.outdir, args.name)}_ckpt",
                                          accelerator="gpu", strategy=args.strategy, max_epochs=int(args.epochs),
                                          logger=ml_logger, num_nodes=int(args.nodes), precision=16)
@@ -250,12 +250,12 @@ def run(args):
                     checkpoint_callback = ModelCheckpoint(every_n_epochs=1, save_top_k=-1)
                     if int(args.GPUs) == 0:
                         trainer = pl.Trainer(profiler=profiler, max_epochs=int(args.epochs),
-                                             callbacks=(checkpoint_callback,),
+                                             callbacks=[checkpoint_callback],
                                              default_root_dir=f"{os.path.join(args.outdir, args.name)}_ckpt",
                                              logger=ml_logger, num_nodes=int(args.nodes))
                     else:
                         trainer = pl.Trainer(devices=int(args.GPUs), profiler=profiler, accelerator="gpu",
-                                             callbacks=(checkpoint_callback,),
+                                             callbacks=[checkpoint_callback],
                                              default_root_dir=f"{os.path.join(args.outdir, args.name)}_ckpt",
                                              strategy=args.strategy, max_epochs=int(args.epochs), logger=ml_logger,
                                              num_nodes=int(args.nodes), precision=16)
@@ -320,7 +320,7 @@ def run(args):
             output_path = os.path.join(args.outdir, f"{args.name}_{args.model}_{args.epochs}.pt")
             if args.save_on_epoch:
                 checkpoint_callback = ModelCheckpoint(every_n_epochs=1, save_top_k=-1)
-                trainer = pl.Trainer(devices=int(args.GPUs), profiler=profiler, callbacks=(checkpoint_callback,),
+                trainer = pl.Trainer(devices=int(args.GPUs), profiler=profiler, callbacks=[checkpoint_callback],
                                      default_root_dir=f"{os.path.join(args.outdir, args.name)}_ckpt", accelerator="gpu",
                                      strategy=args.strategy, max_epochs=int(args.epochs), logger=ml_logger,
                                      num_nodes=int(args.nodes), precision=16)
@@ -344,12 +344,12 @@ def run(args):
                 checkpoint_callback = ModelCheckpoint(every_n_epochs=1, save_top_k=-1)
                 if int(args.GPUs) == 0:
                     trainer = pl.Trainer(profiler=profiler, max_epochs=int(args.epochs),
-                                         callbacks=(checkpoint_callback,),
+                                         callbacks=[checkpoint_callback],
                                          default_root_dir=f"{os.path.join(args.outdir, args.name)}_ckpt", logger=ml_logger,
                                          num_nodes=int(args.nodes))
                 else:
                     trainer = pl.Trainer(devices=int(args.GPUs), profiler=profiler, accelerator="gpu",
-                                         callbacks=(checkpoint_callback,),
+                                         callbacks=[checkpoint_callback],
                                          default_root_dir=f"{os.path.join(args.outdir, args.name)}_ckpt",
                                          strategy=args.strategy, max_epochs=int(args.epochs), logger=ml_logger,
                                          num_nodes=int(args.nodes), precision=16)

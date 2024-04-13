@@ -490,10 +490,10 @@ def run(args):
         # dataloader = torch.utils.data.DataLoader(data, shuffle=False, batch_size=int(args.batch_size), num_workers=0)
         # pred_writer = CustomWriter(output_dir=args.outdir, write_interval="epoch")
         # if int(args.GPUs) == 0:
-        #     trainer = pl.Trainer(enable_checkpointing=False, callbacks=pred_writer, logger=ml_logger,
+        #     trainer = pl.Trainer(enable_checkpointing=False, callbacks=[pred_writer], logger=ml_logger,
         #                          num_nodes=int(args.nodes))
         # else:
-        #     trainer = pl.Trainer(enable_checkpointing=False, devices=int(args.GPUs), callbacks=(pred_writer),
+        #     trainer = pl.Trainer(enable_checkpointing=False, devices=int(args.GPUs), callbacks=[pred_writer],
         #                          accelerator="gpu", logger=ml_logger, num_nodes=int(args.nodes))
         # logger.info("Beginning prediction of 3Di tokens with ProstT5")
 
