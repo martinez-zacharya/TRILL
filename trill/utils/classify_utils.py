@@ -7,6 +7,7 @@ import pandas as pd
 import xgboost as xgb
 import lightgbm as lgb
 import esm
+import time
 from sklearn.metrics import make_scorer
 from sklearn.metrics import precision_recall_fscore_support, f1_score
 from sklearn.model_selection import train_test_split
@@ -14,10 +15,16 @@ from sklearn.preprocessing import LabelEncoder
 from transformers import EsmForSequenceClassification, Trainer, TrainingArguments, AutoTokenizer
 from datasets import Dataset
 from evaluate import load
+import torch
+import torch.nn as nn
+import torch.nn.functional as F
+from transformers import T5EncoderModel, T5Tokenizer
 from skopt import BayesSearchCV
 from icecream import ic
 from skopt.space import Real, Categorical, Integer
 from trill.utils.logging import setup_logger
+import requests
+from Bio import SeqIO
 from loguru import logger
 
 def load_data(args):
@@ -463,6 +470,259 @@ def sweep(train_df, args):
     
     return clf
 
+
+# From mheinzinger at https://github.com/mheinzinger/ProstT5/blob/main/scripts/predict_3Di_encoderOnly.py
+# Convolutional neural network (two convolutional layers)
+class CNN(nn.Module):
+    def __init__(self):
+        super(CNN, self).__init__()
+
+        self.classifier = nn.Sequential(
+            nn.Conv2d(1024, 32, kernel_size=(7, 1), padding=(3, 0)),  # 7x32
+            nn.ReLU(),
+            nn.Dropout(0.0),
+            nn.Conv2d(32, 20, kernel_size=(7, 1), padding=(3, 0))
+        )
+
+    def forward(self, x):
+        """
+            L = protein length
+            B = batch-size
+            F = number of features (1024 for embeddings)
+            N = number of classes (20 for 3Di)
+        """
+        x = x.permute(0, 2, 1).unsqueeze(
+            dim=-1)  # IN: X = (B x L x F); OUT: (B x F x L, 1)
+        Yhat = self.classifier(x)  # OUT: Yhat_consurf = (B x N x L x 1)
+        Yhat = Yhat.squeeze(dim=-1)  # IN: (B x N x L x 1); OUT: ( B x N x L )
+        return Yhat
+
+
+def get_T5_model():
+    model = T5EncoderModel.from_pretrained(
+        "Rostlab/ProstT5_fp16")
+    model = model.eval()
+    vocab = T5Tokenizer.from_pretrained(
+        "Rostlab/ProstT5_fp16", do_lower_case=False)
+    return model, vocab
+
+
+def read_fasta(fasta_path):
+    '''
+        Reads in fasta file containing multiple sequences.
+        Returns dictionary of holding multiple sequences or only single 
+        sequence, depending on input file.
+    '''
+
+    sequences = dict()
+    with open(fasta_path, 'r') as fasta_f:
+        for line in fasta_f:
+            # get uniprot ID from header and create new entry
+            if line.startswith('>'):
+                uniprot_id = line[1:]
+                sequences[uniprot_id] = ''
+            else:
+                s = ''.join(line.split()).replace("-", "")
+
+                if s.islower():  # sanity check to avoid mix-up of 3Di and AA input
+                    print("The input file was in lower-case which indicates 3Di-input." +
+                          "This predictor only operates on amino-acid-input (upper-case)." +
+                          "Exiting now ..."
+                          )
+                    return None
+                else:
+                    sequences[uniprot_id] += s
+    return sequences
+
+
+def write_probs(predictions, args):
+    out_path = os.path.join(args.outdir, f"{args.name}_3Di_output_probabilities.csv")
+    
+    # Write to the output file
+    with open(out_path, 'w+') as out_f:
+        for seq_id, (_, prob) in predictions.items():
+            # Write each line as a formatted string, ensuring CSV compatibility
+            out_f.write(f'{seq_id.strip()},{prob}\n')
+    
+    # Assuming logger is configured elsewhere in your application
+    logger.info(f"Finished writing probabilities to {out_path}")
+    return out_path
+
+
+def write_predictions(predictions, args):
+    ss_mapping = {
+        0: "A",
+        1: "C",
+        2: "D",
+        3: "E",
+        4: "F",
+        5: "G",
+        6: "H",
+        7: "I",
+        8: "K",
+        9: "L",
+        10: "M",
+        11: "N",
+        12: "P",
+        13: "Q",
+        14: "R",
+        15: "S",
+        16: "T",
+        17: "V",
+        18: "W",
+        19: "Y"
+    }
+    out_path = os.path.join(args.outdir, f'{args.name}_3Di.fasta')
+    with open(out_path, 'w+') as out_f:
+        out_f.write('\n'.join(
+            [">{}{}".format(
+                seq_id, "".join(list(map(lambda yhat: ss_mapping[int(yhat)], yhats))))
+             for seq_id, (yhats, _) in predictions.items()
+             ]
+        ))
+    logger.info(f"Finished writing results to {out_path}")
+    return out_path
+
+
+def toCPU(tensor):
+    if len(tensor.shape) > 1:
+        return tensor.detach().cpu().squeeze(dim=-1).numpy()
+    else:
+        return tensor.detach().cpu().numpy()
+
+
+
+def load_predictor(args, cache_dir, weights_link="https://github.com/mheinzinger/ProstT5/raw/main/cnn_chkpnt/model.pt"):
+    model = CNN()
+    checkpoint_p = os.path.join(cache_dir, 'ProstT5_3Di_CNN.pt')
+    # if no pre-trained model is available, yet --> download it
+    if not os.path.exists(weights_link):
+        r = requests.get(weights_link)
+        logger.info('Downloading ProstT5 3Di CNN weights...')
+        with open(checkpoint_p, "wb") as file:
+            file.write(r.content)
+        logger.info('Finished downloading ProstT5 3Di CNN weights!')
+
+
+    state = torch.load(checkpoint_p)
+
+    model.load_state_dict(state["state_dict"])
+
+    model = model.eval()
+    # model = model.to(device)
+
+    return model
+
+
+def get_3di_embeddings(args, cache_dir,
+                   max_residues=4000, max_seq_len=4000, max_batch=500):
+
+    seq_dict = dict()
+    predictions = dict()
+
+    # Read in fasta
+    seq_dict = read_fasta(args.query)
+    prefix = "<AA2fold>"
+
+    model, vocab = get_T5_model()
+    predictor = load_predictor(args, cache_dir)
+
+    # if half_precision:
+    if int(args.GPUs) >= 1:
+        device = 'cuda'
+    else:
+        device = 'cpu'
+
+    model.to(device)
+    predictor.to(device)
+    if int(args.GPUs) >= 1:
+        logger.info("Using models in half-precision.")
+        model.half()
+        predictor.half()
+    # else:
+    #     model.to(torch.float32)
+    #     predictor.to(torch.float32)
+    #     print("Using models in full-precision.")
+    print('here?')
+    logger.info('Total number of sequences: {}'.format(len(seq_dict)))
+
+
+    # sort sequences by length to trigger OOM at the beginning
+    seq_dict = sorted(seq_dict.items(), key=lambda kv: len(
+        seq_dict[kv[0]]), reverse=True)
+
+    batch = list()
+    standard_aa = "ACDEFGHIKLMNPQRSTVWY"
+    standard_aa_dict = {aa: aa for aa in standard_aa}
+    for seq_idx, (pdb_id, seq) in enumerate(seq_dict, 1):
+        # replace the non-standard amino acids with 'X'
+        seq = ''.join([standard_aa_dict.get(aa, 'X') for aa in seq])
+        #seq = seq.replace('U', 'X').replace('Z', 'X').replace('O', 'X')
+        seq_len = len(seq)
+        seq = prefix + ' ' + ' '.join(list(seq))
+        batch.append((pdb_id, seq, seq_len))
+
+        # count residues in current batch and add the last sequence length to
+        # avoid that batches with (n_res_batch > max_residues) get processed
+        n_res_batch = sum([s_len for _, _, s_len in batch]) + seq_len
+        if len(batch) >= max_batch or n_res_batch >= max_residues or seq_idx == len(seq_dict) or seq_len > max_seq_len:
+            pdb_ids, seqs, seq_lens = zip(*batch)
+            batch = list()
+
+            token_encoding = vocab.batch_encode_plus(seqs,
+                                                     add_special_tokens=True,
+                                                     padding="longest",
+                                                     return_tensors='pt'
+                                                     ).to(device)
+            try:
+                with torch.no_grad():
+                    embedding_repr = model(token_encoding.input_ids,
+                                           attention_mask=token_encoding.attention_mask
+                                           )
+            except RuntimeError:
+                print("RuntimeError during embedding for {} (L={})".format(
+                    pdb_id, seq_len)
+                )
+                continue
+
+            # ProtT5 appends a special tokens at the end of each sequence
+            # Mask this also out during inference while taking into account the prefix
+            for idx, s_len in enumerate(seq_lens):
+                token_encoding.attention_mask[idx, s_len+1] = 0
+
+            # extract last hidden states (=embeddings)
+            residue_embedding = embedding_repr.last_hidden_state.detach()
+            # mask out padded elements in the attention output (can be non-zero) for further processing/prediction
+            residue_embedding = residue_embedding * \
+                token_encoding.attention_mask.unsqueeze(dim=-1)
+            # slice off embedding of special token prepended before to each sequence
+            residue_embedding = residue_embedding[:, 1:]
+
+            # IN: X = (B x L x F) - OUT: ( B x N x L )
+            prediction = predictor(residue_embedding)
+            probabilities = toCPU(torch.max(
+                F.softmax(prediction, dim=1), dim=1, keepdim=True)[0])
+            
+            prediction = toCPU(torch.max(prediction, dim=1, keepdim=True)[
+                               1]).astype(np.byte)
+
+            # batch-size x seq_len x embedding_dim
+            # extra token is added at the end of the seq
+            for batch_idx, identifier in enumerate(pdb_ids):
+                s_len = seq_lens[batch_idx]
+                # slice off padding and special token appended to the end of the sequence
+                pred = prediction[batch_idx, :, 0:s_len].squeeze()
+                prob = int( 100* np.mean(probabilities[batch_idx, :, 0:s_len]))
+                predictions[identifier] = (pred, prob)
+                assert s_len == len(predictions[identifier][0]), logger.warning(
+                    f"Length mismatch for {identifier}: is:{len(predictions[identifier])} vs should:{s_len}")
+
+
+    preds_out_path = write_predictions(predictions, args)
+    probs_out_path = write_probs(predictions, args)
+
+    return preds_out_path, probs_out_path
+
 # From Sean R Johnson at https://github.com/seanrjohnson/esmologs
 
 
@@ -764,7 +1024,7 @@ def sweep(train_df, args):
 #             # write the lookup
 #             lookup_h.write(f"{seq_index}\t{pep_name}\t{seq_index}\n".encode())
 
-# def prep_foldseek_dbs(fasta_aa, fasta_3di, output_basename):
+def prep_foldseek_dbs(fasta_aa, fasta_3di, output_basename):
 #     # read in amino-acid sequences
 #     sequences_aa = {}
 #     for record in SeqIO.parse(fasta_aa, "fasta"):
@@ -811,34 +1071,34 @@ def sweep(train_df, args):
     # os.remove("3di.tsv")
     # os.remove("header.tsv")
 #     # read in amino-acid sequences
-#     sequences_aa = {}
-#     for record in SeqIO.parse(fasta_aa, "fasta"):
-#         sequences_aa[record.id] = str(record.seq)
+    sequences_aa = {}
+    for record in SeqIO.parse(fasta_aa, "fasta"):
+        sequences_aa[record.id] = str(record.seq)
 
-#     # read in 3Di strings
-#     sequences_3di = {}
-#     for record in SeqIO.parse(fasta_3di, "fasta"):
-#         sequences_3di[record.id] = str(record.seq).upper()
+    # read in 3Di strings
+    sequences_3di = {}
+    for record in SeqIO.parse(fasta_3di, "fasta"):
+        sequences_3di[record.id] = str(record.seq).upper()
 
-#     # generate TSV file contents
-#     tsv_aa = ""
-#     tsv_3di = ""
-#     tsv_header = ""
-#     for i, id in enumerate(sequences_aa.keys()):
-#         tsv_aa += "{}\t{}\n".format(str(i + 1), sequences_aa[id])
-#         tsv_3di += "{}\t{}\n".format(str(i + 1), sequences_3di[id])
-#         tsv_header += "{}\t{}\n".format(str(i + 1), id)
+    # generate TSV file contents
+    tsv_aa = ""
+    tsv_3di = ""
+    tsv_header = ""
+    for i, id in enumerate(sequences_aa.keys()):
+        tsv_aa += "{}\t{}\n".format(str(i + 1), sequences_aa[id])
+        tsv_3di += "{}\t{}\n".format(str(i + 1), sequences_3di[id])
+        tsv_header += "{}\t{}\n".format(str(i + 1), id)
 
-#     with open(f'tmp_{output_basename}_aa.tsv', "w+") as f:
-#         f.write(tsv_aa)
-#     with open(f'tmp_{output_basename}_tdi.tsv', "w+") as f:
-#         f.write(tsv_3di)
-#     with open(f'tmp_{output_basename}_header.tsv', "w+") as f:
-#         f.write(tsv_header)
+    with open(f'tmp_{output_basename}_aa.tsv', "w+") as f:
+        f.write(tsv_aa)
+    with open(f'tmp_{output_basename}_tdi.tsv', "w+") as f:
+        f.write(tsv_3di)
+    with open(f'tmp_{output_basename}_header.tsv', "w+") as f:
+        f.write(tsv_header)
 
-#     for type, code in [('aa', 0), ('tdi', 0), ('header', 12)]:
-#         ic(type)
-#         ic(code)
-#         foldseek_tsv2db = f'foldseek tsv2db tmp_{output_basename}_{type}.tsv tmp_{output_basename}_{type}_db --output-dbtype {code}'.split()
-#         subprocess.run(foldseek_tsv2db)
-#         print('eyee')
+    for type, code in [('aa', 0), ('tdi', 0), ('header', 12)]:
+        ic(type)
+        ic(code)
+        foldseek_tsv2db = f'foldseek tsv2db tmp_{output_basename}_{type}.tsv tmp_{output_basename}_{type}_db --output-dbtype {code}'.split()
+        subprocess.run(foldseek_tsv2db)
+        print('eyee')

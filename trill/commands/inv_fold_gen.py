@@ -56,7 +56,7 @@ def setup(subparsers):
     #                           help="ProteinMPNN Noise levels: v_48_002, v_48_010, v_48_020, v_48_030; v_48_010=version with 48 edges "
     #                                "0.10A noise")
     inv_fold_gen.add_argument("--lig_mpnn_model", type=str, default="",
-                              help="LigandMPNN: Soluble, Global_Membrane, Local_Membrane, Side-Chain_Packing")
+                              help="LigandMPNN: ProteinMPNN, Soluble, Global_Membrane, Local_Membrane, Side-Chain_Packing")
     inv_fold_gen.add_argument("--lig_mpnn_noise", type=str, default="010",
                               help="LigandMPNN Noise levels: 002, 005, 010, 020, 030; 010 = .10A noise. Note that 002 is only available for Soluble and Side-Chain_packing models")
     # inv_fold_gen.add_argument("--save_score", type=int, default=0,
@@ -90,9 +90,9 @@ def setup(subparsers):
     #                                "which ones are fixed, if not specified all chains will be designed.")
     # inv_fold_gen.add_argument("--fixed_positions_jsonl", type=str, default="",
     #                           help="ProteinMPNN: Path to a dictionary with fixed positions")
-    # inv_fold_gen.add_argument("--omit_AAs", type=list, default="X",
-    #                           help="ProteinMPNN: Specify which amino acids should be omitted in the generated sequence, "
-    #                                "e.g. \"AC\" would omit alanine and cysteine.")
+    inv_fold_gen.add_argument("--omit_AAs", type=list, default="X",
+                              help="LigandMPNN: Specify which amino acids should be omitted in the generated sequence, "
+                                   "e.g. \"AC\" would omit alanine and cysteine.")
     # inv_fold_gen.add_argument("--bias_AA_jsonl", type=str, default="",
     #                           help="ProteinMPNN/LigandMPNN: Path to a dictionary which specifies AA composition bias if needed, "
     #                                "e.g. {A: -1.1, F: 0.7} would make A less likely and F more likely.")
@@ -216,12 +216,12 @@ def setup(subparsers):
     #     default=0,
     #     help="LigandMPNN: Set seed for torch, numpy, and python random.",
     # )
-    # inv_fold_gen.add_argument(
-    #     "--batch_size",
-    #     type=int,
-    #     default=1,
-    #     help="LigandMPNN: Number of sequence to generate per one pass.",
-    # )
+    inv_fold_gen.add_argument(
+        "--batch_size",
+        type=int,
+        default=1,
+        help="LigandMPNN: Number of sequence to generate per one pass.",
+    )
     inv_fold_gen.add_argument(
         "--number_of_batches",
         type=int,

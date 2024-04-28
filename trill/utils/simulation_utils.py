@@ -3,7 +3,8 @@ import sys
 import time
 
 from openmm import CustomExternalForce
-from openmm.app import NoCutoff, Modeller, StateDataReporter, CutoffPeriodic, PDBReporter
+from openmm.app import PME, NoCutoff, CutoffNonPeriodic, CutoffPeriodic, Ewald, LJPME
+from openmm.app import NoCutoff, Modeller, StateDataReporter, PDBReporter
 from openmm.app import PDBFile, Topology
 from openmm.app.forcefield import ForceField
 from openmm.app.simulation import Simulation
@@ -24,7 +25,9 @@ from openmm.unit.quantity import Quantity
 from tqdm import tqdm
 from icecream import ic
 from loguru import logger
+import numpy as np
 from openff.interchange import Interchange
+from openmm import app
 from openff.interchange.components._packmol import RHOMBIC_DODECAHEDRON, pack_box
 from .cuda_utils import set_platform_properties
 
@@ -215,27 +218,31 @@ def set_simulation_parameters2(platform, properties, args):
         lig_topology = lig.to_topology()
         positions_array = lig_topology.get_positions().magnitude
         vec3_positions = [Vec3(x, y, z) for x, y, z in positions_array]
-
-        # Now, wrap the entire list of Vec3 objects in a Quantity with nanometer units
         final_positions = Quantity(vec3_positions, unit.nanometer)
         modeller.add(lig_topology.to_openmm(), final_positions)
         logger.info(f'System has added {args.ligand} with {modeller.topology.getNumAtoms()} atoms')
-    if args.solvate:
-        solvent = args.solvent.split('/')[-1].split('.')[0]
-        if solvent == 'tip3pfb':
-            solvent = 'tip3p'
-        modeller.addSolvent(forcefield, model=solvent, padding = 5*nanometer)
-        logger.info(f'System has {modeller.topology.getNumAtoms()} atoms after solvation')
-        box_vec = modeller.getTopology().getPeriodicBoxVectors()
-        system = forcefield.createSystem(modeller.topology, nonbondedMethod=CutoffPeriodic, constraints=args.constraints, rigidWater=args.rigidWater)
-        system.setDefaultPeriodicBoxVectors(box_vec[0], box_vec[1], box_vec[2])
+    if 'tip' in args.solvent:
+        args.solvent = args.solvent.split('/')[-1].split('.')[0]
+        if args.solvent == 'tip3pfb':
+            args.solvent = 'tip3p'
+        modeller.addSolvent(forcefield, model=args.solvent, boxSize = Vec3(args.periodic_box, args.periodic_box, args.periodic_box))
+    logger.info(f'System has {modeller.topology.getNumAtoms()} atoms after solvation')
+    nonbonded_methods = {
+        "NoCutoff": NoCutoff,
+        "CutoffNonPeriodic": CutoffNonPeriodic,
+        "CutoffPeriodic": CutoffPeriodic,
+        "Ewald": Ewald,
+        "PME": PME,
+        "LJPME": LJPME  
+            }
     box_vec = [Vec3(args.periodic_box,0,0), Vec3(0,args.periodic_box,0), Vec3(0,0,args.periodic_box)]
-    system = forcefield.createSystem(modeller.topology, nonbondedMethod=NoCutoff, nonbondedCutoff=1*nanometer, constraints=args.constraints, rigidWater=args.rigidWater)
+    system = forcefield.createSystem(modeller.topology, nonbondedMethod=nonbonded_methods[args.nonbonded_method], nonbondedCutoff=1*nanometer, constraints=args.constraints, rigidWater=args.rigidWater)
     system.setDefaultPeriodicBoxVectors(box_vec[0], box_vec[1], box_vec[2])
-    if system.usesPeriodicBoundaryConditions():
-        logger.info('Default Periodic box: {}'.format(system.getDefaultPeriodicBoxVectors()))
-    else:
-        logger.info('No Periodic Box')
+    logger.info(f'Periodic box size: x={args.periodic_box}, y={args.periodic_box}, z={args.periodic_box}')
+    # if system.usesPeriodicBoundaryConditions():
+    #     logger.info('Default Periodic box: {}'.format(system.getDefaultPeriodicBoxVectors()))
+    # else:
+    #     logger.info('No Periodic Box')
 
     if args.apply_harmonic_force:
         harmonic_force = CustomExternalForce("0.5 * k * (z - z0)^2")
@@ -246,28 +253,26 @@ def set_simulation_parameters2(platform, properties, args):
             harmonic_force.addParticle(atom_index, [])
         system.addForce(harmonic_force)
 
-    # simulation.context.reinitialize(preserveState=True)
     integrator = LangevinMiddleIntegrator(300*kelvin, 1/picosecond, args.step_size*femtosecond)
     simulation = Simulation(modeller.topology, system, integrator, platform, properties)
     simulation.context.setPositions(modeller.positions)
-    # simulation.reporters.append(StateDataReporter(sys.stdout, 10, step=True, progress = True, totalSteps = (int(args.num_steps)+(2*args.equilibration_steps))))
     totalSteps = int(args.num_steps)
     simulation.reporters.append(StateDataReporter(os.path.join(args.outdir, f'{args.name}_StateDataReporter.out'), 100, step=True, potentialEnergy=True, kineticEnergy=True, totalEnergy=True, volume = True, density=True,  temperature=True, speed=True))
     simulation.reporters.append(PDBReporter(os.path.join(args.outdir, f'{args.name}_sim.pdb'), args.reporter_interval))
-    # simulation.reporters.append(DCDReporter(args.output_traj_dcd, 10))
     silent_output_stream = SilentOutputStream()
     progress_reporter = ProgressBarReporter(10, totalSteps, silent_output_stream, step=True)
     simulation.reporters.append(progress_reporter)
     return simulation, system
 
 def equilibriate(simulation, args, system):
-    simulation.context.reinitialize(True)
     simulation.context.setVelocitiesToTemperature(100*kelvin)
-    simulation.context.reinitialize(True)
     logger.info(f'Warming up temp to {300*kelvin}...')
     simulation.step(args.equilibration_steps)
-    if args.solvate:
-        logger.info(f'Pressurizing to {1*atmospheres}...')
-        system.addForce(MonteCarloBarostat(1 * atmospheres, 300*kelvin, 25))
-        simulation.context.reinitialize(True)
-        simulation.step(args.equilibration_steps)
+    # simulation.step(args.equilibration_steps)
+    simulation.context.reinitialize(preserveState=True)
+    logger.info(f'Pressurizing to {1*atmospheres}...')
+    system.addForce(MonteCarloBarostat(1 * atmospheres, 300*kelvin, 25))
+    # simulation.context.reinitialize(True)
+    simulation.step(args.equilibration_steps)
+    simulation.context.reinitialize(preserveState=True)
+

@@ -43,12 +43,12 @@ def setup(subparsers):
         default="implicit/hct.xml",
         help="Solvent model to use, the default is implicit/hct.xml"
     )
-    simulate.add_argument(
-        "--solvate",
-        default=False,
-        help="Add to solvate your simulation",
-        action="store_true"
-    )
+    # simulate.add_argument(
+    #     "--solvate",
+    #     default=False,
+    #     help="Add to solvate your simulation",
+    #     action="store_true"
+    # )
 
     simulate.add_argument(
         "--step_size",
@@ -125,6 +125,15 @@ def setup(subparsers):
         default=10,
         action="store",
     )
+
+    simulate.add_argument(
+        "--nonbonded_method",
+        help="Specify the method for handling nonbonded interactions. Find more info in 3.6.5 of the OpenMM user guide.",
+        type=str,
+        choices=["NoCutoff", "CutoffNonPeriodic", "CutoffPeriodic", "Ewald", "PME", "LJPME"],
+        default="CutoffPeriodic",
+        action="store",
+    )
     # simulate.add_argument(
     #     "--martini_top",
     #     help="Specify the path to the MARTINI topology file you want to use.",
@@ -156,8 +165,6 @@ def run(args):
     from trill.utils.simulation_utils import relax_structure, run_simulation
 
     if args.just_relax:
-        args.forcefield = "amber14-all.xml"
-        args.solvent = "amber14/tip3pfb.xml"
         pdb_list = []
         if args.receptor.endswith(".txt"):
             with open(args.receptor, "r") as infile:

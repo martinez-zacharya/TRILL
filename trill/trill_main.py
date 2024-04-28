@@ -29,6 +29,7 @@ for command in {
     "visualize",
     "simulate",
     "dock",
+    "score",
     "utils",
 }:
     commands[command] = importlib.import_module(f"trill.commands.{command}")
