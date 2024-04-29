@@ -166,6 +166,11 @@ def setup(subparsers):
         default=3
     )
 
+    classify.add_argument(
+        "--db",
+        help="3Di-Search: Specify the path of the fasta file for your database that you want to query against.",
+        action="store",
+    )
 
 def run(args):
     import builtins
@@ -481,84 +486,17 @@ def run(args):
             os.remove(os.path.join(args.outdir, f"{args.name}_{args.emb_model}_AVG.csv"))
 
 
-<<<<<<< HEAD
     elif args.classifier == '3Di-Search':
-        logger.info('Prepping Foldseek database from input')
-        preds_out_path, probs_out_path = get_3di_embeddings(args, cache_dir)
-        prep_foldseek_dbs(args.query, preds_out_path, args.name)
-=======
-    # elif args.classifier == '3Di-search':
-    #     logger.info('Prepping Foldseek database from input')
-    #     from trill.utils.inverse_folding.util import get_3di_prostt5
-    #     model = ProstT5(args)
-    #     data = esm.data.FastaBatchedDataset.from_file(args.query)
-    #     get_3di_prostt5(args, args.outdir, cache_dir)
-        # dataloader = torch.utils.data.DataLoader(data, shuffle=False, batch_size=int(args.batch_size), num_workers=0)
-        # pred_writer = CustomWriter(output_dir=args.outdir, write_interval="epoch")
-        # if int(args.GPUs) == 0:
-        #     trainer = pl.Trainer(enable_checkpointing=False, callbacks=[pred_writer], logger=ml_logger,
-        #                          num_nodes=int(args.nodes))
-        # else:
-        #     trainer = pl.Trainer(enable_checkpointing=False, devices=int(args.GPUs), callbacks=[pred_writer],
-        #                          accelerator="gpu", logger=ml_logger, num_nodes=int(args.nodes))
-        # logger.info("Beginning prediction of 3Di tokens with ProstT5")
+        logger.info(f'Prepping Foldseek databases from {args.query} and {args.db}')
+        query_preds_out_path, db_preds_out_path = get_3di_embeddings(args, cache_dir)
+        prep_foldseek_dbs(args.query, query_preds_out_path, f'{args.name}_query')
+        prep_foldseek_dbs(args.db, db_preds_out_path, f'{args.name}_db')
+        logger.info(f'Finished creating Foldseek databases!')
+        foldseek_search_cmd = f'foldseek search tmp_{args.name}_query_db tmp_{args.name}_db_db {args.name}_3di-search_results tmp -v 0'
+        logger.info(f'Starting foldseek search with: \n{foldseek_search_cmd}')
+        subprocess.run(foldseek_search_cmd.split())
+        output_path = os.path.join(args.outdir, f'{args.name}_3di-search_results.tsv')
+        foldseek_convertalis_cmd = f'foldseek convertalis tmp_{args.name}_query_db tmp_{args.name}_db_db {args.name}_3di-search_results {output_path} -v 0'.split()
+        subprocess.run(foldseek_convertalis_cmd)
+        logger.info(f'Foldseek output can be found at {output_path}!')
 
-        # reps = trainer.predict(model, dataloader)
-        # cwd_files = os.listdir(args.outdir)
-        # pt_files = [file for file in cwd_files if "predictions_" in file]
-        # pred_embeddings = []
-        # if args.batch_size == 1 or int(args.GPUs) > 1:
-        #     for pt in pt_files:
-        #         preds = torch.load(os.path.join(args.outdir, pt))
-        #         for pred in preds:
-        #             for sublist in pred:
-        #                 if len(sublist) == 2 and args.batch_size == 1:
-        #                     pred_embeddings.append(tuple([sublist[0], sublist[1]]))
-        #                 else:
-        #                     processed_sublists = process_sublist(sublist)
-        #                     for sub in processed_sublists:
-        #                         pred_embeddings.append(tuple([sub[0], sub[1]]))
-        #     embedding_df = pd.DataFrame(pred_embeddings, columns=("3Di", "Label"))
-        #     finaldf = embedding_df["3Di"].apply(pd.Series)
-        #     finaldf["Label"] = embedding_df["Label"]
-        # else:
-        #     embs = []
-        #     for rep in reps:
-        #         inner_embeddings = [item[0] for item in rep]
-        #         inner_labels = [item[1] for item in rep]
-        #         for emb_lab in zip(inner_embeddings, inner_labels):
-        #             embs.append(emb_lab)
-        #     embedding_df = pd.DataFrame(embs, columns=("3Di", "Label"))
-        #     finaldf = embedding_df["3Di"].apply(pd.Series)
-        #     finaldf["Label"] = embedding_df["Label"]
-        # logger.info("Finished 3Di predictions")
-        # # outname = os.path.join(args.outdir, f"{args.name}_{args.model}.csv")
-        # # finaldf.to_csv(outname, index=False, header=("3Di", "Label"))
-        # for file in pt_files:
-        #     os.remove(os.path.join(args.outdir, file))
-        # aa_seqs = data[:][1]
-        # aa_seq_labs = data[:][0]
-        # tdi_labels = finaldf['Label'].to_list()
-        # tdis = finaldf[0].to_list()
-        # # Step 1: Create a mapping from labels to sequences
-        # label_to_seq = dict(zip(aa_seq_labs, aa_seqs))
-
-        # # Step 2: Replace tdi_labels with the corresponding sequences from aa_seqs in the master list
-        # # Only include items in master if their label (from tdi_labels) has a corresponding sequence in the mapping
-        # master = []
-        # for tdi_label, tdi in zip(tdi_labels, tdis):
-        #     if tdi_label in label_to_seq:
-        #         # Replace tdi_label with the corresponding sequence from aa_seqs
-        #         seq = label_to_seq[tdi_label]
-        #         # Add the tuple (sequence, tdi_label, tdi) to the master list
-        #         master.append((seq, tdi_label, tdi)) 
-        # with open(f'tmp_{args.name}_aa.fasta', 'w+') as aa_fasta:
-        #     with open(f'tmp_{args.name}_td.fasta', 'w+') as td_fasta:
-        #         for aa, lab, td in master:
-        #             aa_fasta.write(f'>{lab}\n')
-        #             aa_fasta.write(f'{aa}\n')
-        #             td_fasta.write(f'>{lab}\n')
-        #             td_fasta.write(f'{td}\n')
-
-        # prep_foldseek_dbs(args.query, os.path.join(args.outdir, f'test_ProstT5-3Di_outputs/{args.name}_ProstT5-3Di.fasta'), f'tmp_{args.name}_db')
->>>>>>> origin/trill1.7.0

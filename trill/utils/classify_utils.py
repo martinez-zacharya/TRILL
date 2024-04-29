@@ -26,6 +26,7 @@ from trill.utils.logging import setup_logger
 import requests
 from Bio import SeqIO
 from loguru import logger
+from tqdm import tqdm
 
 def load_data(args):
     if not args.preComputed_Embs:
@@ -535,8 +536,8 @@ def read_fasta(fasta_path):
     return sequences
 
 
-def write_probs(predictions, args):
-    out_path = os.path.join(args.outdir, f"{args.name}_3Di_output_probabilities.csv")
+def write_probs(predictions, args, input):
+    out_path = os.path.join(args.outdir, f"{args.name}_{input}_3Di_output_probabilities.csv")
     
     # Write to the output file
     with open(out_path, 'w+') as out_f:
@@ -549,7 +550,7 @@ def write_probs(predictions, args):
     return out_path
 
 
-def write_predictions(predictions, args):
+def write_predictions(predictions, args, input):
     ss_mapping = {
         0: "A",
         1: "C",
@@ -572,7 +573,7 @@ def write_predictions(predictions, args):
         18: "W",
         19: "Y"
     }
-    out_path = os.path.join(args.outdir, f'{args.name}_3Di.fasta')
+    out_path = os.path.join(args.outdir, f'{args.name}_{input}_3Di.fasta')
     with open(out_path, 'w+') as out_f:
         out_f.write('\n'.join(
             [">{}{}".format(
@@ -621,7 +622,6 @@ def get_3di_embeddings(args, cache_dir,
     predictions = dict()
 
     # Read in fasta
-    seq_dict = read_fasta(args.query)
     prefix = "<AA2fold>"
 
     model, vocab = get_T5_model()
@@ -643,434 +643,91 @@ def get_3di_embeddings(args, cache_dir,
     #     model.to(torch.float32)
     #     predictor.to(torch.float32)
     #     print("Using models in full-precision.")
-    print('here?')
-    logger.info('Total number of sequences: {}'.format(len(seq_dict)))
+    pred_path_list = []
+    for input in ['query', 'db']:
+        current_input = getattr(args, input)
+        seq_dict = read_fasta(current_input)
+        logger.info('Total number of sequences: {}'.format(len(seq_dict)))
 
 
-    # sort sequences by length to trigger OOM at the beginning
-    seq_dict = sorted(seq_dict.items(), key=lambda kv: len(
-        seq_dict[kv[0]]), reverse=True)
+        # sort sequences by length to trigger OOM at the beginning
+        seq_dict = sorted(seq_dict.items(), key=lambda kv: len(
+            seq_dict[kv[0]]), reverse=True)
 
-    batch = list()
-    standard_aa = "ACDEFGHIKLMNPQRSTVWY"
-    standard_aa_dict = {aa: aa for aa in standard_aa}
-    for seq_idx, (pdb_id, seq) in enumerate(seq_dict, 1):
-        # replace the non-standard amino acids with 'X'
-        seq = ''.join([standard_aa_dict.get(aa, 'X') for aa in seq])
-        #seq = seq.replace('U', 'X').replace('Z', 'X').replace('O', 'X')
-        seq_len = len(seq)
-        seq = prefix + ' ' + ' '.join(list(seq))
-        batch.append((pdb_id, seq, seq_len))
+        batch = list()
+        standard_aa = "ACDEFGHIKLMNPQRSTVWY"
+        standard_aa_dict = {aa: aa for aa in standard_aa}
+        for seq_idx, (pdb_id, seq) in tqdm(enumerate(seq_dict, 1)):
+            # replace the non-standard amino acids with 'X'
+            seq = ''.join([standard_aa_dict.get(aa, 'X') for aa in seq])
+            #seq = seq.replace('U', 'X').replace('Z', 'X').replace('O', 'X')
+            seq_len = len(seq)
+            seq = prefix + ' ' + ' '.join(list(seq))
+            batch.append((pdb_id, seq, seq_len))
 
-        # count residues in current batch and add the last sequence length to
-        # avoid that batches with (n_res_batch > max_residues) get processed
-        n_res_batch = sum([s_len for _, _, s_len in batch]) + seq_len
-        if len(batch) >= max_batch or n_res_batch >= max_residues or seq_idx == len(seq_dict) or seq_len > max_seq_len:
-            pdb_ids, seqs, seq_lens = zip(*batch)
-            batch = list()
+            # count residues in current batch and add the last sequence length to
+            # avoid that batches with (n_res_batch > max_residues) get processed
+            n_res_batch = sum([s_len for _, _, s_len in batch]) + seq_len
+            if len(batch) >= max_batch or n_res_batch >= max_residues or seq_idx == len(seq_dict) or seq_len > max_seq_len:
+                pdb_ids, seqs, seq_lens = zip(*batch)
+                batch = list()
 
-            token_encoding = vocab.batch_encode_plus(seqs,
-                                                     add_special_tokens=True,
-                                                     padding="longest",
-                                                     return_tensors='pt'
-                                                     ).to(device)
-            try:
-                with torch.no_grad():
-                    embedding_repr = model(token_encoding.input_ids,
-                                           attention_mask=token_encoding.attention_mask
-                                           )
-            except RuntimeError:
-                print("RuntimeError during embedding for {} (L={})".format(
-                    pdb_id, seq_len)
-                )
-                continue
+                token_encoding = vocab.batch_encode_plus(seqs,
+                                                        add_special_tokens=True,
+                                                        padding="longest",
+                                                        return_tensors='pt'
+                                                        ).to(device)
+                try:
+                    with torch.no_grad():
+                        embedding_repr = model(token_encoding.input_ids,
+                                            attention_mask=token_encoding.attention_mask
+                                            )
+                except RuntimeError:
+                    print("RuntimeError during embedding for {} (L={})".format(
+                        pdb_id, seq_len)
+                    )
+                    continue
 
-            # ProtT5 appends a special tokens at the end of each sequence
-            # Mask this also out during inference while taking into account the prefix
-            for idx, s_len in enumerate(seq_lens):
-                token_encoding.attention_mask[idx, s_len+1] = 0
+                # ProtT5 appends a special tokens at the end of each sequence
+                # Mask this also out during inference while taking into account the prefix
+                for idx, s_len in enumerate(seq_lens):
+                    token_encoding.attention_mask[idx, s_len+1] = 0
 
-            # extract last hidden states (=embeddings)
-            residue_embedding = embedding_repr.last_hidden_state.detach()
-            # mask out padded elements in the attention output (can be non-zero) for further processing/prediction
-            residue_embedding = residue_embedding * \
-                token_encoding.attention_mask.unsqueeze(dim=-1)
-            # slice off embedding of special token prepended before to each sequence
-            residue_embedding = residue_embedding[:, 1:]
+                # extract last hidden states (=embeddings)
+                residue_embedding = embedding_repr.last_hidden_state.detach()
+                # mask out padded elements in the attention output (can be non-zero) for further processing/prediction
+                residue_embedding = residue_embedding * \
+                    token_encoding.attention_mask.unsqueeze(dim=-1)
+                # slice off embedding of special token prepended before to each sequence
+                residue_embedding = residue_embedding[:, 1:]
 
-            # IN: X = (B x L x F) - OUT: ( B x N x L )
-            prediction = predictor(residue_embedding)
-            probabilities = toCPU(torch.max(
-                F.softmax(prediction, dim=1), dim=1, keepdim=True)[0])
-            
-            prediction = toCPU(torch.max(prediction, dim=1, keepdim=True)[
-                               1]).astype(np.byte)
+                # IN: X = (B x L x F) - OUT: ( B x N x L )
+                prediction = predictor(residue_embedding)
+                probabilities = toCPU(torch.max(
+                    F.softmax(prediction, dim=1), dim=1, keepdim=True)[0])
+                
+                prediction = toCPU(torch.max(prediction, dim=1, keepdim=True)[
+                                1]).astype(np.byte)
 
-            # batch-size x seq_len x embedding_dim
-            # extra token is added at the end of the seq
-            for batch_idx, identifier in enumerate(pdb_ids):
-                s_len = seq_lens[batch_idx]
-                # slice off padding and special token appended to the end of the sequence
-                pred = prediction[batch_idx, :, 0:s_len].squeeze()
-                prob = int( 100* np.mean(probabilities[batch_idx, :, 0:s_len]))
-                predictions[identifier] = (pred, prob)
-                assert s_len == len(predictions[identifier][0]), logger.warning(
-                    f"Length mismatch for {identifier}: is:{len(predictions[identifier])} vs should:{s_len}")
-
-
-    preds_out_path = write_predictions(predictions, args)
-    probs_out_path = write_probs(predictions, args)
-
-    return preds_out_path, probs_out_path
-
-# From Sean R Johnson at https://github.com/seanrjohnson/esmologs
+                # batch-size x seq_len x embedding_dim
+                # extra token is added at the end of the seq
+                for batch_idx, identifier in enumerate(pdb_ids):
+                    s_len = seq_lens[batch_idx]
+                    # slice off padding and special token appended to the end of the sequence
+                    pred = prediction[batch_idx, :, 0:s_len].squeeze()
+                    prob = int( 100* np.mean(probabilities[batch_idx, :, 0:s_len]))
+                    predictions[identifier] = (pred, prob)
+                    assert s_len == len(predictions[identifier][0]), logger.warning(
+                        f"Length mismatch for {identifier}: is:{len(predictions[identifier])} vs should:{s_len}")
 
 
-#Importing required libraries
-# import string
-# import torch
-# from torch.nn.utils.rnn import pad_sequence
-# import torch.nn.functional as F
-# from tqdm import tqdm
-# from Bio import SeqIO
-# import numpy as np
-# import importlib.resources as importlib_resources
+        preds_out_path = write_predictions(predictions, args, input)
+        probs_out_path = write_probs(predictions, args, input)
+        pred_path_list.append(preds_out_path)
 
-# def _open_if_is_name(filename_or_handle, mode="r"):
-#     """
-#         if a file handle is passed, return the file handle
-#         if a Path object or path string is passed, open and return a file handle to the file.
-#         returns:
-#             file_handle, input_type ("name" | "handle")
-#     """
-#     out = filename_or_handle
-#     input_type = "handle"
-#     try:
-#         out = open(filename_or_handle, mode)
-#         input_type = "name"
-#     except TypeError:
-#         pass
-#     except Exception as e:
-#         raise(e)
-
-#     return (out, input_type)
-
-
-# def get_data():
-#     pkg = importlib_resources.files("threedifam")
-#     train_set_pep = list(SeqIO.parse(str(pkg / "data" / "train_set_pep.fasta"), "fasta"))
-#     train_set_3di = list(SeqIO.parse(str(pkg / "data" / "train_set_3di.fasta"), "fasta"))
-#     test_set_pep = list(SeqIO.parse(str(pkg / "data" / "test_set_pep.fasta"), "fasta"))
-#     test_set_3di =list(SeqIO.parse(str(pkg / "data" / "test_set_3di.fasta"), "fasta"))
-#     val_set_pep = list(SeqIO.parse(str(pkg / "data" / "val_set_pep.fasta"), "fasta"))
-#     val_set_3di = list(SeqIO.parse(str(pkg / "data" / "val_set_3di.fasta"), "fasta"))
-    
-#     #get only the sequences 
-#     train_set_pep_seqs = parse_seqs_list(train_set_pep)
-#     train_set_3di_seqs = parse_seqs_list(train_set_3di)
-#     test_set_pep_seqs = parse_seqs_list(test_set_pep)
-#     test_set_3di_seqs = parse_seqs_list(test_set_3di)
-#     val_set_pep_seqs = parse_seqs_list(val_set_pep)
-#     val_set_3di_seqs = parse_seqs_list(val_set_3di)
-    
-#     return train_set_pep_seqs,train_set_3di_seqs,test_set_pep_seqs,test_set_3di_seqs,val_set_pep_seqs,val_set_3di_seqs
-
-# def parse_seqs_list(seqs_list):
-#     seqs = []
-#     #get a list of sequences
-#     for record in seqs_list:
-#         seqs.append(str(record.seq))
-        
-#     return seqs
-             
-# def seq2onehot(seq_records):
-#     #declaring the alphabet
-#     # - represents padding
-#     alphabet = 'ACDEFGHIKLMNPQRSTVWYBXZJUO-'
-
-#     # define a mapping of chars to integers
-#     aa_to_int = dict((c, i) for i, c in enumerate(alphabet))
-#     int_to_aa = dict((i, c) for i, c in enumerate(alphabet))
-    
-#     one_hot_representations = []
-#     integer_encoded_representations = []
-
-#     for seq in seq_records:
-#         # integer encode seq data
-#         integer_encoded = torch.tensor(np.array([aa_to_int[aa] for aa in seq]))
-#         # convert tensors into one-hot encoding 
-#         one_hot_representations.append(F.one_hot(integer_encoded, num_classes=27))
-
-#     ps = pad_sequence(one_hot_representations,batch_first=True)
-#     output = torch.transpose(ps,1,2)
-#     return output
-
-# def seq2integer(seq_records):
-#     #declaring the alphabet
-#     # - represents padding
-#     alphabet = 'ACDEFGHIKLMNPQRSTVWYBXZJUO-'
-
-#     # define a mapping of chars to integers
-#     aa_to_int = dict((c, i) for i, c in enumerate(alphabet))
-#     int_to_aa = dict((i, c) for i, c in enumerate(alphabet))
-    
-#     integer_encoded_representations = []
-
-#     for seq in seq_records:
-#         # integer encode seq data
-#         integer_encoded = torch.tensor([aa_to_int[aa] for aa in seq])
-#         integer_encoded_representations.append(integer_encoded)
-    
-#     #pad result to get equal sized tensors
-#     output = pad_sequence(integer_encoded_representations,batch_first=True,padding_value=26.0)
-#     return output
-
-# class CleanSeq():
-#     def __init__(self, clean=None):
-#         self.clean = clean
-#         if clean == 'delete':
-#             # uses code from: https://github.com/facebookresearch/esm/blob/master/examples/contact_prediction.ipynb
-#             deletekeys = dict.fromkeys(string.ascii_lowercase)
-#             deletekeys["."] = None
-#             deletekeys["*"] = None
-#             translation = str.maketrans(deletekeys)
-#             self.remove_insertions = lambda x: x.translate(translation)
-#         elif clean == 'upper':
-#             deletekeys = {'*': None, ".": "-"}
-#             translation = str.maketrans(deletekeys)
-#             self.remove_insertions = lambda x: x.upper().translate(translation)
-            
-
-#         elif clean == 'unalign':
-#             deletekeys = {'*': None, ".": None, "-": None}
-            
-#             translation = str.maketrans(deletekeys)
-#             self.remove_insertions = lambda x: x.upper().translate(translation)
-        
-#         elif clean is None:
-#             self.remove_insertions = lambda x: x
-        
-#         else:
-#             raise ValueError(f"unrecognized input for clean parameter: {clean}")
-        
-#     def __call__(self, seq):
-#         return self.remove_insertions(seq)
-
-#     def __repr__(self):
-#         return f"CleanSeq(clean={self.clean})"
-
-
-
-
-# def parse_fasta(filename, return_names=False, clean=None, full_name=False): 
-#     """
-#         adapted from: https://bitbucket.org/seanrjohnson/srj_chembiolib/src/master/parsers.py
-        
-#         input:
-#             filename: the name of a fasta file or a filehandle to a fasta file.
-#             return_names: if True then return two lists: (names, sequences), otherwise just return list of sequences
-#             clean: {None, 'upper', 'delete', 'unalign'}
-#                     if 'delete' then delete all lowercase "." and "*" characters. This is usually if the input is an a2m file and you don't want to preserve the original length.
-#                     if 'upper' then delete "*" characters, convert lowercase to upper case, and "." to "-"
-#                     if 'unalign' then convert to upper, delete ".", "*", "-"
-#             full_name: if True, then returns the entire name. By default only the part before the first whitespace is returned.
-#         output: sequences or (names, sequences)
-#     """
-    
-#     prev_len = 0
-#     prev_name = None
-#     prev_seq = ""
-#     out_seqs = list()
-#     out_names = list()
-#     (input_handle, input_type) = _open_if_is_name(filename)
-
-#     seq_cleaner = CleanSeq(clean)
-
-#     for line in input_handle:
-#         line = line.strip()
-#         if len(line) == 0:
-#             continue
-#         if line[0] == ">":
-#             if full_name:
-#                 name = line[1:]
-#             else:
-#                 parts = line.split(None, 1)
-#                 name = parts[0][1:]
-#             out_names.append(name)
-#             if (prev_name is not None):
-#                 out_seqs.append(prev_seq)
-#             prev_len = 0
-#             prev_name = name
-#             prev_seq = ""
-#         else:
-#             prev_len += len(line)
-#             prev_seq += line
-#     if (prev_name != None):
-#         out_seqs.append(prev_seq)
-
-#     if input_type == "name":
-#         input_handle.close()
-    
-#     if clean is not None:
-#         for i in range(len(out_seqs)):
-#             out_seqs[i] = seq_cleaner(out_seqs[i])
-
-#     if return_names:
-#         return out_names, out_seqs
-#     else:
-#         return out_seqs
-    
-
-# def iter_fasta(filename, clean=None, full_name=False): 
-#     """
-#         adapted from: https://bitbucket.org/seanrjohnson/srj_chembiolib/src/master/parsers.py
-        
-#         input:
-#             filename: the name of a fasta file or a filehandle to a fasta file.
-#             return_names: if True then return two lists: (names, sequences), otherwise just return list of sequences
-#             clean: {None, 'upper', 'delete', 'unalign'}
-#                     if 'delete' then delete all lowercase "." and "*" characters. This is usually if the input is an a2m file and you don't want to preserve the original length.
-#                     if 'upper' then delete "*" characters, convert lowercase to upper case, and "." to "-"
-#                     if 'unalign' then convert to upper, delete ".", "*", "-"
-#             full_name: if True, then returns the entire name. By default only the part before the first whitespace is returned.
-#         output: names, sequences
-#     """
-    
-#     prev_len = 0
-#     prev_name = None
-#     prev_seq = ""
-#     (input_handle, input_type) = _open_if_is_name(filename)
-
-#     seq_cleaner = CleanSeq(clean)
-
-#     for line in input_handle:
-#         line = line.strip()
-#         if len(line) == 0:
-#             continue
-#         if line[0] == ">":
-#             if full_name:
-#                 name = line[1:]
-#             else:
-#                 parts = line.split(None, 1)
-#                 name = parts[0][1:]
-#             if (prev_name is not None):
-#                 yield prev_name, seq_cleaner(prev_seq)
-#             prev_len = 0
-#             prev_name = name
-#             prev_seq = ""
-#         else:
-#             prev_len += len(line)
-#             prev_seq += line
-#     if (prev_name != None):
-#         yield prev_name, seq_cleaner(prev_seq)
-        
-
-#     if input_type == "name":
-#         input_handle.close()
-
-
-# def fasta2foldseek(aa_fasta, tdi_fasta, output_basename):
-#     # pep dbtype
-#     with open(output_basename+".dbtype","wb") as pep_dbtype:
-#         pep_dbtype.write(b'\x00\x00\x00\x00')
-
-#     # 3Di dbtype
-#     with open(output_basename+"_ss.dbtype","wb") as tdi_dbtype:
-#         tdi_dbtype.write(b'\x00\x00\x00\x00')
-
-#     # headers dbtype
-#     with open(output_basename+"_h.dbtype","wb") as h_dbtype:
-#         h_dbtype.write(b'\x00\x0c\x00\x00')
-        
-    
-#     with open(f"{output_basename}","wb") as aa_h, open(f"{output_basename}_ss","wb") as tdi_h, open(f"{output_basename}_h","wb") as header_h, \
-#          open(f"{output_basename}.index","wb") as aa_index_h, open(f"{output_basename}_ss.index","wb") as tdi_index_h, open(f"{output_basename}_h.index","wb") as header_index_h, \
-#          open(f"{output_basename}.lookup","wb") as lookup_h, \
-#          open(tdi_fasta, "r") as tdi_in, open(aa_fasta, "r") as pep_in:
-#         tdi_iter = iter_fasta(tdi_in, full_name=True)
-
-#         seq_index = -1
-#         for pep_header, pep_seq in iter_fasta(pep_in, full_name=True):
-#             pep_name = pep_header.split(' ')[0]
-#             tdi_header, tdi_seq = next(tdi_iter)
-#             tdi_name = tdi_header.split(' ')[0]
-#             assert pep_header == tdi_header, f"Headers do not match: {pep_header} != {tdi_header}"
-#             assert pep_name == tdi_name, f"Names do not match: {pep_name} != {tdi_name}"
-#             # assert len(pep_seq) == len(tdi_seq), f"Sequences do not match in length: {len(pep_seq)} != {len(tdi_seq)}"
-
-#             seq_index += 1
-            
-#             # write the pep sequence
-#             aa_start_pos = aa_h.tell()
-#             aa_index_h.write(f"{seq_index}\t{aa_start_pos}\t".encode())
-#             aa_h.write(pep_seq.encode())
-#             aa_h.write(b'\x0a\x00')
-#             aa_index_h.write(f"{aa_h.tell() - aa_start_pos}\n".encode())
-
-#             # write the tdi sequence
-#             tdi_start_pos = tdi_h.tell()
-#             tdi_index_h.write(f"{seq_index}\t{tdi_start_pos}\t".encode())
-#             tdi_h.write(tdi_seq.encode())
-#             tdi_h.write(b'\x0a\x00')
-#             tdi_index_h.write(f"{tdi_h.tell() - tdi_start_pos}\n".encode())
-
-#             # write the header
-#             header_start_pos = header_h.tell()
-#             header_index_h.write(f"{seq_index}\t{header_start_pos}\t".encode())
-#             header_h.write(pep_header.encode())
-#             header_h.write(b'\x0a\x00')
-#             header_index_h.write(f"{header_h.tell() - header_start_pos}\n".encode())
-
-#             # write the lookup
-#             lookup_h.write(f"{seq_index}\t{pep_name}\t{seq_index}\n".encode())
+    return pred_path_list
 
 def prep_foldseek_dbs(fasta_aa, fasta_3di, output_basename):
-#     # read in amino-acid sequences
-#     sequences_aa = {}
-#     for record in SeqIO.parse(fasta_aa, "fasta"):
-#         sequences_aa[record.id] = str(record.seq)
-
-#     # read in 3Di strings
-#     sequences_3di = {}
-#     for record in SeqIO.parse(fasta_3di, "fasta"):
-#         if not record.id in sequences_aa.keys():
-#             print("Warning: ignoring 3Di entry {}, since it is not in the amino-acid FASTA file".format(record.id))
-#         else:
-#             sequences_3di[record.id] = str(record.seq).upper()
-
-#     # assert that we parsed 3Di strings for all sequences in the amino-acid FASTA file
-#     for id in sequences_aa.keys():
-#         if not id in sequences_3di.keys():
-#             print("Error: entry {} in amino-acid FASTA file has no corresponding 3Di string".format(id))
-#             quit()
-
-#     # generate TSV file contents
-#     tsv_aa = ""
-#     tsv_3di = ""
-#     tsv_header = ""
-#     for i,id in enumerate(sequences_aa.keys()):
-#         tsv_aa += "{}\t{}\n".format(str(i+1), sequences_aa[id])
-#         tsv_3di += "{}\t{}\n".format(str(i+1), sequences_3di[id])
-#         tsv_header += "{}\t{}\n".format(str(i+1), id)
-
-#     # write TSV files
-#     with open("aa.tsv", "w+") as f:
-#         f.write(tsv_aa)
-#     with open("3di.tsv", "w+") as f:
-#         f.write(tsv_3di)
-#     with open("header.tsv", "w+") as f:
-#         f.write(tsv_header)
-
-#     # create Foldseek database
-#     os.system("foldseek tsv2db aa.tsv {} --output-dbtype 0".format(output_basename))
-#     os.system("foldseek tsv2db 3di.tsv {}_ss --output-dbtype 0".format(output_basename))
-#     os.system("foldseek tsv2db header.tsv {}_h --output-dbtype 12".format(output_basename))
-
-    # clean up
-    # os.remove("aa.tsv")
-    # os.remove("3di.tsv")
-    # os.remove("header.tsv")
-#     # read in amino-acid sequences
     sequences_aa = {}
     for record in SeqIO.parse(fasta_aa, "fasta"):
         sequences_aa[record.id] = str(record.seq)
@@ -1096,9 +753,6 @@ def prep_foldseek_dbs(fasta_aa, fasta_3di, output_basename):
     with open(f'tmp_{output_basename}_header.tsv', "w+") as f:
         f.write(tsv_header)
 
-    for type, code in [('aa', 0), ('tdi', 0), ('header', 12)]:
-        ic(type)
-        ic(code)
-        foldseek_tsv2db = f'foldseek tsv2db tmp_{output_basename}_{type}.tsv tmp_{output_basename}_{type}_db --output-dbtype {code}'.split()
+    for type, code, suff in [('aa', 0, ''), ('tdi', 0, '_ss'), ('header', 12, '_h')]:
+        foldseek_tsv2db = f'foldseek tsv2db tmp_{output_basename}_{type}.tsv tmp_{output_basename}_db{suff} --output-dbtype {code} -v 0'.split()
         subprocess.run(foldseek_tsv2db)
-        print('eyee')
