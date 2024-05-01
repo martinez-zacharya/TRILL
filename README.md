@@ -17,14 +17,14 @@ TRILL (**TR**aining and **I**nference using the **L**anguage of **L**ife) is a s
 
 | **Command** | **Function** | **Available Models** |
 |:-----------:|:------------:|:--------------------:|
-| **Embed** | Generates numerical representations or "embeddings" of protein sequences for quantitative analysis and comparison. | [ESM2](https://doi.org/10.1101/2022.07.20.500902), [ProtT5-XL](https://doi.org/10.1109/TPAMI.2021.3095381), [ProstT5](https://doi.org/10.1101/2023.07.23.550085) |
+| **Embed** | Generates numerical representations or "embeddings" of protein sequences for quantitative analysis and comparison. | [ESM2](https://doi.org/10.1101/2022.07.20.500902), [ProtT5-XL](https://doi.org/10.1109/TPAMI.2021.3095381), [ProstT5](https://doi.org/10.1101/2023.07.23.550085), [Ankh](https://doi.org/10.48550/arXiv.2301.06568) |
 | **Visualize** | Creates interactive 2D visualizations of embeddings for exploratory data analysis. | PCA, t-SNE, UMAP |
 | **Finetune** | Finetunes protein language models for specific tasks. | [ESM2](https://doi.org/10.1101/2022.07.20.500902), [ProtGPT2](https://doi.org/10.1038/s41467-022-32007-7), [ZymCTRL](https://www.mlsb.io/papers_2022/ZymCTRL_a_conditional_language_model_for_the_controllable_generation_of_artificial_enzymes.pdf) |
 | **Language Model Protein Generation** | Generates proteins using pretrained language models. | [ESM2](https://doi.org/10.1101/2022.07.20.500902), [ProtGPT2](https://doi.org/10.1038/s41467-022-32007-7), [ZymCTRL](https://www.mlsb.io/papers_2022/ZymCTRL_a_conditional_language_model_for_the_controllable_generation_of_artificial_enzymes.pdf) |
 | **Inverse Folding Protein Generation** | Designs proteins to fold into specific 3D structures. | [ESM-IF1](https://doi.org/10.1101/2022.04.10.487779), [ProteinMPNN](https://doi.org/10.1101/2022.06.03.494563), [ProstT5](https://doi.org/10.1101/2023.07.23.550085) |
 | **Diffusion Based Protein Generation** | Uses denoising diffusion models to generate proteins. | [RFDiffusion](https://doi.org/10.1101/2022.12.09.519842) |
 | **Fold** | Predicts 3D protein structures. | [ESMFold](https://doi.org/10.1101/2022.07.20.500902), [ProstT5](https://doi.org/10.1101/2023.07.23.550085) |
-| **Dock** | Simulates protein-ligand interactions. | [DiffDock](https://doi.org/10.48550/arXiv.2210.01776), [Smina](https://doi.org/10.1021/ci300604z), [Autodock Vina](https://doi.org/10.1021/acs.jcim.1c00203), [Lightdock](https://doi.org/10.1093/bioinformatics/btx555) |
+| **Dock** | Simulates protein-ligand interactions. | [DiffDock](https://doi.org/10.48550/arXiv.2210.01776), [Smina](https://doi.org/10.1021/ci300604z), [Autodock Vina](https://doi.org/10.1021/acs.jcim.1c00203), [Lightdock](https://doi.org/10.1093/bioinformatics/btx555), [GeoDock](https://doi.org/10.1002/pro.4862) |
 | **Classify** | Predicts protein properties at high throughput. | [TemStaPro](https://doi.org/10.1101/2023.03.27.534365), [EpHod](https://doi.org/10.1101/2023.06.22.544776) |
 | **Simulate** | Uses molecular dynamics with the AMBER force field to relax structures. | [OpenMM](https://doi.org/10.1371/journal.pcbi.1005659) |
 
