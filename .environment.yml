@@ -44,7 +44,7 @@ dependencies:
     - cchardet
     - skops
     - fairscale
-    - deepspeed
+    # - deepspeed
     - sphinx-argparse
     - myst-parser
     - sphinx-rtd-dark-mode
