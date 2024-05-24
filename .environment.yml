@@ -20,6 +20,7 @@ dependencies:
   - pip:
     - lightning-fabric==2.2.5
     - h5py
+    - setuptools
     - pytorch-lightning
     - transformers
     - datasets
