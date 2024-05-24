@@ -16,6 +16,7 @@ dependencies:
   - pytorch-cluster=1.6.1=py38_torch_1.13.0_cpu 
   - pytorch-sparse=0.6.17=py38_torch_1.13.0_cpu 
   - pytorch-scatter=2.1.1=py38_torch_1.13.0_cpu
+  - mkl=2024.0
   - pip:
     - lightning-fabric==2.2.5
     - h5py
