@@ -1,34 +1,22 @@
+import math
+import os
+import random
+# from colossalai.nn.optimizer import HybridAdam, CPUAdam
+import re
+
 import pytorch_lightning as pl
 import torch
-import esm
-import torch.nn as nn
 import torch.nn.functional as F
-import pandas as pd
-import sys
-import gc
-import os
-import math
-from tqdm import trange
-import random
-import numpy as np
-SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
-sys.path.append(os.path.dirname(SCRIPT_DIR))
-# sys.path.insert(0, 'utils')
-from utils.mask import maskInputs
-from utils.update_weights import weights_update
-from pytorch_lightning.loggers import TensorBoardLogger
-from pytorch_lightning.profilers import PyTorchProfiler
 from deepspeed.ops.adam import DeepSpeedCPUAdam
-from transformers import pipeline, AutoTokenizer, AutoModelForCausalLM, DataCollatorForLanguageModeling, T5EncoderModel, T5Tokenizer, AutoModelForSeq2SeqLM, AutoModel
-from esm.inverse_folding.multichain_util import sample_sequence_in_complex
-# from colossalai.nn.optimizer import HybridAdam, CPUAdam
-from deepspeed.ops.adam import FusedAdam
-from tqdm import tqdm
-import re
 from pytorch_lightning.callbacks import BasePredictionWriter
-import torch
 from torch.utils.data import Dataset
-from icecream import ic
+from tqdm import trange
+from loguru import logger
+from transformers import pipeline, AutoTokenizer, AutoModelForCausalLM, DataCollatorForLanguageModeling, T5EncoderModel, \
+    T5Tokenizer, AutoModelForSeq2SeqLM
+
+from .esm_utils import Alphabet
+from .mask import maskInputs
 
 ESM_ALLOWED_AMINO_ACIDS = "ACDEFGHIKLMNPQRSTVWY"
 
@@ -43,6 +31,8 @@ class ESM(pl.LightningModule):
             self.strat = args.strategy
             self.mask_fraction = args.mask_fraction
             self.pre_masked_fasta = args.pre_masked_fasta
+            if args.pre_masked_fasta:
+                self.alphabet = Alphabet.from_architecture('ESM-1b')
         else:
             self.strat = None
             self.mask_fraction = None
@@ -51,18 +41,21 @@ class ESM(pl.LightningModule):
         if args.command == 'embed' or args.command == 'dock':
             self.per_AA = args.per_AA
             self.avg = args.avg
- 
 
     def training_step(self, batch, batch_idx):
         torch.cuda.empty_cache()
         labels, seqs, toks = batch
-        del labels, seqs, batch_idx
+        del labels, batch_idx
         if self.pre_masked_fasta:
             masked_toks = toks
+            actual_toks = seqs
         else:
             masked_toks = maskInputs(toks, self.esm, self.mask_fraction)
         output = self.esm(masked_toks, repr_layers = [-1], return_contacts=False)
-        loss = F.cross_entropy(output['logits'].permute(0,2,1), toks)
+        if self.pre_masked_fasta:
+            loss = F.cross_entropy(output['logits'].permute(0,2,1), actual_toks)
+        else:
+            loss = F.cross_entropy(output['logits'].permute(0,2,1), toks)
         self.log("loss", loss)
         del masked_toks, toks
         return {"loss": loss}
@@ -138,7 +131,7 @@ class ProtGPT2(pl.LightningModule):
             # raise RuntimeError
             optimizer = DeepSpeedCPUAdam(self.model.parameters(), lr=self.lr)
         elif 'fsdp' in self.strat:
-            print("*** FSDP can't currently be used with TRILL and ProtGPT2 ***")
+            logger.warning("*** FSDP can't currently be used with TRILL and ProtGPT2 ***")
             raise RuntimeError
             # optimizer = torch.optim.Adam(self.trainer.model.parameters(), lr=self.lr)
         else:
@@ -626,7 +619,7 @@ class ZymCTRL(pl.LightningModule):
         if 'offload' in self.strat:
             optimizer = DeepSpeedCPUAdam(self.model.parameters(), lr=self.lr)
         elif 'fsdp' in self.strat:
-            print("*** FSDP can't currently be used with TRILL and ProtGPT2 ***")
+            logger.warning("*** FSDP can't currently be used with TRILL and ProtGPT2 ***")
             raise RuntimeError
             # optimizer = torch.optim.Adam(self.trainer.model.parameters(), lr=self.lr)
         else:
@@ -669,7 +662,7 @@ class ProstT5(pl.LightningModule):
                 self.model = T5EncoderModel.from_pretrained("Rostlab/ProstT5", device_map="auto")
             else:
                 self.model = T5EncoderModel.from_pretrained("Rostlab/ProstT5", low_cpu_mem_usage=True)
-        elif self.command == 'fold' or self.command == 'inv_fold_gen':
+        elif self.command == 'fold' or self.command == 'inv_fold_gen' or self.command == 'classify':
             if int(args.GPUs) > 1:
                 self.model = AutoModelForSeq2SeqLM.from_pretrained("Rostlab/ProstT5", device_map="auto")
             else:
@@ -711,7 +704,7 @@ class ProstT5(pl.LightningModule):
         if 'offload' in self.strat:
             optimizer = DeepSpeedCPUAdam(self.model.parameters(), lr=self.lr)
         elif 'fsdp' in self.strat:
-            print("*** FSDP can't currently be used with TRILL and ProtGPT2 ***")
+            logger.warning("*** FSDP can't currently be used with TRILL and ProtGPT2 ***")
             raise RuntimeError
             # optimizer = torch.optim.Adam(self.trainer.model.parameters(), lr=self.lr)
         else:
@@ -748,7 +741,7 @@ class ProstT5(pl.LightningModule):
 
             return aa_reps, avg_reps
 
-        elif self.command == 'fold':
+        elif self.command == 'fold' or self.command=='classify':
             label, _ = batch
             seqs = [" ".join(list(re.sub(r"[UZOB]", "X", sequence))) for sequence in batch[1]]
             seqs = [ "<AA2fold>" + " " + s for s in seqs]

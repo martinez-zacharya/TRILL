@@ -1,17 +1,14 @@
 from __future__ import print_function
-import json, time, os, sys, glob
-import shutil
+from loguru import logger
+import itertools
+import json
+import time
+
 import numpy as np
 import torch
-from torch import optim
-from torch.utils.data import DataLoader
-from torch.utils.data.dataset import random_split, Subset
-
-import copy
 import torch.nn as nn
 import torch.nn.functional as F
-import random
-import itertools
+
 
 # This is straight from https://github.com/dauparas/ProteinMPNN/blob/main/protein_mpnn_utils.py
 #A number of functions/classes are adopted from: https://github.com/jingraham/neurips19-graph-protein-design
@@ -495,7 +492,7 @@ class StructureDataset():
                         discard_count['too_long'] += 1
                 else:
                     if verbose:
-                        print(name, bad_chars, entry['seq'])
+                        logger.info(name, bad_chars, entry['seq'])
                     discard_count['bad_chars'] += 1
 
                 # Truncate early
@@ -504,9 +501,9 @@ class StructureDataset():
 
                 if verbose and (i + 1) % 1000 == 0:
                     elapsed = time.time() - start
-                    print('{} entries ({} loaded) in {:.1f} s'.format(len(self.data), i+1, elapsed))
+                    logger.info('{} entries ({} loaded) in {:.1f} s'.format(len(self.data), i+1, elapsed))
             if verbose:
-                print('discarded', discard_count)
+                logger.warning('discarded', discard_count)
     def __len__(self):
         return len(self.data)
 

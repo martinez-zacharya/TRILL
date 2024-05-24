@@ -1,22 +1,19 @@
-import numpy as np
 import pandas as pd
-import bokeh
-from umap import UMAP
-# import holoviews as hv
-from bokeh.io import output_file, save, show
-from sklearn.decomposition import PCA
-from sklearn.manifold import TSNE
-from bokeh.models import CustomJSFilter, CDSView, ColumnDataSource, TextInput, CustomJS, HoverTool, GroupFilter
-from bokeh.plotting import figure, curdoc, output_notebook, show
 from bokeh.layouts import column
-from bokeh.resources  import settings
-
+from bokeh.models import CustomJSFilter, CDSView, ColumnDataSource, TextInput, CustomJS, HoverTool, GroupFilter
+from bokeh.plotting import figure
 # from bokeh.models import ColumnDataSource, HoverTool, CustomJS, TextInput, CDSView, CustomJSFilter, GroupFilter
 # from bokeh.io import output_notebook, show
 # from bokeh.layouts import column
 # import pandas as pd
 # from bokeh.plotting import figure
 # hv.extension('bokeh')
+# import holoviews as hv
+from sklearn.decomposition import PCA
+from sklearn.manifold import TSNE
+from umap import UMAP
+
+
 
 
 

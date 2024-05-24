@@ -1,22 +1,38 @@
 import os
-from tqdm import tqdm
-from openmm.app.forcefield import ForceField
-from openmm.app.pdbfile import PDBFile
-from openmm.app.simulation import Simulation
-from openmm.openmm import LangevinMiddleIntegrator, Platform, MonteCarloBarostat
-from openmm.unit import kelvin, picosecond, picoseconds, femtosecond
-from openmm.app import NoCutoff, element, Modeller, DCDReporter, StateDataReporter, CutoffPeriodic, PDBReporter, CutoffNonPeriodic
-from openmm import CustomExternalForce
-from utils.cuda_utils import set_platform_properties
-from openmm.app import Topology
-from openmm.vec3 import Vec3
-from openmm.unit import nanometer, elementary_charge, atmospheres
-from openmm.app import PDBFile, Topology
-import time
-# import martini_openmm as martini
-
 import sys
 import time
+
+from openmm import CustomExternalForce
+from openmm.app import PME, NoCutoff, CutoffNonPeriodic, CutoffPeriodic, Ewald, LJPME
+from openmm.app import NoCutoff, Modeller, StateDataReporter, PDBReporter
+from openmm.app import PDBFile, Topology
+from openmm.app.forcefield import ForceField
+from openmm.app.simulation import Simulation
+from openmm.openmm import LangevinMiddleIntegrator, MonteCarloBarostat
+from openmm.unit import kelvin, picosecond, picoseconds, femtosecond
+from openmm.unit import nanometer, atmospheres
+from openff.toolkit.topology import Molecule
+from openff.toolkit import Topology as fftop
+from openmm.vec3 import Vec3
+from openff.toolkit import  Molecule
+from openmm import unit
+from openmmforcefields.generators import SMIRNOFFTemplateGenerator
+from openmmforcefields.generators import SystemGenerator
+from openff.interchange import Interchange
+from openff.toolkit import ForceField as ff_ff
+from openff.toolkit.utils import get_data_file_path
+from openmm.unit.quantity import Quantity
+from tqdm import tqdm
+from icecream import ic
+from loguru import logger
+import numpy as np
+from openff.interchange import Interchange
+from openmm import app
+from openff.interchange.components._packmol import RHOMBIC_DODECAHEDRON, pack_box
+from .cuda_utils import set_platform_properties
+
+
+# import martini_openmm as martini
 
 class SilentOutputStream:
     def write(self, *args, **kwargs):
@@ -113,17 +129,47 @@ def minimize_and_save(simulation, output_dir, name):
     simulation.context.reinitialize(preserveState=True)
     return simulation
 
+# def setup_openff_interchange(args):
+#     # rec_path = get_data_file_path('/home/zachmartinez/trill1.7.0/TRILL/MBP2.pdb')
+#     topology = fftop.from_pdb(args.protein)
+#     protein = topology.molecule(0)
+#     lig = Molecule.from_file(args.ligand)
+#     lig.generate_conformers(n_conformers=1)
+
+#     topology = fftop.from_molecules([lig])
+#     amber_force_field = ff_ff("ff14sb_off_impropers_0.0.3.offxml")
+#     rec_inter = amber_force_field.create_interchange(topology=protein.to_topology())
+#     lig_ff = ff_ff('openff-2.1.0.offxml', 'ff14sb_off_impropers_0.0.3.offxml')
+
+#     if args.solvate:
+#         water = Molecule.from_mapped_smiles("[H:2][O:1][H:3]")
+#         topology = pack_box(molecules=[lig, water, protein],number_of_copies=[1, 1000, 1],box_vectors=7.5 * RHOMBIC_DODECAHEDRON * unit.nanometer)
+#         interchange = Interchange.from_smirnoff(force_field=lig_ff, topology=topology)
+#         openmm_system = interchange.to_openmm()
+#         openmm_topology = interchange.to_openmm_topology()
+#         openmm_positions = interchange.positions.to_openmm()
+#     else:
+
+#         lig_inter = Interchange.from_smirnoff(lig_ff, topology)
+
+#         interchange = Interchange.combine(rec_inter, lig_inter)
+#         openmm_system = interchange.to_openmm()
+#         openmm_topology = interchange.to_openmm_topology()
+#         openmm_positions = interchange.positions.to_openmm()
+
+#     return openmm_system, openmm_topology, openmm_positions
+
 
 def run_simulation(args):
     platform, properties = set_platform_properties(args)
 
-    print("Preparing simulation...")
+    logger.info("Preparing simulation...")
     # for filename in fixed_pdb_files:
     simulation, system = set_simulation_parameters2(platform, properties, args)
     # simulation.context.reinitialize(True)
-    print('Minimizing complex energy...')
+    logger.info('Minimizing complex energy...')
     minimize_and_save(simulation, args.outdir, args.name)
-    print("Performing simulation...")
+    logger.info("Performing simulation...")
     simulation.context.reinitialize(True)
     equilibriate(simulation, args, system)
     simulation.context.reinitialize(True)
@@ -155,32 +201,48 @@ def set_simulation_parameters2(platform, properties, args):
     #     simulation.reporters.append(PDBReporter(f'{args.name}_sim.pdb', 10000))
     #     return simulation, system
 
-    # else:
+
+
     pdb = PDBFile(args.protein)
-    if args.ligand:
-        lig = PDBFile(args.ligand)
-    modeller = Modeller(pdb.topology, pdb.positions)
-    print(f'System has added {args.protein} with {modeller.topology.getNumAtoms()} atoms')
-    if args.ligand:
-        modeller.add(lig.topology, lig.positions)
-        print(f'System has added {args.ligand} with {modeller.topology.getNumAtoms()} atoms')
     forcefield = ForceField(args.forcefield, args.solvent)
-    if args.solvate:
-        solvent = args.solvent.split('/')[-1].split('.')[0]
-        if solvent == 'tip3pfb':
-            solvent = 'tip3p'
-        modeller.addSolvent(forcefield, model=solvent, padding = 5*nanometer)
-        print(f'System has {modeller.topology.getNumAtoms()} atoms after solvation')
-        box_vec = modeller.getTopology().getPeriodicBoxVectors()
-        system = forcefield.createSystem(modeller.topology, nonbondedMethod=CutoffPeriodic, constraints=args.constraints, rigidWater=args.rigidWater)
-        system.setDefaultPeriodicBoxVectors(box_vec[0], box_vec[1], box_vec[2])
+    if args.ligand:
+        if args.ligand.endswith('.pdb'):
+            lig = PDBFile(args.ligand)
+        else:
+            lig = Molecule.from_file(args.ligand)
+            smirnoff = SMIRNOFFTemplateGenerator(molecules=lig)
+            forcefield.registerTemplateGenerator(smirnoff.generator)
+    modeller = Modeller(pdb.topology, pdb.positions)
+    logger.info(f'System has added {args.protein} with {modeller.topology.getNumAtoms()} atoms')
+    if args.ligand:
+        lig_topology = lig.to_topology()
+        positions_array = lig_topology.get_positions().magnitude
+        vec3_positions = [Vec3(x, y, z) for x, y, z in positions_array]
+        final_positions = Quantity(vec3_positions, unit.nanometer)
+        modeller.add(lig_topology.to_openmm(), final_positions)
+        logger.info(f'System has added {args.ligand} with {modeller.topology.getNumAtoms()} atoms')
+    if 'tip' in args.solvent:
+        args.solvent = args.solvent.split('/')[-1].split('.')[0]
+        if args.solvent == 'tip3pfb':
+            args.solvent = 'tip3p'
+        modeller.addSolvent(forcefield, model=args.solvent, boxSize = Vec3(args.periodic_box, args.periodic_box, args.periodic_box))
+    logger.info(f'System has {modeller.topology.getNumAtoms()} atoms after solvation')
+    nonbonded_methods = {
+        "NoCutoff": NoCutoff,
+        "CutoffNonPeriodic": CutoffNonPeriodic,
+        "CutoffPeriodic": CutoffPeriodic,
+        "Ewald": Ewald,
+        "PME": PME,
+        "LJPME": LJPME  
+            }
     box_vec = [Vec3(args.periodic_box,0,0), Vec3(0,args.periodic_box,0), Vec3(0,0,args.periodic_box)]
-    system = forcefield.createSystem(modeller.topology, nonbondedMethod=NoCutoff, nonbondedCutoff=1*nanometer, constraints=args.constraints, rigidWater=args.rigidWater)
+    system = forcefield.createSystem(modeller.topology, nonbondedMethod=nonbonded_methods[args.nonbonded_method], nonbondedCutoff=1*nanometer, constraints=args.constraints, rigidWater=args.rigidWater)
     system.setDefaultPeriodicBoxVectors(box_vec[0], box_vec[1], box_vec[2])
-    if system.usesPeriodicBoundaryConditions():
-        print('Default Periodic box: {}'.format(system.getDefaultPeriodicBoxVectors()))
-    else:
-        print('No Periodic Box')
+    logger.info(f'Periodic box size: x={args.periodic_box}, y={args.periodic_box}, z={args.periodic_box}')
+    # if system.usesPeriodicBoundaryConditions():
+    #     logger.info('Default Periodic box: {}'.format(system.getDefaultPeriodicBoxVectors()))
+    # else:
+    #     logger.info('No Periodic Box')
 
     if args.apply_harmonic_force:
         harmonic_force = CustomExternalForce("0.5 * k * (z - z0)^2")
@@ -190,28 +252,27 @@ def set_simulation_parameters2(platform, properties, args):
         for atom_index in molecule_atom_indices:
             harmonic_force.addParticle(atom_index, [])
         system.addForce(harmonic_force)
-    # simulation.context.reinitialize(preserveState=True)
+
     integrator = LangevinMiddleIntegrator(300*kelvin, 1/picosecond, args.step_size*femtosecond)
     simulation = Simulation(modeller.topology, system, integrator, platform, properties)
     simulation.context.setPositions(modeller.positions)
-    # simulation.reporters.append(StateDataReporter(sys.stdout, 10, step=True, progress = True, totalSteps = (int(args.num_steps)+(2*args.equilibration_steps))))
     totalSteps = int(args.num_steps)
     simulation.reporters.append(StateDataReporter(os.path.join(args.outdir, f'{args.name}_StateDataReporter.out'), 100, step=True, potentialEnergy=True, kineticEnergy=True, totalEnergy=True, volume = True, density=True,  temperature=True, speed=True))
     simulation.reporters.append(PDBReporter(os.path.join(args.outdir, f'{args.name}_sim.pdb'), args.reporter_interval))
-    # simulation.reporters.append(DCDReporter(args.output_traj_dcd, 10))
     silent_output_stream = SilentOutputStream()
     progress_reporter = ProgressBarReporter(10, totalSteps, silent_output_stream, step=True)
     simulation.reporters.append(progress_reporter)
     return simulation, system
 
 def equilibriate(simulation, args, system):
-    simulation.context.reinitialize(True)
     simulation.context.setVelocitiesToTemperature(100*kelvin)
-    simulation.context.reinitialize(True)
-    print(f'Warming up temp to {300*kelvin}...')
+    logger.info(f'Warming up temp to {300*kelvin}...')
     simulation.step(args.equilibration_steps)
-    if args.solvate:
-        print(f'Pressurizing to {1*atmospheres}...')
-        system.addForce(MonteCarloBarostat(1 * atmospheres, 300*kelvin, 25))
-        simulation.context.reinitialize(True)
-        simulation.step(args.equilibration_steps)
+    # simulation.step(args.equilibration_steps)
+    simulation.context.reinitialize(preserveState=True)
+    logger.info(f'Pressurizing to {1*atmospheres}...')
+    system.addForce(MonteCarloBarostat(1 * atmospheres, 300*kelvin, 25))
+    # simulation.context.reinitialize(True)
+    simulation.step(args.equilibration_steps)
+    simulation.context.reinitialize(preserveState=True)
+

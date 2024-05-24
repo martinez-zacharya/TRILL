@@ -1,5 +1,5 @@
 import torch
-import numpy as np
+
 
 def maskInputs(train_inputs, model, mask_fraction):
 

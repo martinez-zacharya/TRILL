@@ -1,6 +1,7 @@
 import subprocess
-import os
+
 from openmm.openmm import Platform
+
 
 def get_available_cuda_devices():
     try:

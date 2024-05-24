@@ -1,5 +1,6 @@
-import pandas as pd
 import os
+
+import pandas as pd
 from Bio import SeqIO
 
 
@@ -54,8 +55,6 @@ def FineTuneDatabaseValidation(name, fastaInput):
     database.to_csv(f'{name}_database_df_labeled.csv')
 
     return True
-
-
 
 
 

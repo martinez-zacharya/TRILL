@@ -1,25 +1,21 @@
-import os
-import subprocess
-from rdkit import Chem
-import pandas as pd
-from openmm.app.pdbfile import PDBFile
-from openmm.app import NoCutoff, element
-import pdbfixer
-from tqdm import tqdm
-from multiprocessing import Pool
-from functools import partial
-import shutil
-from biobb_vs.fpocket.fpocket_filter import fpocket_filter
-from biobb_vs.fpocket.fpocket_select import fpocket_select
-from biobb_vs.fpocket.fpocket_run import fpocket_run
-from biobb_vs.utils.box import box
-import json
-from Bio.PDB import PDBParser, Superimposer, PDBIO
 import glob
-from io import StringIO 
+import os
+import shutil
+import subprocess
 import sys
-import numpy as np
+from io import StringIO
 
+import pdbfixer
+from Bio.PDB import PDBParser, Superimposer, PDBIO
+from biobb_vs.fpocket.fpocket_filter import fpocket_filter
+from biobb_vs.fpocket.fpocket_run import fpocket_run
+from biobb_vs.fpocket.fpocket_select import fpocket_select
+from biobb_vs.utils.box import box
+from openmm.app import element
+from openmm.app.pdbfile import PDBFile
+from rdkit import Chem
+from tqdm import tqdm
+from loguru import logger
 
 class Capturing(list):
     def __enter__(self):
@@ -54,7 +50,7 @@ def parse_pocket_output(output):
     return matched_pockets
 
 def convert_protein_to_pdbqt(protein_file, rec_pdbqt):
-    print(f'Converting {protein_file} to {rec_pdbqt}...')
+    logger.info(f'Converting {protein_file} to {rec_pdbqt}...')
     convert_rec = [
         'obabel',
         '-ipdb', protein_file,
@@ -67,7 +63,7 @@ def convert_protein_to_pdbqt(protein_file, rec_pdbqt):
     subprocess.run(convert_rec, stdout=subprocess.DEVNULL)
 
 def convert_ligand_to_pdbqt(ligand_file, lig_pdbqt, lig_ext):
-    print(f'Converting {ligand_file} to {lig_pdbqt}...')
+    logger.info(f'Converting {ligand_file} to {lig_pdbqt}...')
     if lig_ext == "pdb":
         convert_lig = [
             'obabel',
@@ -245,7 +241,7 @@ def run_fpocket_hunting(protein_file, protein_name, args):
         'num_spheres': args.min_alpha_spheres,
         'sort_by': 'score'
     }
-    print('Pocket hunting...')
+    logger.info('Pocket hunting...')
     with Capturing() as output1:
         fpocket_run(input_pdb_path=protein_file,
                     output_pockets_zip=f'{protein_name}_raw_pockets.zip',
@@ -255,7 +251,7 @@ def run_fpocket_hunting(protein_file, protein_name, args):
 
 def run_fpocket_filtering(protein_name):
     prop = {'score': [0.2, 1]}
-    print('Pocket filtering...')
+    logger.info('Pocket filtering...')
     with Capturing() as output2:
         fpocket_filter(f'{protein_name}_raw_pockets.zip', f'{protein_name}_fpocket_info.json', f'{protein_name}_filtered_pockets.zip', properties=prop)
     pockets = parse_pocket_output(output2)
@@ -276,7 +272,7 @@ def extract_box_info_from_pdb(pdb_file_path):
 def smina_dock(args, pocket_file, ligand_file):
     # print(f"Smina docking with {args.protein} and {ligand_file} in pocket {pocket_file}")
     if args.blind:
-      print('Smina blind docking...')
+      logger.info('Smina blind docking...')
 
 
       # Prepare the Smina command
@@ -310,12 +306,12 @@ def smina_dock(args, pocket_file, ligand_file):
     # Run the Smina command
     result = subprocess.run(smina_cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
     if not args.ligand.endswith('.txt'):
-      print(f"Docking completed. Results saved to {args.output_file}")
+      logger.info(f"Docking completed. Results saved to {args.output_file}")
     return result
 
 def vina_dock(args, pocket_file, ligand_file):
     if args.blind:
-      print('Vina blind docking...')
+      logger.info('Vina blind docking...')
 
 
       # Prepare the Vina command
@@ -349,7 +345,7 @@ def vina_dock(args, pocket_file, ligand_file):
     result = subprocess.run(vina_cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
 
     if not args.ligand.endswith('.txt'):
-      print(f"Docking completed. Results saved to {args.output_file}")
+      logger.info(f"Docking completed. Results saved to {args.output_file}")
     return result
 
 def calculate_rmsd(chain1, chain2):
@@ -399,7 +395,10 @@ def fixer_of_pdbs(args):
       fixed_pdb_files.append(receptor)
     else:
       receptor = fix_pdb(args.receptor, alterations={}, args=args)
-      ligand = fix_pdb(args.ligand, alterations={}, args=args)
+      if args.ligand.endswith(".pdb"):
+        ligand = fix_pdb(args.ligand, alterations={}, args=args)
+      else:
+         ligand = args.ligand
       fixed_pdb_files.append(receptor)
       fixed_pdb_files.append(ligand)
     # elif args.structure:
@@ -435,7 +434,6 @@ def fix_pdb(pdb, alterations, args):
   Returns:
     A PDB string representing the fixed structure.
   """
-  print(pdb)
   fixer = pdbfixer.PDBFixer(pdb)
   fixer.findNonstandardResidues()
   alterations['nonstandard_residues'] = fixer.nonstandardResidues
@@ -604,8 +602,6 @@ def lightdock_setup(args):
     if args.restraints:
       cmd = ["lightdock3_setup.py", args.protein, args.ligand, "--outdir", args.outdir, "--noxt", "--noh", "--now", "-s", str(args.swarms), "--seed_points", str(args.RNG_seed), "--seed_anm", str(args.RNG_seed), "--rst", args.restraints]
     else:
-      print(args.protein)
-      print(args.ligand)
       cmd = ["lightdock3_setup.py", args.protein, args.ligand,"--outdir", args.outdir, "--noxt", "--noh", "--now", "-s", str(args.swarms), "--seed_points", str(args.RNG_seed), "--seed_anm", str(args.RNG_seed)]
     subprocess.run(cmd)
 
