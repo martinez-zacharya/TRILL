@@ -236,13 +236,9 @@ def set_simulation_parameters2(platform, properties, args):
         "LJPME": LJPME  
             }
     box_vec = [Vec3(args.periodic_box,0,0), Vec3(0,args.periodic_box,0), Vec3(0,0,args.periodic_box)]
+    modeller.topology.setPeriodicBoxVectors(box_vec)
     system = forcefield.createSystem(modeller.topology, nonbondedMethod=nonbonded_methods[args.nonbonded_method], nonbondedCutoff=1*nanometer, constraints=args.constraints, rigidWater=args.rigidWater)
-    system.setDefaultPeriodicBoxVectors(box_vec[0], box_vec[1], box_vec[2])
     logger.info(f'Periodic box size: x={args.periodic_box}, y={args.periodic_box}, z={args.periodic_box}')
-    # if system.usesPeriodicBoundaryConditions():
-    #     logger.info('Default Periodic box: {}'.format(system.getDefaultPeriodicBoxVectors()))
-    # else:
-    #     logger.info('No Periodic Box')
 
     if args.apply_harmonic_force:
         harmonic_force = CustomExternalForce("0.5 * k * (z - z0)^2")
@@ -258,7 +254,7 @@ def set_simulation_parameters2(platform, properties, args):
     simulation.context.setPositions(modeller.positions)
     totalSteps = int(args.num_steps)
     simulation.reporters.append(StateDataReporter(os.path.join(args.outdir, f'{args.name}_StateDataReporter.out'), 100, step=True, potentialEnergy=True, kineticEnergy=True, totalEnergy=True, volume = True, density=True,  temperature=True, speed=True))
-    simulation.reporters.append(PDBReporter(os.path.join(args.outdir, f'{args.name}_sim.pdb'), args.reporter_interval))
+    simulation.reporters.append(PDBReporter(os.path.join(args.outdir, f'{args.name}_sim.pdb'), args.reporter_interval, enforcePeriodicBox=False))
     silent_output_stream = SilentOutputStream()
     progress_reporter = ProgressBarReporter(10, totalSteps, silent_output_stream, step=True)
     simulation.reporters.append(progress_reporter)
