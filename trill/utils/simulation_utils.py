@@ -8,7 +8,7 @@ from openmm.app import NoCutoff, Modeller, StateDataReporter, PDBReporter
 from openmm.app import PDBFile, Topology
 from openmm.app.forcefield import ForceField
 from openmm.app.simulation import Simulation
-from openmm.openmm import LangevinMiddleIntegrator, MonteCarloBarostat
+from openmm.openmm import LangevinMiddleIntegrator, MonteCarloBarostat, MinimizationReporter
 from openmm.unit import kelvin, picosecond, picoseconds, femtosecond
 from openmm.unit import nanometer, atmospheres
 from openff.toolkit.topology import Molecule

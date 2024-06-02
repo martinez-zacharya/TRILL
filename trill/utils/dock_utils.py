@@ -438,7 +438,8 @@ def fix_pdb(pdb, alterations, args):
   fixer.findNonstandardResidues()
   alterations['nonstandard_residues'] = fixer.nonstandardResidues
   fixer.replaceNonstandardResidues()
-  _remove_heterogens(fixer, alterations, keep_water=False)
+  # _remove_heterogens(fixer, alterations, keep_water=False)
+  fixer.removeHeterogens(False)
   fixer.findMissingResidues()
   alterations['missing_residues'] = fixer.missingResidues
   fixer.findMissingAtoms()

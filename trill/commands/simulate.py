@@ -40,8 +40,9 @@ def setup(subparsers):
     simulate.add_argument(
         "--solvent",
         type=str,
+        choices=["implicit/hct.xml", "amber14/tip3p.xml", "amber14/tip3pfb.xml"],
         default="implicit/hct.xml",
-        help="Solvent model to use, the default is implicit/hct.xml"
+        help="Solvent model to use. Options are 'implicit/hct.xml', 'amber14/tip3p.xml', or 'amber14/tip3pfb.xml'. The default is 'implicit/hct.xml'."
     )
     # simulate.add_argument(
     #     "--solvate",
