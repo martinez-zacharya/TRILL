@@ -4,6 +4,7 @@ import shutil
 import subprocess
 import sys
 from io import StringIO
+import pkg_resources
 
 import pdbfixer
 from Bio.PDB import PDBParser, Superimposer, PDBIO
@@ -14,7 +15,11 @@ from biobb_vs.utils.box import box
 from openmm.app import element
 from openmm.app.pdbfile import PDBFile
 from rdkit import Chem
+import numpy as np
 from tqdm import tqdm
+import re
+from rdkit.Chem import AllChem
+from meeko import MoleculePreparation, RDKitMolCreate, PDBQTMolecule, PDBQTWriterLegacy
 from loguru import logger
 
 class Capturing(list):
@@ -62,7 +67,7 @@ def convert_protein_to_pdbqt(protein_file, rec_pdbqt):
     ]
     subprocess.run(convert_rec, stdout=subprocess.DEVNULL)
 
-def convert_ligand_to_pdbqt(ligand_file, lig_pdbqt, lig_ext):
+def convert_ligand_to_pdbqt(ligand_file, lig_pdbqt, lig_ext, args=None):
     logger.info(f'Converting {ligand_file} to {lig_pdbqt}...')
     if lig_ext == "pdb":
         convert_lig = [
@@ -71,22 +76,34 @@ def convert_ligand_to_pdbqt(ligand_file, lig_pdbqt, lig_ext):
             ligand_file,
             '-xr',
             '-h',
-            '--partialcharge', 'eem',
+            '-- ', 'eem',
             '-opdbqt'
             '-O', lig_pdbqt
         ]
     else:
-        convert_lig = [
-            'obabel',
-            f'-i{lig_ext}',
-            ligand_file,
-            '-h',
-            '--partialcharge',
-            'eem',
-            '-opdbqt',
-            '-O', lig_pdbqt
-        ]
-    subprocess.run(convert_lig, stdout=subprocess.DEVNULL)
+       with open(os.path.join(args.outdir, lig_pdbqt), 'w+') as outlig:
+          input_lig = Chem.SDMolSupplier(ligand_file)
+          for mol in input_lig:
+            mol_Hs = Chem.AddHs(mol)
+            params = AllChem.ETKDGv3()
+            AllChem.EmbedMolecule(mol_Hs, params)
+            preparator = MoleculePreparation()
+            mol_setups = preparator.prepare(mol_Hs)
+            for setup in mol_setups:
+                pdbqt_string = PDBQTWriterLegacy.write_string(setup)
+                outlig.write(pdbqt_string[0])
+
+    #     convert_lig = [
+    #         'obabel',
+    #         f'-i{lig_ext}',
+    #         ligand_file,
+    #         '-h',
+    #         '--partialcharge',
+    #         'eem',
+    #         '-opdbqt',
+    #         '-O', lig_pdbqt
+    #     ]
+    # subprocess.run(convert_lig, stdout=subprocess.DEVNULL)
 
 def perform_docking(args, ligands):
     protein_file = os.path.abspath(args.protein)
@@ -104,29 +121,29 @@ def perform_docking(args, ligands):
     if prot_ext != 'pdbqt' and args.algorithm != 'Smina':
         convert_protein_to_pdbqt(protein_file, rec_pdbqt)
 
-    if not args.blind:
+    if not args.blind and not args.multi_lig:
         run_fpocket_hunting(protein_file, protein_name, args)
         pockets = run_fpocket_filtering(protein_name)
     docking_results = []
 
 
     if args.multi_lig:
-       prepped_ligs = ''
-       for current_lig in ligands:
+      prepped_ligs = ''
+      for current_lig in ligands:
         ligand_file = os.path.abspath(current_lig)
         lig_name, lig_ext = os.path.basename(ligand_file).split('.')
         lig_pdbqt = f'{os.path.join(args.outdir, lig_name)}.pdbqt'
         
         if args.algorithm == 'Vina' and lig_ext != 'pdbqt':
-            convert_ligand_to_pdbqt(ligand_file, lig_pdbqt, lig_ext)
+            convert_ligand_to_pdbqt(ligand_file, lig_pdbqt, lig_ext, args)
             prepped_ligs += lig_pdbqt
 
-        output_file = os.path.join(args.outdir, f"{lig_name}_{args.algorithm}.pdbqt")
-        args.output_file = output_file
-        args.protein = rec_pdbqt
-        args.ligand = prepped_ligs
-        result = vina_dock(args, '', ligand_file)
-        docking_results.append(('blind_dock:', result.stdout))
+      output_file = os.path.join(args.outdir, f"{args.name}_{args.algorithm}.pdbqt")
+      args.output_file = output_file
+      args.protein = rec_pdbqt
+      args.ligand = prepped_ligs
+      result = vina_dock(args, '', ligand_file)
+      docking_results.append(('blind_dock:', result.stdout))
               
     else: 
       for current_lig in ligands:
@@ -309,20 +326,47 @@ def smina_dock(args, pocket_file, ligand_file):
       logger.info(f"Docking completed. Results saved to {args.output_file}")
     return result
 
+def calculate_blind_bounding_box(pdbqt_file_path):
+    """
+    Calculate the center and size of the bounding box for a given .pdbqt file.
+
+    Parameters:
+    pdbqt_file_path (str): Path to the .pdbqt file.
+
+    Returns:
+    tuple: Center coordinates (center_x, center_y, center_z) and size (size_x, size_y, size_z).
+    """
+    with open(pdbqt_file_path, 'r') as file:
+        lines = file.readlines()
+
+    atom_lines = [line for line in lines if line.startswith('ATOM') or line.startswith('HETATM')]
+    coordinates = []
+    for line in atom_lines:
+        x = float(line[30:38].strip())
+        y = float(line[38:46].strip())
+        z = float(line[46:54].strip())
+        coordinates.append([x, y, z])
+
+    # Convert to numpy array for easy calculations
+    coords = np.array(coordinates)
+
+    # Calculate the center and size of the bounding box
+    min_coords = coords.min(axis=0)
+    max_coords = coords.max(axis=0)
+    center = (min_coords + max_coords) / 2
+    size = max_coords - min_coords
+
+    return center, size
+
 def vina_dock(args, pocket_file, ligand_file):
-    if args.blind:
+    split_paths = ' '.join(re.findall(r'(?:\./|/)[^\.]+\.pdbqt', args.ligand))
+    print(args.output_file)
+    if args.blind or args.multi_lig:
       logger.info('Vina blind docking...')
+      center, size = calculate_blind_bounding_box(args.protein)
+      vina_cmd = (
+          f"vina --receptor {args.protein} --ligand {split_paths} --center_x {center[0]} --center_y {center[1]} --center_z {center[2]} --size_x {size[0]} --size_y {size[1]} --size_z {size[2]} --exhaustiveness {args.exhaustiveness} --out {args.output_file}").split()
 
-
-      # Prepare the Vina command
-      vina_cmd = [
-          "smina",
-          "-r", args.protein,
-          "-l", args.ligand,
-          "--autobox_ligand", args.ligand if not isinstance(args.ligand, list) else args.ligand[0],
-          "--exhaustiveness", str(args.exhaustiveness),
-          "-o", args.output_file
-      ]
     else:
       # Extract center and size from the pocket PDB file
       center, size = extract_box_info_from_pdb(pocket_file)
@@ -343,7 +387,6 @@ def vina_dock(args, pocket_file, ligand_file):
 
     # Run the Vina command
     result = subprocess.run(vina_cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-
     if not args.ligand.endswith('.txt'):
       logger.info(f"Docking completed. Results saved to {args.output_file}")
     return result
@@ -550,7 +593,26 @@ def save_complex(receptor_structure, ligand_structure, output_file):
     io.set_structure(ligand_structure)
     io.save(output_file, write_end=1, append_end=1)
 
+def downgrade_biopython():
+    """ Downgrade biopython to version 1.7.9 """
+    subprocess.check_call([sys.executable, '-m', 'pip', 'install', 'biopython==1.79', 'numpy==1.23.5', 'pyparsing==3.1.1'])
+
+def upgrade_biopython(og_ver_biopython, og_ver_np, pypar_ver):
+    """ Upgrade biopython back to the original version """
+    subprocess.check_call([sys.executable, '-m', 'pip', 'install', f'biopython=={og_ver_biopython}', f'numpy=={og_ver_np}', f'pyparsing=={pypar_ver}'])
+
+def get_current_biopython_version():
+    """ Get the current version of biopython """
+    biopy_ver = pkg_resources.get_distribution("biopython").version
+    np_ver = pkg_resources.get_distribution("numpy").version
+    pypar_ver = pkg_resources.get_distribution("pyparsing").version
+
+    return biopy_ver, np_ver, pypar_ver
+
+
 def lightdock(args, ligands):
+    og_biopython_ver, og_np_ver, pypar_ver = get_current_biopython_version()
+    downgrade_biopython()
     master_outdir = os.path.abspath(args.outdir) # Save the original output directory
     protein_file = os.path.basename(args.protein)
     args.protein = os.path.abspath(args.protein)
@@ -571,7 +633,7 @@ def lightdock(args, ligands):
             if os.path.abspath(args.ligand) != os.path.abspath(lig_dest):
               shutil.copy(args.ligand, args.outdir) 
 
-            args.protein = os.path.join(args.outdir, protein_file)     
+            args.protein = os.path.join(args.outdir, protein_file) 
             args.ligand = os.path.join(args.outdir, os.path.basename(args.ligand))  
             # Run the LightDock pipeline for this ligand
             lightdock_out = os.path.join(args.outdir, f'{args.name}_lightdock_output')
@@ -594,10 +656,15 @@ def lightdock(args, ligands):
 
         args.protein = os.path.join(args.outdir, protein_file)
         args.ligand = os.path.join(args.outdir, ligand_file)  # Make sure it's an absolute path
+        fixed_prot = fix_pdb(args.protein, {}, args)
+        args.protein = fixed_prot
+        fixed_ligand = fix_pdb(args.ligand, {}, args)
+        args.ligand = fixed_ligand     
         lightdock_setup(args)
         lightdock_run(os.path.join(args.outdir, 'setup.json'), args.sim_steps, args.outdir, args.n_workers)
         generate_ant_thony_list(args)
         rank_lightdock(args)
+    upgrade_biopython(og_biopython_ver, og_np_ver, pypar_ver)
 
 def lightdock_setup(args):
     if args.restraints:

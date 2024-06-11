@@ -6,8 +6,7 @@ def setup(subparsers):
 
     dock.add_argument(
         "algorithm",
-        help="Note that while LightDock can dock protein ligands, DiffDock, Smina, and Vina can only do "
-             "small-molecules.",
+        help="LightDock and GeoDock are only able to dock proteins-proteins currently. Vina, Smina and DiffDock allow for docking small molecules to proteins.",
         choices=["DiffDock", "Vina", "Smina", "LightDock", "GeoDock"]
     )
 

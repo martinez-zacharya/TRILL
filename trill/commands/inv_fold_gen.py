@@ -458,4 +458,5 @@ def run(args):
         logger.info("Found LigandMPNN model weights!")
         from lig_mpnn_run import lig_mpnn
         logger.info("LigandMPNN generation starting...")
+        args.number_of_batches = int(args.num_return_sequences)
         lig_mpnn(args, cache_dir)

@@ -5,6 +5,7 @@ import sys
 import time
 import calendar
 
+
 import pytorch_lightning as pl
 import torch
 from pyfiglet import Figlet
@@ -12,6 +13,7 @@ from transformers import set_seed
 from loguru import logger
 
 from trill.utils.logging import setup_logger
+
 
 os.environ['CUDA_LAUNCH_BLOCKING'] = '1'
 os.environ["TOKENIZERS_PARALLELISM"] = "false"
@@ -29,7 +31,7 @@ for command in {
     "visualize",
     "simulate",
     "dock",
-    "score",
+    # "score",
     "utils",
 }:
     commands[command] = importlib.import_module(f"trill.commands.{command}")
