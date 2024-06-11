@@ -150,10 +150,9 @@ def perform_docking(args, ligands):
           ligand_file = os.path.abspath(current_lig)
           lig_name, lig_ext = os.path.basename(ligand_file).split('.')
           lig_pdbqt = f'{os.path.join(args.outdir, lig_name)}.pdbqt'
-          
-          if args.algorithm == 'Vina' and lig_ext != 'pdbqt':
-              convert_ligand_to_pdbqt(ligand_file, lig_pdbqt, lig_ext)
-          
+          if args.algorithm == 'Vina' and lig_ext != 'pdbqt' and lig_ext != 'txt':
+              convert_ligand_to_pdbqt(ligand_file, lig_pdbqt, lig_ext, args)
+
           if not args.blind:
               for pocket in tqdm(pockets, desc=f"Docking {protein_name} and {lig_name}"):
                 with Capturing() as output3:
@@ -360,7 +359,6 @@ def calculate_blind_bounding_box(pdbqt_file_path):
 
 def vina_dock(args, pocket_file, ligand_file):
     split_paths = ' '.join(re.findall(r'(?:\./|/)[^\.]+\.pdbqt', args.ligand))
-    print(args.output_file)
     if args.blind or args.multi_lig:
       logger.info('Vina blind docking...')
       center, size = calculate_blind_bounding_box(args.protein)
