@@ -637,6 +637,10 @@ def lightdock(args, ligands):
             lightdock_out = os.path.join(args.outdir, f'{args.name}_lightdock_output')
             os.mkdir(lightdock_out)
             args.outdir = lightdock_out
+            fixed_prot = fix_pdb(args.protein, {}, args)
+            args.protein = fixed_prot
+            fixed_ligand = fix_pdb(args.ligand, {}, args)
+            args.ligand = fixed_ligand  
             lightdock_setup(args)
             lightdock_run(os.path.join(args.outdir, 'setup.json'), args.sim_steps, args.outdir, args.n_workers)
             generate_ant_thony_list(args)
