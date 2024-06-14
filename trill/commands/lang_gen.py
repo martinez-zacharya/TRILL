@@ -95,6 +95,7 @@ def run(args):
     import os
 
     import torch
+    import esm
     from tqdm import tqdm
     from transformers import AutoTokenizer
     from loguru import logger
