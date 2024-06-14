@@ -5,7 +5,7 @@ import subprocess
 import sys
 from io import StringIO
 import pkg_resources
-
+from pathlib import Path
 import pdbfixer
 from Bio.PDB import PDBParser, Superimposer, PDBIO
 from biobb_vs.fpocket.fpocket_filter import fpocket_filter
@@ -113,7 +113,9 @@ def perform_docking(args, ligands):
         lightdock(args, ligands)
         return
 
-    protein_name, prot_ext = os.path.basename(protein_file).split('.')
+    # protein_name, prot_ext = os.path.basename(protein_file).split('.')
+    protein_name = Path(protein_file).stem
+    prot_ext = Path(protein_file).suffix
     # lig_name, lig_ext = os.path.basename(ligand_file).split('.')
     rec_pdbqt = f'{os.path.join(args.outdir, protein_name)}.pdbqt'
     # lig_pdbqt = f'{os.path.join(args.outdir, lig_name)}.pdbqt'
@@ -180,7 +182,7 @@ def perform_docking(args, ligands):
                 for log_file in glob.glob("log*.err"):
                   os.remove(log_file)
           else:
-            output_file = os.path.join(args.outdir, f"{lig_name}_{args.algorithm}.pdbqt")
+            output_file = os.path.join(args.outdir, f"{args.name}_{args.algorithm}.pdbqt")
             args.output_file = output_file
             if args.algorithm == 'Vina':
                 args.protein = rec_pdbqt

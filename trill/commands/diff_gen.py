@@ -90,7 +90,6 @@ def run(args):
 
     import requests
     from git import Repo
-    from run_inference import run_rfdiff
     from loguru import logger
     from .commands_common import cache_dir
 
@@ -130,7 +129,7 @@ def run(args):
         sys.path.insert(0, os.path.join(cache_dir, "RFDiffusion"))
         git_repo = Repo(os.path.join(cache_dir, "RFDiffusion"), search_parent_directories=True)
         rfdiff_git_root = git_repo.git.rev_parse("--show-toplevel")
-
+    from run_inference import run_rfdiff
     # if args.sym:
     #     run_rfdiff(os.path.join(rfdiff_git_root, "config", "inference", "symmetry.yaml"), args)
     # else:
