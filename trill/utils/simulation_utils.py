@@ -28,6 +28,7 @@ from loguru import logger
 import numpy as np
 from openff.interchange import Interchange
 from openmm import app
+from rdkit import Chem
 from openff.interchange.components._packmol import RHOMBIC_DODECAHEDRON, pack_box
 from .cuda_utils import set_platform_properties
 
@@ -173,6 +174,7 @@ def run_simulation(args):
     simulation.context.reinitialize(True)
     equilibriate(simulation, args, system)
     simulation.context.reinitialize(True)
+    logger.info(f'Beginning simulation of {args.num_steps} steps with {args.step_size} fs step sizes')
     # simulation.reporters.append(DCDReporter(args.output_traj_dcd, args.reporting_interval, enforcePeriodicBox=True))
     simulation.step(args.num_steps)
 
@@ -206,21 +208,27 @@ def set_simulation_parameters2(platform, properties, args):
     pdb = PDBFile(args.protein)
     forcefield = ForceField(args.forcefield, args.solvent)
     if args.ligand:
+        ligs = []
         if args.ligand.endswith('.pdb'):
             lig = PDBFile(args.ligand)
+            ligs.append(lig)
         else:
-            lig = Molecule.from_file(args.ligand)
-            smirnoff = SMIRNOFFTemplateGenerator(molecules=lig)
-            forcefield.registerTemplateGenerator(smirnoff.generator)
+            input_lig = Chem.SDMolSupplier(args.ligand)
+            for mol in input_lig:
+                lig = Molecule.from_rdkit(mol, allow_undefined_stereo=True)
+                smirnoff = SMIRNOFFTemplateGenerator(molecules=lig)
+                forcefield.registerTemplateGenerator(smirnoff.generator)
+                ligs.append(lig)
     modeller = Modeller(pdb.topology, pdb.positions)
     logger.info(f'System has added {args.protein} with {modeller.topology.getNumAtoms()} atoms')
     if args.ligand:
-        lig_topology = lig.to_topology()
-        positions_array = lig_topology.get_positions().magnitude
-        vec3_positions = [Vec3(x, y, z) for x, y, z in positions_array]
-        final_positions = Quantity(vec3_positions, unit.nanometer)
-        modeller.add(lig_topology.to_openmm(), final_positions)
-        logger.info(f'System has added {args.ligand} with {modeller.topology.getNumAtoms()} atoms')
+        for lig in ligs:
+            lig_topology = lig.to_topology()
+            positions_array = lig_topology.get_positions().magnitude
+            vec3_positions = [Vec3(x, y, z) for x, y, z in positions_array]
+            final_positions = Quantity(vec3_positions, unit.nanometer)
+            modeller.add(lig_topology.to_openmm(), final_positions)
+            logger.info(f'System has added {lig} and with {lig.n_atoms} atoms')
     if 'tip' in args.solvent:
         args.solvent = args.solvent.split('/')[-1].split('.')[0]
         if args.solvent == 'tip3pfb':
@@ -264,7 +272,6 @@ def equilibriate(simulation, args, system):
     simulation.context.setVelocitiesToTemperature(100*kelvin)
     logger.info(f'Warming up temp to {300*kelvin}...')
     simulation.step(args.equilibration_steps)
-    # simulation.step(args.equilibration_steps)
     simulation.context.reinitialize(preserveState=True)
     logger.info(f'Pressurizing to {1*atmospheres}...')
     system.addForce(MonteCarloBarostat(1 * atmospheres, 300*kelvin, 25))
