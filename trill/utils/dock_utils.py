@@ -263,7 +263,7 @@ def run_fpocket_hunting(protein_file, protein_name, args):
     with Capturing() as output1:
         fpocket_run(input_pdb_path=protein_file,
                     output_pockets_zip=f'{protein_name}_raw_pockets.zip',
-                    output_summary=f'{protein_name}_fpocket_info.json',
+                    output_summmolary=f'{protein_name}_fpocket_info.json',
                     properties=prop)
     return output1
 
