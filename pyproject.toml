@@ -49,6 +49,8 @@ skops = "^0.6.0"
 biobb_vs = "^4.1.1"
 scikit-optimize = "^0.9.0"
 h5py = "^3.10.0"
+lightgbm = "^4.4.0"
+evaluate = "^0.4.2"
 ml-collections = "^0.1.1"
 dm-tree = "^0.1.8"
 
