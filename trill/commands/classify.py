@@ -221,12 +221,13 @@ def run(args):
         if not args.preComputed_Embs:
             data = esm.data.FastaBatchedDataset.from_file(args.query)
             model = ProtT5(args)
+            pred_writer = CustomWriter(output_dir=args.outdir, write_interval="epoch")
             dataloader = torch.utils.data.DataLoader(data, shuffle=False, batch_size=1, num_workers=0)
             if int(args.GPUs) > 0:
-                trainer = pl.Trainer(enable_checkpointing=False, devices=int(args.GPUs), accelerator="gpu",
+                trainer = pl.Trainer(enable_checkpointing=False, callbacks=[pred_writer], devices=int(args.GPUs), accelerator="gpu",
                                      logger=ml_logger, num_nodes=int(args.nodes))
             else:
-                trainer = pl.Trainer(enable_checkpointing=False, logger=ml_logger, num_nodes=int(args.nodes))
+                trainer = pl.Trainer(enable_checkpointing=False, callbacks=[pred_writer], logger=ml_logger, num_nodes=int(args.nodes))
             reps = trainer.predict(model, dataloader)
             parse_and_save_all_predictions(args)
         if not os.path.exists(os.path.join(cache_dir, "TemStaPro_models")):
@@ -273,9 +274,9 @@ def run(args):
         inference_df["Protein"] = inference_df["RawLab"].apply(lambda x: x.split("$%#")[0])
         inference_df["Threshold"] = inference_df["RawLab"].apply(lambda x: x.split("$%#")[-1])
         inference_df = inference_df.drop(columns="RawLab")
-        inference_df = inference_df[("Protein", "Threshold", "Mean_Pred", "Binary_Pred")]
+        inference_df = inference_df[["Protein", "Threshold", "Mean_Pred", "Binary_Pred"]]
         inference_df.to_csv(os.path.join(args.outdir, f"{args.name}_TemStaPro_preds.csv"), index=False)
-        if not args.save_emb:
+        if not args.save_emb and not args.preComputed_Embs:
             os.remove(os.path.join(args.outdir, f"{args.name}_ProtT5_AVG.csv"))
 
     elif args.classifier == "EpHod":
