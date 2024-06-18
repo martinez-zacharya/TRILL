@@ -64,12 +64,15 @@ def viz(df, args):
     
     # Check if grouped is True
     if not args.key:
+        print("Columns in DataFrame:", df.columns)
+
         source = ColumnDataSource(df)
+        print("Source data:", source.data) 
         # Create a simple scatter plot without grouping
         fig = figure(title=args.name, width=600, height=600, x_axis_label=col1, y_axis_label=col2)
         # Create a CustomJSFilter
-        # Create a CustomJSFilter
         text_input = TextInput(value='', title='Search:')
+
         custom_filter = CustomJSFilter(args=dict(text_input=text_input, data=dict(source.data)), code="""
             var indices = [];
             var names = data['Label'];
@@ -84,18 +87,20 @@ def viz(df, args):
             return indices;
         """)
         view = CDSView(source=source, filters=[custom_filter])
-        scatter_renderer = fig.circle(col1, col2, source=source, view=view, color='#68023F')
+        # scatter_renderer = fig.scatter(col1, col2, source=source, color='#68023F')
+        scatter_renderer = fig.scatter(col1, col2, source=source, view=view, color='#68023F')
         # Add hover tool
         fig.add_tools(HoverTool(renderers=[scatter_renderer], tooltips=[('Protein', '@Label')]))
         # Update the CustomJS callback when the input value changes
         text_input.js_on_change('value', CustomJS(args=dict(source=source, scatter_renderer=scatter_renderer), code="""
             scatter_renderer.data_source.change.emit();
         """))
-
+        # text_input.js_on_change('value', CustomJS(args=dict(source=source), code="""
+        #     source.change.emit();
+        # """))
         # Create the layout with the TextInput widget and the figure
         layout = column(text_input, fig)
         return layout
-        
 
     else:
         # Add 'Group' column based on 'Label' values
@@ -148,7 +153,8 @@ def viz(df, args):
             group_filter = GroupFilter(column_name='Class', group=group)
             
             # Create a scatter plot for the group
-            scatter_renderer = fig.circle(col1, col2, source=source, color=color, legend_label=group, view=CDSView(source=source, filters=[custom_filter, group_filter]))
+            # scatter_renderer = fig.circle(col1, col2, source=source, color=color, legend_label=group, view=CDSView(source=source, filters=[custom_filter, group_filter]))
+            scatter_renderer = fig.scatter(col1, col2, source=source, color=color, legend_label=group, view=CDSView(source=source, filters=[custom_filter, group_filter]))
             scatter_renderers.append(scatter_renderer)
         
         # Add hover tool
