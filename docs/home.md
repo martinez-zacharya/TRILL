@@ -25,7 +25,7 @@ TRILL (**TR**aining and **I**nference using the **L**anguage of **L**ife) is a s
 | **Diffusion Based Protein Generation** | Uses denoising diffusion models to generate proteins. | [RFDiffusion](https://doi.org/10.1101/2022.12.09.519842) |
 | **Fold** | Predicts 3D protein structures. | [ESMFold](https://doi.org/10.1101/2022.07.20.500902), [ProstT5](https://doi.org/10.1101/2023.07.23.550085) |
 | **Dock** | Simulates protein-ligand interactions. | [DiffDock](https://doi.org/10.48550/arXiv.2210.01776), [Smina](https://doi.org/10.1021/ci300604z), [Autodock Vina](https://doi.org/10.1021/acs.jcim.1c00203), [Lightdock](https://doi.org/10.1093/bioinformatics/btx555), [GeoDock](https://doi.org/10.1101/2023.06.29.547134) |
-| **Classify** | Predicts protein properties with pretrained models or train custom classifiers | [TemStaPro](https://doi.org/10.1101/2023.03.27.534365), [EpHod](https://doi.org/10.1101/2023.06.22.544776), [LightGBM](https://papers.nips.cc/paper_files/paper/2017/hash/6449f44a102fde848669bdd9eb6b76fa-Abstract.html), [XGBoost](https://doi.org/10.48550/arXiv.1603.02754), [Isolation Forest](https://doi.org/10.1109/ICDM.2008.17) |
+| **Classify** | Predicts protein properties with pretrained models or train custom classifiers | [TemStaPro](https://doi.org/10.1101/2023.03.27.534365), [EpHod](https://doi.org/10.1101/2023.06.22.544776), [ECPICK](https://github.com/datax-lab/ECPICK), [LightGBM](https://papers.nips.cc/paper_files/paper/2017/hash/6449f44a102fde848669bdd9eb6b76fa-Abstract.html), [XGBoost](https://doi.org/10.48550/arXiv.1603.02754), [Isolation Forest](https://doi.org/10.1109/ICDM.2008.17) |
 | **Regress** | Train custom regression models. | [LightGBM](https://papers.nips.cc/paper_files/paper/2017/hash/6449f44a102fde848669bdd9eb6b76fa-Abstract.html), [Linear Regression](https://scikit-learn.org/stable/modules/generated/sklearn.linear_model.LinearRegression.html)|
 | **Simulate** | Uses molecular dynamics with the AMBER force field to relax structures. | [OpenMM](https://doi.org/10.1371/journal.pcbi.1005659) |
 
@@ -44,7 +44,7 @@ micromamba install -c conda-forge openbabel pdbfixer swig openmm smina fpocket v
 micromamba install -c bioconda foldseek pyrsistent
 micromamba install -c "dglteam/label/cu121" dgl
 micromamba install -c pyg pyg pytorch-cluster pytorch-sparse pytorch-scatter
-pip install git+https://github.com/martinez-zacharya/lightdock.git@03a8bc4888c0ff8c98b7f0df4b3c671e3dbf3b1f
+pip install git+https://github.com/martinez-zacharya/lightdock.git@03a8bc4888c0ff8c98b7f0df4b3c671e3dbf3b1f git+https://github.com/martinez-zacharya/ECPICK.git
 ```
 3. Next, simply install TRILL!
 ```shell

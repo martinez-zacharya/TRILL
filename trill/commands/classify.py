@@ -7,7 +7,7 @@ def setup(subparsers):
         "classifier",
         help="Predict thermostability/optimal enzymatic pH using TemStaPro/EpHod or choose custom to train/use your "
              "own XGBoost, LightGBM or Isolation Forest classifier. ESM2+MLP allows you to train an ESM2 model with a classification head end-to-end.",
-        choices=("TemStaPro", "EpHod", "XGBoost", "LightGBM", "iForest", "ESM2+MLP", "3Di-Search")
+        choices=("TemStaPro", "EpHod", "ECPICK", "XGBoost", "LightGBM", "iForest", "ESM2+MLP", "3Di-Search")
     )
     classify.add_argument(
         "query",
@@ -201,6 +201,7 @@ def run(args):
     from trill.utils.classify_utils import prep_data, setup_esm2_hf, prep_foldseek_dbs, get_3di_embeddings, log_results, sweep, prep_hf_data, custom_esm2mlp_test, train_model, load_model, custom_model_test, predict_and_evaluate
     from trill.utils.esm_utils import parse_and_save_all_predictions, convert_outputs_to_pdb
     from trill.utils.lightning_models import ProtT5, CustomWriter, ProstT5
+    from ecpick import ECPICK
     from .commands_common import cache_dir, get_logger
 
     ml_logger = get_logger(args)
@@ -217,6 +218,12 @@ def run(args):
     if args.sweep and not args.train_split:
         logger.error("You need to provide a train-test fraction with --train_split!")
         raise Exception("You need to provide a train-test fraction with --train_split!")
+    
+    if args.classifier == 'ECPICK':
+        args.cache_dir = cache_dir
+        ecpick = ECPICK(args)
+        ecpick.predict_fasta(fasta_path=args.query, output_path=args.outdir, args=args)
+
     if args.classifier == "TemStaPro":
         if not args.preComputed_Embs:
             data = esm.data.FastaBatchedDataset.from_file(args.query)
@@ -384,7 +391,7 @@ def run(args):
             pred_df.to_csv(os.path.join(args.outdir, pred_file_name), index=False)
 
 
-    elif args.classifier != "iForest" and args.classifier != '3Di-Search':
+    elif args.classifier not in ['3Di-Search','ECPICK', 'iForest']:
         outfile = os.path.join(args.outdir, f"{args.name}_{args.classifier}.out")
         if not args.preComputed_Embs:
             embed_command = (
@@ -425,7 +432,7 @@ def run(args):
             if not args.save_emb and not args.preComputed_Embs:
                 os.remove(os.path.join(args.outdir, f"{args.name}_{args.emb_model}_AVG.csv"))
 
-        elif args.classifier != '3Di-Search':
+        elif args.classifier not in ['3Di-Search','ECPICK']:
             if not args.preTrained:
                 logger.error("You need to provide a model with --preTrained to perform inference!")
                 raise Exception("You need to provide a model with --preTrained to perform inference!")
@@ -436,7 +443,7 @@ def run(args):
                 if not args.save_emb and not args.preComputed_Embs:
                     os.remove(os.path.join(args.outdir, f"{args.name}_{args.emb_model}_AVG.csv"))
 
-    elif args.classifier == "iForest":
+    elif args.classifier not in ['iForest','ECPICK']:
         # Load embeddings
         if not args.preComputed_Embs:
             embed_command = (
