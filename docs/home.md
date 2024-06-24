@@ -44,7 +44,7 @@ micromamba install -c conda-forge openbabel pdbfixer swig openmm smina fpocket v
 micromamba install -c bioconda foldseek pyrsistent
 micromamba install -c "dglteam/label/cu121" dgl
 micromamba install -c pyg pyg pytorch-cluster pytorch-sparse pytorch-scatter
-pip install git+https://github.com/martinez-zacharya/lightdock.git@03a8bc4888c0ff8c98b7f0df4b3c671e3dbf3b1f git+https://github.com/martinez-zacharya/ECPICK.git
+pip install git+https://github.com/martinez-zacharya/lightdock.git@03a8bc4888c0ff8c98b7f0df4b3c671e3dbf3b1f git+https://github.com/martinez-zacharya/ECPICK.git setuptools==69.5.1
 ```
 3. Next, simply install TRILL!
 ```shell
@@ -73,6 +73,7 @@ positional arguments:
     dock                Perform molecular docking with proteins and ligands. Note that you should relax your protein receptor with Simulate or another method before docking.
     diff_gen            Generate proteins using RFDiffusion
     fold                Predict 3D protein structures using ESMFold or obtain 3Di structure for use with Foldseek to perform remote homology detection
+    score               Score protein sequences using ESM1v or ESM2 and protein structure with various ProteinMPNN models
 
 options:
   -h, --help            show this help message and exit
