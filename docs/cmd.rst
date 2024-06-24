@@ -14,4 +14,5 @@ Home
    cmd_fold
    cmd_visualize
    cmd_simulate
+   cmd_score
    cmd_utils

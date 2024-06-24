@@ -31,7 +31,7 @@ for command in {
     "visualize",
     "simulate",
     "dock",
-    # "score",
+    "score",
     "utils",
 }:
     commands[command] = importlib.import_module(f"trill.commands.{command}")
@@ -135,8 +135,8 @@ def main(args):
     logger.info(f'RNG seed set to {args.RNG_seed}')
     commands[args.command].run(args)
     end = time.time()
-    print("Finished!")
-    print(f"Time elapsed: {end - start} seconds")
+    logger.info("Finished!")
+    logger.info(f"Time elapsed: {end - start} seconds")
 
 
 def cli(args=None):
