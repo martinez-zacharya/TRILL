@@ -10,7 +10,7 @@ dependencies:
   - openmm
   - swig
   - pdbfixer
-  - llvm-openmp
+  - llvm-openmp=18.1.8
   - pytorch=2.2.0=py3.8_cpu_0
   - cpuonly
   - pyg=2.5.2=py38_torch_2.2.0_cpu 
