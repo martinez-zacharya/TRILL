@@ -8,7 +8,7 @@ def setup(subparsers):
     )
     score.add_argument(
         "query",
-        help="Path to protein PDB file to score. Can also provide a .txt file with absolute paths to multiple PDBs",
+        help="Path to protein PDB/fasta file to score. Can also provide a .txt file with absolute paths to multiple PDBs",
         action="store",
     )
     score.add_argument("--mpnn_model", type=str, default="ProteinMPNN",
