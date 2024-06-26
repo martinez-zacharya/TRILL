@@ -973,7 +973,7 @@ class ESM_sampler():
         return indexes, last_i
 
 
-    def log_likelihood(self, seq, with_masking=True, verbose=False, mask_distance=float("inf"), batch_size=None) -> Tuple[float,List[float]]:
+    def log_likelihood(self, seq, with_masking=True, verbose=False, mask_distance=float("inf"), batch_size=None, device = 'cpu'):
         """
             seq: a protein sequence string
             with_masking: if True, then iterate over the sequence masking one position at a time and summing the log likelihoods of the correct choice at the masked positions.
@@ -991,35 +991,30 @@ class ESM_sampler():
         # Inspired by and borrowing code from:
         # https://github.com/facebookresearch/esm/blob/master/variant-prediction/predict.py
 
-        n_batches = len(seq_list)
-        if batch_size is None:
-            batch_size = n_batches
+        results = []
 
-        reformatted_seq = [(str(idx), self.clean_seed_seq(seq)) for idx, seq in enumerate(seq_list)]
-        _, _, tokens = self.model.batch_converter(reformatted_seq)
+        for seq in tqdm(seq_list):
+            reformatted_seq = [(str(0), self.clean_seed_seq(seq))]
+            _, _, tokens = self.model.batch_converter(reformatted_seq)
 
-        range_start = 1 if self.model.alphabet.prepend_bos else 0
-        end_modifier = -1 if self.model.alphabet.append_eos else 0
+            range_start = 1 if self.model.alphabet.prepend_bos else 0
+            end_modifier = -1 if self.model.alphabet.append_eos else 0
 
-        batch_range_end = [len(seq) + range_start for seq in seq_list]
-        overall_range_end = tokens.shape[1] + end_modifier
+            batch_range_end = len(seq) + range_start
+            overall_range_end = tokens.shape[1] + end_modifier
 
-        assert max(len(seq) for seq in seq_list) == len(range(range_start, overall_range_end))
+            assert len(seq) == len(range(range_start, overall_range_end))
 
-        for b_idx in range(n_batches):
-            assert len(seq_list[b_idx]) == len(range(range_start, batch_range_end[b_idx]))
-
-        tokens = tokens.cuda() if self.cuda else tokens
-        with torch.no_grad():
-            with torch.autocast(device_type=device):
-                token_probs = torch.log_softmax(self.model.model(tokens)['logits'], dim=-1)
-                results = []
-                for batch_idx in trange(n_batches):
+            tokens = tokens.cuda() if self.cuda else tokens
+            with torch.no_grad():
+                with torch.autocast(device_type=device):
+                    token_probs = torch.log_softmax(self.model.model(tokens)['logits'], dim=-1)
                     log_likelihood_sum = 0.0
                     log_likelihood_list = []
-                    for idx in range(range_start, batch_range_end[batch_idx]):
-                        likelihood = token_probs[batch_idx, idx, tokens[batch_idx, idx].item()]
+                    for idx in range(range_start, batch_range_end):
+                        likelihood = token_probs[0, idx, tokens[0, idx].item()]
                         log_likelihood_sum += likelihood
                         log_likelihood_list.append(likelihood.item())
-                    results.append(float(log_likelihood_sum / len(seq_list[batch_idx])))
+                    results.append(float(log_likelihood_sum / len(seq)))
+
         return results
