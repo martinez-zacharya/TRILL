@@ -8,7 +8,7 @@ def setup(subparsers):
     )
     score.add_argument(
         "query",
-        help="Path to protein PDB/fasta file to score. Can also provide a .txt file with absolute paths to multiple PDBs",
+        help="Path to protein PDB file to score. Can also provide a .txt file with absolute paths to multiple PDBs",
         action="store",
     )
     score.add_argument("--mpnn_model", type=str, default="ProteinMPNN",
@@ -112,13 +112,13 @@ import subprocess
 import sys
 from git import Repo
 import esm
-from trill.utils.esm_utils import ESM_sampler, ESM1v, ESM2_650M
+from trill.utils.esm_utils import ESM_sampler, ESM1v, ESM2_650M, ESM2_150M
 from trill.utils.inverse_folding.util import download_ligmpnn_weights
+from tqdm import tqdm
 import csv
  
 
 def run(args):
-
     args.loguru = logger
     if args.scorer == 'ProteinMPNN':
         if not os.path.exists((os.path.join(cache_dir, "LigandMPNN/"))):
@@ -154,11 +154,18 @@ def run(args):
     else:
         if int(args.GPUs) == 0:
             device = 'cpu'
+            autocast_dev = 'cpu'
         else:
-            device = 'cuda'
+            device = 'gpu'
+            autocast_dev = 'cuda'
         args.scorer = args.scorer + '()'
         sampler = ESM_sampler(eval(args.scorer), device)
         data = esm.data.FastaBatchedDataset.from_file(args.query)
         labels = data[:][0]
         sequences = data[:][1]
-        scores = sampler.log_likelihood_batch(sequences, False)
+        scores = sampler.log_likelihood_batch(sequences, False, device=autocast_dev)
+        with open(f'{args.name}_{args.scorer[:-2]}_scores.csv', mode='w+', newline='') as file:
+            writer = csv.writer(file)
+            writer.writerow(['Label', f'{args.scorer[:-2]}_Score'])
+            for label, score in zip(labels, scores):
+                writer.writerow([label, score])
