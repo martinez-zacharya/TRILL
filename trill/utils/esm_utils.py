@@ -769,7 +769,7 @@ class ESM_sampler():
         #TODO: handle case where there are multiple cuda devices.
         if (device == "gpu"):
             if (torch.cuda.is_available()):
-                device = 'cuda:0'
+                device = 'cuda'
                 self.cuda = True
             else:
                 raise(Exception("gpu requested, but No Cuda devices found"))
