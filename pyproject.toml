@@ -53,6 +53,7 @@ lightgbm = "^4.4.0"
 evaluate = "^0.4.2"
 ml-collections = "^0.1.1"
 dm-tree = "^0.1.8"
+protein-sequence-annotation = "^1.0.6"
 
 
 [tool.poetry.scripts]
