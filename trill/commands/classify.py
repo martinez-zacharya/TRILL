@@ -7,7 +7,7 @@ def setup(subparsers):
         "classifier",
         help="Predict thermostability/optimal enzymatic pH using TemStaPro/EpHod or choose custom to train/use your "
              "own XGBoost, LightGBM or Isolation Forest classifier. ESM2+MLP allows you to train an ESM2 model with a classification head end-to-end.",
-        choices=("TemStaPro", "EpHod", "ECPICK", "XGBoost", "LightGBM", "iForest", "ESM2+MLP", "3Di-Search")
+        choices=("TemStaPro", "EpHod", "ECPICK", "PSALM", "XGBoost", "LightGBM", "iForest", "ESM2+MLP", "3Di-Search")
     )
     classify.add_argument(
         "query",
@@ -201,11 +201,18 @@ def run(args):
     from trill.utils.classify_utils import prep_data, setup_esm2_hf, prep_foldseek_dbs, get_3di_embeddings, log_results, sweep, prep_hf_data, custom_esm2mlp_test, train_model, load_model, custom_model_test, predict_and_evaluate
     from trill.utils.esm_utils import parse_and_save_all_predictions, convert_outputs_to_pdb
     from trill.utils.lightning_models import ProtT5, CustomWriter, ProstT5
+    from unittest.mock import patch
     from ecpick import ECPICK
+    import matplotlib.pyplot as plt
+    from psalm import psalm
+    from psalm.viz_utils import plot_predictions
     from .commands_common import cache_dir, get_logger
 
     ml_logger = get_logger(args)
 
+    def noop(*args, **kwargs):
+        pass
+            
     class CustomDataset(torch.utils.data.Dataset):
         def __init__(self, data):
             self.data = data
@@ -391,7 +398,7 @@ def run(args):
             pred_df.to_csv(os.path.join(args.outdir, pred_file_name), index=False)
 
 
-    elif args.classifier not in ['3Di-Search','ECPICK', 'iForest']:
+    elif args.classifier not in ['3Di-Search','ECPICK', 'iForest', 'PSALM']:
         outfile = os.path.join(args.outdir, f"{args.name}_{args.classifier}.out")
         if not args.preComputed_Embs:
             embed_command = (
@@ -432,7 +439,7 @@ def run(args):
             if not args.save_emb and not args.preComputed_Embs:
                 os.remove(os.path.join(args.outdir, f"{args.name}_{args.emb_model}_AVG.csv"))
 
-        elif args.classifier not in ['3Di-Search','ECPICK']:
+        elif args.classifier not in ['3Di-Search','ECPICK', 'PSALM']:
             if not args.preTrained:
                 logger.error("You need to provide a model with --preTrained to perform inference!")
                 raise Exception("You need to provide a model with --preTrained to perform inference!")
@@ -443,7 +450,7 @@ def run(args):
                 if not args.save_emb and not args.preComputed_Embs:
                     os.remove(os.path.join(args.outdir, f"{args.name}_{args.emb_model}_AVG.csv"))
 
-    elif args.classifier not in ['iForest','ECPICK']:
+    elif args.classifier not in ['iForest','ECPICK','PSALM']:
         # Load embeddings
         if not args.preComputed_Embs:
             embed_command = (
@@ -508,3 +515,95 @@ def run(args):
         subprocess.run(foldseek_convertalis_cmd)
         logger.info(f'Foldseek output can be found at {output_path}!')
 
+    elif args.classifier == "PSALM":
+        outfile = os.path.join(args.outdir, f"{args.name}_{args.classifier}.out")
+        if not args.preComputed_Embs:
+            embed_command = (
+                "trill",
+                args.name,
+                args.GPUs,
+                "--outdir", args.outdir,
+                "embed",
+                "esm2_t33_650M",
+                args.query,
+                "--per_AA"
+            )
+            logger.info("Extracting embeddings from ESM2-650M...")
+            subprocess.run(embed_command, check=True)
+            perAA = torch.load(os.path.join(args.outdir, f"{args.name}_esm2_t33_650M_perAA.pt"))
+        else:
+            perAA = torch.load(args.preComputed_Embs)
+        device = 'cuda' if int(args.GPUs) > 0 else 'cpu'
+        PSALM = psalm(clan_model_name="ProteinSequenceAnnotation/PSALM-1-clan",
+                    fam_model_name="ProteinSequenceAnnotation/PSALM-1-family",
+                    device = device)
+        
+        embeddings = [emb for emb, label in perAA[0]]
+        labels = [label for emb, label in perAA[0]]
+        max_length = max([emb.shape[0] for emb in embeddings])
+
+        # Initialize DataFrames with NaN values
+        fam_aa_df = pd.DataFrame(columns=range(max_length))
+        clan_aa_df = pd.DataFrame(columns=range(max_length))
+
+        with open(os.path.join(args.outdir, f'{args.name}_{args.classifier}_preds.csv'), 'w') as outcsv:
+
+            outcsv.write('Label,Families,Clans\n')
+            logger.info("Using ESM2 embeddings for PSALM predictions...")
+
+            for i, (emb, lab) in tqdm(enumerate(zip(embeddings, labels)), total=len(embeddings), desc="Performing PSALM predictions"):
+                fixed = emb[1:len(emb)+1, :]
+                fixed = torch.tensor(fixed)
+                clan_preds = PSALM.clan_model(fixed.to(device))
+                fam_preds = PSALM.fam_model(fixed.to(device), clan_preds, PSALM.clan_fam_matrix)
+                with patch('matplotlib.pyplot.show', new=noop):
+                    plot_predictions(fam_preds.detach().cpu(), clan_preds.detach().cpu(), PSALM.fam_maps, 0.72, seq_name=lab, save_path=args.outdir)
+            
+
+                fam_top_val, fam_top_index = torch.topk(fam_preds,k=1,dim=1)
+                unique_fam_values = torch.unique(fam_top_index)
+                num_unique_fam_values = unique_fam_values.numel()
+
+                clan_top_val, clan_top_index = torch.topk(clan_preds, k=1, dim=1)
+                unique_clan_values = torch.unique(clan_top_index)
+                num_unique_clan_values = unique_clan_values.numel()
+
+                fam_keys = PSALM.fam_maps['idx_fam']
+                clan_keys = PSALM.fam_maps['idx_clan']
+
+                fam_pred_labels = fam_top_index
+                fam_pred_vals = fam_top_val
+                clan_pred_labels = clan_top_index
+                clan_pred_vals = clan_top_val
+
+                fam_unique_test = torch.unique(fam_pred_labels)
+                clan_unique_test = torch.unique(clan_pred_labels)
+
+                if fam_unique_test[-1] == 19632:
+                    fam_unique_test = fam_unique_test[:-1]
+                if clan_unique_test[-1] == 656:
+                    clan_unique_test = clan_unique_test[:-1]
+
+                fams = []
+                for entry in fam_unique_test:
+                    idx = (fam_pred_labels == entry) & (fam_pred_vals >= 0.72)
+                    fams.append(fam_keys[entry.item()].split(".")[0])
+                    residues = torch.where(idx)[0]
+                    for residue in residues.cpu().numpy():
+                        fam_aa_df.loc[lab, residue] = f"{fam_keys[entry.item()].split('.')[0]}:{fam_pred_vals[idx][residues == residue].item()}"
+
+                clans = []
+                for entry in clan_unique_test:
+                    idx = (clan_pred_labels == entry) & (clan_pred_vals >= 0.72)
+                    clans.append(clan_keys[entry.item()].split(".")[0])
+                    residues = torch.where(idx)[0]
+                    for residue in residues.cpu().numpy():
+                        clan_aa_df.loc[lab, residue] = f"{clan_keys[entry.item()].split('.')[0]}:{clan_pred_vals[idx][residues == residue].item()}"
+
+
+                clans = [x.replace("NC0001", "Non-Clan") for x in clans]
+
+                outcsv.write(f'{lab},{":".join(fams)},{":".join(clans)}\n')
+
+        fam_aa_df.to_csv(os.path.join(args.outdir, f'{args.name}_{args.classifier}_pfam_AA_preds.csv'), index=True)
+        clan_aa_df.to_csv(os.path.join(args.outdir, f'{args.name}_{args.classifier}_clan_AA_preds.csv'), index=True)

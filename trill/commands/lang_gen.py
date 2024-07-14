@@ -4,7 +4,8 @@ def setup(subparsers):
     lang_gen.add_argument(
         "model",
         help="Choose desired language model",
-        choices=["ESM2", "ProtGPT2", "ZymCTRL"]
+        choices=["ESM2", "ProtGPT2", "progen2-small", "progen2-medium", "progen2-large", "progen2-oas",
+                 "progen2-BFD90", "progen2-xlarge", "ZymCTRL"]
     )
     lang_gen.add_argument(
         "--finetuned",
@@ -97,7 +98,7 @@ def run(args):
     import torch
     import esm
     from tqdm import tqdm
-    from transformers import AutoTokenizer
+    from transformers import AutoTokenizer, pipeline, AutoModelForCausalLM
     from loguru import logger
     from trill.utils.lightning_models import ProtGPT2, ESM_Gibbs, ZymCTRL
     from trill.utils.update_weights import weights_update
@@ -175,3 +176,26 @@ def run(args):
                 fasta.write(f">{args.name}_{args.ctrl_tag}_ZymCTRL_{i}_PPL={generated_output[0][1]} \n")
                 fasta.write(f"{generated_output[0][0]}\n")
                 fasta.flush()
+
+    elif 'progen2' in args.model:
+        if not args.ctrl_tag:
+            args.ctrl_tag = ""
+
+        device = 'cuda' if int(args.GPUs) > 0 else 'cpu'
+
+        if args.finetuned:
+            model = AutoModelForCausalLM.from_pretrained(f"{args.finetuned}", trust_remote_code=True)
+        else:
+            model = f"hugohrban/{args.model}"
+
+        pipe = pipeline('text-generation', model=model, tokenizer=f"hugohrban/{args.model}", trust_remote_code=True, device=device)
+        
+        if args.ctrl_tag and args.ctrl_tag != "":
+            args.ctrl_tag = f'<|{args.ctrl_tag}|>'
+
+        output = pipe(f"{args.ctrl_tag}1{args.seed_seq}", max_length=int(args.max_length), do_sample=args.do_sample, top_k=int(args.top_k), repetition_penalty=float(args.repetition_penalty),num_return_sequences=int(args.num_return_sequences), temperature=float(args.temp), truncation=True, eos_token_id=2)
+        outseqs = [samp['generated_text'].replace('\n','').replace(args.ctrl_tag, '').replace('1','').replace('2','') for samp in output]
+        with open(os.path.join(args.outdir, f"{args.name}_{args.model}.fasta"), "w+") as fasta:
+            for i, seq in enumerate(outseqs):
+                fasta.write(f">{args.name}_CTRL-{args.ctrl_tag}_{args.model}_{i}\n")
+                fasta.write(f"{seq}\n")
