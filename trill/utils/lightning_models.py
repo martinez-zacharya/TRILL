@@ -11,15 +11,67 @@ from deepspeed.ops.adam import DeepSpeedCPUAdam
 from pytorch_lightning.callbacks import BasePredictionWriter
 from torch.utils.data import Dataset
 from tqdm import trange
+from icecream import ic
 from loguru import logger
 from transformers import pipeline, AutoTokenizer, AutoModelForCausalLM, DataCollatorForLanguageModeling, T5EncoderModel, \
-    T5Tokenizer, AutoModelForSeq2SeqLM
+    T5Tokenizer, AutoModelForSeq2SeqLM, EsmTokenizer, EsmForMaskedLM
 
 from .esm_utils import Alphabet
 from .mask import maskInputs
 
 ESM_ALLOWED_AMINO_ACIDS = "ACDEFGHIKLMNPQRSTVWY"
 
+
+class SaProt(pl.LightningModule):
+    def __init__(self, args):
+        super().__init__()
+        self.model = EsmForMaskedLM.from_pretrained("westlake-repl/SaProt_650M_AF2")
+        self.reps = []
+        if args.command == 'embed' or args.command == 'dock':
+            self.per_AA = args.per_AA
+            self.avg = args.avg
+
+    def training_step(self, batch, batch_idx):
+        torch.cuda.empty_cache()
+        labels, seqs, toks = batch
+        del labels, batch_idx
+        if self.pre_masked_fasta:
+            masked_toks = toks
+            actual_toks = seqs
+        else:
+            masked_toks = maskInputs(toks, self.esm, self.mask_fraction)
+        output = self.esm(masked_toks, repr_layers = [-1], return_contacts=False)
+        if self.pre_masked_fasta:
+            loss = F.cross_entropy(output['logits'].permute(0,2,1), actual_toks)
+        else:
+            loss = F.cross_entropy(output['logits'].permute(0,2,1), toks)
+        self.log("loss", loss)
+        del masked_toks, toks
+        return {"loss": loss}
+    
+    def configure_optimizers(self):
+        if 'offload' in str(self.strat):
+            optimizer = DeepSpeedCPUAdam(self.esm.parameters(), lr=self.lr)
+            return optimizer
+        else:
+            optimizer = torch.optim.Adam(self.esm.parameters(), lr=self.lr)
+            lr_scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=1)
+            return [optimizer], [lr_scheduler]
+    
+    def predict_step(self, batch, batch_idx):
+        toks, labels = batch
+        pred = self.model(**toks, output_hidden_states=True)
+        rep_numpy = pred.hidden_states[-1].cpu().numpy()[:, 1:-1, :]
+        aa_reps = []
+        avg_reps = []
+        for i in range(len(rep_numpy)):
+            if self.avg:
+                avg_reps.append(tuple([rep_numpy[i].mean(0), labels[i]]))
+            if self.per_AA:
+                aa_reps.append(tuple([rep_numpy[i], labels[i]]))
+
+        return aa_reps, avg_reps
+    
 class ESM(pl.LightningModule):
     def __init__(self, model, lr, args):
         super().__init__()
@@ -904,3 +956,4 @@ class Custom3DiDataset(Dataset):
         sequence = self.sequences[index]
         label = self.labels[index]
         return label, sequence
+
