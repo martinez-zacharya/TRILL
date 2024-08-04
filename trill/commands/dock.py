@@ -289,13 +289,12 @@ def run(args):
         run_diffdock(args, diffdock_root)
 
     elif args.algorithm == "DiffDock-L":
-        
         tmp_csv_path = None
         if not os.path.exists(os.path.join(cache_dir, "DiffDock-L")):
             logger.info("Cloning DiffDock-L")
             os.makedirs(os.path.join(cache_dir, "DiffDock-L"))
-            diffdock = Repo.clone_from("https://github.com/gcorso/DiffDock",
-                                       os.path.join(cache_dir, "DiffDock-L"))
+            diffdock = Repo.clone_from("https://github.com/martinez-zacharya/DiffDock",
+                                       os.path.join(cache_dir, "DiffDock-L"), branch='DiffDock-L')
             diffdock_root = diffdock.git.rev_parse("--show-toplevel")
             # subprocess.run(["pip", "install", "-e", diffdock_root])
             sys.path.insert(0, os.path.join(cache_dir, "DiffDock-L"))
@@ -317,6 +316,7 @@ def run(args):
             pre_csv['protein_sequence'] = ''
             tmp_csv_path = os.path.join(args.outdir, f'tmp_{args.name}_DiffDock-L_input.csv')
             pre_csv.to_csv(tmp_csv_path, index=None)
+            # diffdock_l_cmd = f"python3 {cache_dir}/DiffDock-L/inference.py --config {cache_dir}/DiffDock-L/default_inference_args.yaml --protein_ligand_csv {tmp_csv_path} --out_dir {args.outdir}".split()
             diffdock_l_cmd = f"python3 {cache_dir}/DiffDock-L/inference.py --config {cache_dir}/DiffDock-L/default_inference_args.yaml --protein_ligand_csv {tmp_csv_path} --out_dir {args.outdir}".split()
 
         elif len(args.ligand) == 1 and args.ligand[0].endswith('.txt'):
@@ -346,7 +346,7 @@ def run(args):
             diffdock_l_cmd = f"python3 {cache_dir}/DiffDock-L/inference.py --config {cache_dir}/DiffDock-L/default_inference_args.yaml --protein_ligand_csv {tmp_csv_path} --out_dir {args.outdir}".split()
 
         if args.save_visualisation:
-            diffdock_l_cmd.append('--save_visualization')
+            diffdock_l_cmd.append('--save_visualisation')
         diffdock_l_cmd.append('--inference_steps')
         diffdock_l_cmd.append(f'{args.inference_steps}')
         diffdock_l_cmd.append('--samples_per_complex')
