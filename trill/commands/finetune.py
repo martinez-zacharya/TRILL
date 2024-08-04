@@ -98,7 +98,7 @@ def setup(subparsers):
     finetune.add_argument(
         "--eval",
         help="ProGen2: You can choose to withold a random proportion of the input data for evaluation to \
-            check for overfitting. Input a float, like 0.25, which would hold-out 25\% of the data from \
+            check for overfitting. Input a float, like 0.25, which would hold-out 25%% of the data from \
                 finetuning for evaluation after every epoch.",
         action="store",
         default=0,

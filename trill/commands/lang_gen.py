@@ -97,7 +97,7 @@ def run(args):
 
     import torch
     import esm
-    from tqdm import tqdm
+    from tqdm import tqdm, trange
     from transformers import AutoTokenizer, pipeline, AutoModelForCausalLM
     from loguru import logger
     from trill.utils.lightning_models import ProtGPT2, ESM_Gibbs, ZymCTRL
@@ -180,7 +180,8 @@ def run(args):
     elif 'progen2' in args.model:
         if not args.ctrl_tag:
             args.ctrl_tag = ""
-
+        args.num_return_sequences = int(args.num_return_sequences)
+        args.batch_size = int(args.batch_size)
         device = 'cuda' if int(args.GPUs) > 0 else 'cpu'
 
         if args.finetuned:
@@ -188,14 +189,41 @@ def run(args):
         else:
             model = f"hugohrban/{args.model}"
 
-        pipe = pipeline('text-generation', model=model, tokenizer=f"hugohrban/{args.model}", trust_remote_code=True, device=device)
+        if args.batch_size == 1:
+            logger.warning('--batch_size is set to 1, the default. Unless this is on purpose, you can speed up generation with a larger batch_size.')
+        pipe = pipeline('text-generation', model=model, tokenizer=f"hugohrban/{args.model}", trust_remote_code=True, device=device, torch_dtype="float16" if device == "cuda" else "float32")
         
         if args.ctrl_tag and args.ctrl_tag != "":
             args.ctrl_tag = f'<|{args.ctrl_tag}|>'
 
-        output = pipe(f"{args.ctrl_tag}1{args.seed_seq}", max_length=int(args.max_length), do_sample=args.do_sample, top_k=int(args.top_k), repetition_penalty=float(args.repetition_penalty),num_return_sequences=int(args.num_return_sequences), temperature=float(args.temp), truncation=True, eos_token_id=2)
-        outseqs = [samp['generated_text'].replace('\n','').replace(args.ctrl_tag, '').replace('1','').replace('2','') for samp in output]
+        num_batches = int(args.num_return_sequences / args.batch_size) + (1 if args.num_return_sequences % args.batch_size != 0 else 0)
+
+        all_outseqs = []
+        logger.info(f'Generating {args.num_return_sequences} proteins in batches of {args.batch_size}')
+        for _ in trange(num_batches):
+            batch_output = pipe(
+                f"{args.ctrl_tag}1{args.seed_seq}", 
+                max_length=int(args.max_length), 
+                do_sample=args.do_sample, 
+                top_k=int(args.top_k), 
+                repetition_penalty=float(args.repetition_penalty),
+                num_return_sequences=min(args.batch_size, args.num_return_sequences - len(all_outseqs)), 
+                temperature=float(args.temp), 
+                truncation=True, 
+                eos_token_id=2
+            )
+            # Process and clean the generated sequences
+            batch_outseqs = [
+                samp['generated_text']
+                .replace('\n', '')
+                .replace(args.ctrl_tag, '')
+                .replace('1', '')
+                .replace('2', '')
+                for samp in batch_output
+            ]
+            all_outseqs.extend(batch_outseqs)
+
         with open(os.path.join(args.outdir, f"{args.name}_{args.model}.fasta"), "w+") as fasta:
-            for i, seq in enumerate(outseqs):
+            for i, seq in enumerate(all_outseqs):
                 fasta.write(f">{args.name}_CTRL-{args.ctrl_tag}_{args.model}_{i}\n")
                 fasta.write(f"{seq}\n")

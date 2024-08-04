@@ -31,8 +31,8 @@ def setup(subparsers):
              "classifier. Default is esm2_t12_35M",
         default="esm2_t12_35M",
         action="store",
-        choices=("esm2_t6_8M", "esm2_t12_35M", "esm2_t30_150M", "esm2_t33_650M", "esm2_t36_3B", "esm2_t48_15B",
-                 "ProtT5-XL", "ProstT5", "Ankh", "Ankh-Large")
+        choices=("Ankh", "Ankh-Large", "CaLM", "esm2_t6_8M", "esm2_t12_35M", "esm2_t30_150M", "esm2_t33_650M", "esm2_t36_3B", "esm2_t48_15B",
+                 "ProtT5-XL", "ProstT5", "RiNALMo", "mRNA-FM", "RNA-FM", "SaProt")
     )
     classify.add_argument(
         "--train_split",
