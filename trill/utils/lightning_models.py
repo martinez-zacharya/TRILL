@@ -15,7 +15,12 @@ from icecream import ic
 from loguru import logger
 from transformers import pipeline, AutoTokenizer, AutoModelForCausalLM, DataCollatorForLanguageModeling, T5EncoderModel, \
     T5Tokenizer, AutoModelForSeq2SeqLM, EsmTokenizer, EsmForMaskedLM
-
+import rinalmo.model.model
+from rinalmo.config import model_config
+import rinalmo.data.alphabet
+import calm
+import fm
+from icecream import ic
 from .esm_utils import Alphabet
 from .mask import maskInputs
 
@@ -129,15 +134,174 @@ class ESM(pl.LightningModule):
         aa_reps = []
         avg_reps = []
         for i in range(len(rep_numpy)):
-            if self.avg:
-            # self.reps.append(tuple([rep_numpy[i].mean(0), labels[i]]))
+            if self.avg:              
                 avg_reps.append(tuple([rep_numpy[i].mean(0), labels[i]]))
             if self.per_AA:
                 aa_reps.append(tuple([rep_numpy[i], labels[i]]))
-        # newdf = pd.DataFrame(reps, columns = ['Embeddings', 'Label'])
-        # finaldf = newdf['Embeddings'].apply(pd.Series)
-        # finaldf['Label'] = newdf['Label']
-        # return finaldf
+
+        return aa_reps, avg_reps
+    
+class RNAFM(pl.LightningModule):
+    def __init__(self, args):
+        super().__init__()
+        if args.model == 'RNA-FM':
+            self.model, self.alphabet = fm.pretrained.rna_fm_t12()
+        elif args.model == 'mRNA-FM':
+            self.model, self.alphabet = fm.pretrained.mrna_fm_t12()
+        self.reps = []
+        if args.command == 'embed' or args.command == 'dock':
+            self.per_AA = args.per_AA
+            self.avg = args.avg
+
+    def training_step(self, batch, batch_idx):
+        torch.cuda.empty_cache()
+        labels, seqs, toks = batch
+        del labels, batch_idx
+        if self.pre_masked_fasta:
+            masked_toks = toks
+            actual_toks = seqs
+        else:
+            masked_toks = maskInputs(toks, self.esm, self.mask_fraction)
+        output = self.esm(masked_toks, repr_layers = [-1], return_contacts=False)
+        if self.pre_masked_fasta:
+            loss = F.cross_entropy(output['logits'].permute(0,2,1), actual_toks)
+        else:
+            loss = F.cross_entropy(output['logits'].permute(0,2,1), toks)
+        self.log("loss", loss)
+        del masked_toks, toks
+        return {"loss": loss}
+    
+    def configure_optimizers(self):
+        if 'offload' in str(self.strat):
+            optimizer = DeepSpeedCPUAdam(self.esm.parameters(), lr=self.lr)
+            return optimizer
+        else:
+            optimizer = torch.optim.Adam(self.esm.parameters(), lr=self.lr)
+            lr_scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=1)
+            return [optimizer], [lr_scheduler]
+    
+    def predict_step(self, batch, batch_idx):
+        labels, seqs, toks = batch
+        outputs = self.model(toks, repr_layers=[12])
+        emb = outputs['representations'][12].detach().cpu()
+        aa_reps = []
+        avg_reps = []
+        for i in range(len(emb)):
+            if self.avg:              
+                avg_reps.append(tuple([emb[i].mean(0), labels[i]]))
+            if self.per_AA:
+                aa_reps.append(tuple([emb[i], labels[i]]))
+
+        return aa_reps, avg_reps
+
+class CaLM(pl.LightningModule):
+    def __init__(self, args, weights_file):
+        super().__init__()
+        self.model = calm.CaLM(weights_file = weights_file)
+        self.reps = []
+        if args.command == 'embed':
+            self.per_AA = args.per_AA
+            self.avg = args.avg
+
+    def training_step(self, batch, batch_idx):
+        torch.cuda.empty_cache()
+        labels, seqs, toks = batch
+        del labels, batch_idx
+        if self.pre_masked_fasta:
+            masked_toks = toks
+            actual_toks = seqs
+        else:
+            masked_toks = maskInputs(toks, self.esm, self.mask_fraction)
+        output = self.esm(masked_toks, repr_layers = [-1], return_contacts=False)
+        if self.pre_masked_fasta:
+            loss = F.cross_entropy(output['logits'].permute(0,2,1), actual_toks)
+        else:
+            loss = F.cross_entropy(output['logits'].permute(0,2,1), toks)
+        self.log("loss", loss)
+        del masked_toks, toks
+        return {"loss": loss}
+    
+    def configure_optimizers(self):
+        if 'offload' in str(self.strat):
+            optimizer = DeepSpeedCPUAdam(self.esm.parameters(), lr=self.lr)
+            return optimizer
+        else:
+            optimizer = torch.optim.Adam(self.esm.parameters(), lr=self.lr)
+            lr_scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=1)
+            return [optimizer], [lr_scheduler]
+    
+    def predict_step(self, batch, batch_idx):
+        labels = list(batch[0])
+        seqs = list(batch[1])
+        embs = self.model.embed_sequences(seqs, average=False)
+        embs = [emb.detach().cpu().numpy() for emb in embs]
+
+        aa_reps = []
+        avg_reps = []
+        for i in range(len(embs)):
+            if self.avg:
+                avg_reps.append(tuple([embs[i].squeeze(0).mean(0), labels[i]]))
+            if self.per_AA:
+                aa_reps.append(tuple([embs[i].squeeze(0), labels[i]]))
+ 
+        return aa_reps, avg_reps
+    
+class RiNALMo(pl.LightningModule):
+    def __init__(self, args, weights_file):
+        super().__init__()
+        config = model_config('giga')
+        self.model = rinalmo.model.model.RiNALMo(config)
+        self.model.load_state_dict(torch.load(weights_file))
+        self.alphabet = rinalmo.data.alphabet.Alphabet(**config['alphabet'])
+        self.reps = []
+        if args.command == 'embed':
+            self.per_AA = args.per_AA
+            self.avg = args.avg
+        self.dev = 'cpu' if int(args.GPUs) == 0 else 'cuda'
+
+    def training_step(self, batch, batch_idx):
+        torch.cuda.empty_cache()
+        labels, seqs, toks = batch
+        del labels, batch_idx
+        if self.pre_masked_fasta:
+            masked_toks = toks
+            actual_toks = seqs
+        else:
+            masked_toks = maskInputs(toks, self.esm, self.mask_fraction)
+        output = self.esm(masked_toks, repr_layers = [-1], return_contacts=False)
+        if self.pre_masked_fasta:
+            loss = F.cross_entropy(output['logits'].permute(0,2,1), actual_toks)
+        else:
+            loss = F.cross_entropy(output['logits'].permute(0,2,1), toks)
+        self.log("loss", loss)
+        del masked_toks, toks
+        return {"loss": loss}
+    
+    def configure_optimizers(self):
+        if 'offload' in str(self.strat):
+            optimizer = DeepSpeedCPUAdam(self.esm.parameters(), lr=self.lr)
+            return optimizer
+        else:
+            optimizer = torch.optim.Adam(self.esm.parameters(), lr=self.lr)
+            lr_scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=1)
+            return [optimizer], [lr_scheduler]
+    
+    def predict_step(self, batch, batch_idx):
+        labels = list(batch[0])
+        seqs = list(batch[1])
+        tokens = torch.tensor(self.alphabet.batch_tokenize(seqs), dtype=torch.int64).to(self.dev)
+        embs = self.model(tokens)['representation']
+        embs = [emb.detach().cpu().numpy() for emb in embs]
+        aa_reps = []
+        avg_reps = []
+        for i in range(len(embs)):
+            if self.avg:
+                ic(embs[i])
+                ic(embs[i].shape)
+                avg_reps.append(tuple([embs[i].mean(0), labels[i]]))
+            if self.per_AA:
+                aa_reps.append(tuple([embs[i], labels[i]]))
+ 
         return aa_reps, avg_reps
     
 class ProtGPT2(pl.LightningModule):

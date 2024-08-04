@@ -199,7 +199,6 @@ def train_model(train_df, args):
         d_train = lgb.Dataset(train_df.iloc[:, :-2], label=train_df['NewLab'])
     elif args.classifier == 'XGBoost':
         d_train = xgb.DMatrix(train_df.iloc[:, :-2], label=train_df['NewLab'])
-    
     config = {
         'lightgbm': {
             'objective': 'multiclass',
@@ -233,7 +232,7 @@ def train_model(train_df, args):
     if args.classifier == 'LightGBM':
         clf = lgb.train(config['lightgbm'], d_train, args.n_estimators)
     elif args.classifier == 'XGBoost':
-        clf = xgb.train(config['xgboost'], d_train, args.n_estimators)
+        clf = xgb.train(config['xgboost'], d_train)
     
     return clf
 
@@ -243,14 +242,14 @@ def predict_and_evaluate(model, le, test_df, args):
         test_preds = model.predict(test_df.iloc[:, :-2])
         # test_preds = np.argmax(test_preds, axis=0)
     elif args.classifier == 'XGBoost':
-        # d_test = xgb.DMatrix(test_df.iloc[:, :-2])
-        # test_preds = model.predict(d_test)
-        test_preds = model.predict(test_df.iloc[:, :-2])
-        # test_preds = np.argmax(test_preds, axis=1)
+        d_test = xgb.DMatrix(test_df.iloc[:, :-2])
+        test_preds = model.predict(d_test)
+        # test_preds = model.predict(test_df.iloc[:, :-2])
+        test_preds = np.argmax(test_preds, axis=1)
     transformed_preds = le.inverse_transform(test_preds)
     precision, recall, fscore, support = precision_recall_fscore_support(test_df['NewLab'].values, test_preds, average=args.f1_avg_method,labels=np.unique(test_df['NewLab']))
-                                                                         
-    return precision, recall, fscore, support
+    label_order = np.unique(test_df['NewLab'])                                                           
+    return precision, recall, fscore, support, label_order
 
 def custom_model_test(model, test_df, args):
     # Generate probability predictions based on the model type
@@ -294,7 +293,7 @@ def custom_xg_test(model, test_df, args):
     pred_df.to_csv(os.path.join(args.outdir, f'{args.name}_XGBoost_predictions.csv'), index=False)
     return 
 
-def log_results(out_file, command_str, n_classes, args, classes = None, sweeped_clf=None, precision=None, recall=None, fscore=None, support=None, le=None):
+def log_results(out_file, command_str, n_classes, args, classes = None, sweeped_clf=None, precision=None, recall=None, fscore=None, support=None, le=None, LabelOrder=None):
     with open(out_file, 'w+') as out:
         out.write('TRILL command used: ' + command_str + '\n\n')
         out.write(f'Classes trained on: {classes}\n\n')
@@ -310,8 +309,8 @@ def log_results(out_file, command_str, n_classes, args, classes = None, sweeped_
             out.write(f'Best sweep params: {sweeped_clf.best_params_}\n\n')
             out.write(f'Best sweep F1 score: {sweeped_clf.best_score_}\n\n')
             out.write("Classification Metrics Per Class:\n")
-            for i, label in enumerate(classes):
-                num_label = le.transform([label])
+            for i, num_label in enumerate(LabelOrder):
+                label = le.inverse_transform([num_label])
                 out.write(f"\nClass {num_label} : {label}\n")
                 
                 out.write(f"\tPrecision: {precision[i]}\n")
@@ -323,8 +322,8 @@ def log_results(out_file, command_str, n_classes, args, classes = None, sweeped_
                 out.write(f"\tSupport: {support[i]}\n")
         elif precision is not None and recall is not None and fscore is not None and support is not None:  
             out.write("Classification Metrics Per Class:\n")
-            for i, label in enumerate(classes):
-                num_label = le.transform([label])
+            for i, num_label in enumerate(LabelOrder):
+                label = le.inverse_transform([num_label])
                 out.write(f"\nClass {num_label} : {label}\n")
                 
                 out.write(f"\tPrecision: {precision[i]}\n")
@@ -347,13 +346,13 @@ def log_results(out_file, command_str, n_classes, args, classes = None, sweeped_
             out.write(f"\tAverage Recall: {avg_recall:.4f}\n")
 
             out.write(f"\tAverage F-score: {avg_fscore:.4f}\n")
-        elif precision is not None and recall is not None and fscore is not None:
-            out.write("Classification Metrics Per Class:\n")
-            for i in n_classes:
-                out.write(f"\nClass: {label}\n")
-                out.write(f"\tPrecision: {precision[i]}\n")
-                out.write(f"\tRecall: {recall[i]}\n")
-                out.write(f"\tF-score: {fscore[i]}\n")
+        # elif precision is not None and recall is not None and fscore is not None:
+        #     out.write("Classification Metrics Per Class:\n")
+        #     for i in range(n_classes):
+        #         out.write(f"\nClass: {label}\n")
+        #         out.write(f"\tPrecision: {precision[i]}\n")
+        #         out.write(f"\tRecall: {recall[i]}\n")
+        #         out.write(f"\tF-score: {fscore[i]}\n")
 
 def generate_class_key_csv(args):
     all_headers = []

@@ -7,7 +7,7 @@ def setup(subparsers):
     dock.add_argument(
         "algorithm",
         help="LightDock and GeoDock are only able to dock proteins-proteins currently. Vina, Smina and DiffDock allow for docking small molecules to proteins.",
-        choices=["DiffDock", "Vina", "Smina", "LightDock", "GeoDock"]
+        choices=["DiffDock", "DiffDock-L", "Vina", "Smina", "LightDock", "GeoDock"]
     )
 
     dock.add_argument(
@@ -71,6 +71,15 @@ def setup(subparsers):
         action="store",
         default=None
     )
+
+    # dock.add_argument(
+    #     "--preComputed_Embs",
+    #     help="DiffDock-L: Enter the path to your pre-computed embeddings. Make sure they are from esm2_t33_650M.",
+    #     action="store",
+    #     default=False
+    # )
+
+
     dock.add_argument(
         "--min_radius",
         help="Smina/Vina + Fpocket: Minimum radius of alpha spheres in a pocket. Default is 3Å.",
@@ -126,6 +135,14 @@ def setup(subparsers):
     )
 
     dock.add_argument(
+        "--glowworms",
+        help="LightDock: The number of glowworms per swarm, default is 200",
+        action="store",
+        type=int,
+        default=200
+    )
+
+    dock.add_argument(
         "--sim_steps",
         help="LightDock: The number of steps of the simulation. Default is 100",
         action="store",
@@ -153,33 +170,35 @@ def run(args):
     import torch
     from esm.inverse_folding.util import load_coords
     from git import Repo
+    import pandas as pd
     from loguru import logger
-    from trill.utils.dock_utils import perform_docking, write_docking_results_to_file
+    from trill.utils.dock_utils import perform_docking, write_docking_results_to_file, create_init_file
     from trill.utils.esm_utils import parse_and_save_all_predictions
     from trill.utils.lightning_models import ESM, CustomWriter
     from .commands_common import cache_dir, get_logger
 
     ml_logger = get_logger(args)
 
-    ligands = []
-    if isinstance(args.ligand, list) and len(args.ligand) > 1:
-        for lig in args.ligand:
-            ligands.append(lig)
-            args.multi_lig = True
-    else:
-        args.ligand = args.ligand[0]
-        args.multi_lig = False
-        if args.ligand.endswith(".txt"):
-            with open(args.ligand, "r") as infile:
-                for path in infile:
-                    path = path.strip()
-                    if not path:
-                        continue
-                    ligands.append(path)
+    if not args.algorithm == 'DiffDock-L':
+        ligands = []
+        if isinstance(args.ligand, list) and len(args.ligand) > 1:
+            for lig in args.ligand:
+                ligands.append(lig)
+                args.multi_lig = True
         else:
-            ligands.append(args.ligand)
+            args.ligand = args.ligand[0]
+            args.multi_lig = False
+            if args.ligand.endswith(".txt"):
+                with open(args.ligand, "r") as infile:
+                    for path in infile:
+                        path = path.strip()
+                        if not path:
+                            continue
+                        ligands.append(path)
+            else:
+                ligands.append(args.ligand)
 
-    protein_name = os.path.splitext(os.path.basename(args.protein))[0]
+        protein_name = os.path.splitext(os.path.basename(args.protein))[0]
 
     if args.algorithm == "Smina" or args.algorithm == "Vina":
         docking_results = perform_docking(args, ligands)
@@ -269,33 +288,72 @@ def run(args):
         from inference import run_diffdock
         run_diffdock(args, diffdock_root)
 
-        # out_dir = os.path.join(args.outdir, f"{args.name}_DiffDock_out")
-        # rec = os.path.splitext(os.path.basename(args.protein))[0]
-        # out_rec = rec.split(os.path.sep)[-1]
-        # convert_rec = (
-        #     "obabel",
-        #     f"{rec}.pdb",
-        #     "-O", f"{out_rec}.pdbqt"
-        # )
-        # subprocess.run(convert_rec, stdout=subprocess.DEVNULL)
-        # for file in os.listdir(out_dir):
-        #     if "confidence" in file:
-        #         file_pre = os.path.splitext(file)[0]
-        #         convert_lig = (
-        #             "obabel",
-        #             os.path.join(out_dir, file),
-        #             "-O", f"{file_pre}.pdbqt"
-        #         )
-        #         subprocess.run(convert_lig, stdout=subprocess.DEVNULL)
-        #
-        #         smina_cmd = (
-        #             "smina",
-        #             "--score_only",
-        #             "-r", f"{out_rec}.pdbqt",
-        #             "-l", f"{file_pre}.pdbqt"
-        #         )
-        #         result = subprocess.run(smina_cmd, stdout=subprocess.PIPE)
-        #
-        #         result = re.search("Affinity: \w+.\w+", result.stdout.decode("utf-8"))
-        #         affinity = result.group()
-        #         affinity = re.search("\d+\.\d+", affinity).group()
+    elif args.algorithm == "DiffDock-L":
+        
+        tmp_csv_path = None
+        if not os.path.exists(os.path.join(cache_dir, "DiffDock-L")):
+            logger.info("Cloning DiffDock-L")
+            os.makedirs(os.path.join(cache_dir, "DiffDock-L"))
+            diffdock = Repo.clone_from("https://github.com/gcorso/DiffDock",
+                                       os.path.join(cache_dir, "DiffDock-L"))
+            diffdock_root = diffdock.git.rev_parse("--show-toplevel")
+            # subprocess.run(["pip", "install", "-e", diffdock_root])
+            sys.path.insert(0, os.path.join(cache_dir, "DiffDock-L"))
+        else:
+            sys.path.insert(0, os.path.join(cache_dir, "DiffDock-L"))
+            diffdock = Repo(os.path.join(cache_dir, "DiffDock-L"))
+            diffdock_root = diffdock.git.rev_parse("--show-toplevel")
+        directories = ['datasets', 'models', 'utils']
+        for directory in directories:
+            create_init_file(os.path.join(diffdock_root, directory))
+
+        from inference import main
+
+        if len(args.ligand) == 1 and args.protein.endswith('.pdb'):
+            diffdock_l_cmd = f"python3 {cache_dir}/DiffDock-L/inference.py --config {cache_dir}/DiffDock-L/default_inference_args.yaml --protein_path {args.protein} --ligand {args.ligand[0]} --out_dir {args.outdir}".split()
+
+        elif args.protein.endswith('.csv'):
+            pre_csv = pd.read_csv(args.protein)
+            pre_csv['protein_sequence'] = ''
+            tmp_csv_path = os.path.join(args.outdir, f'tmp_{args.name}_DiffDock-L_input.csv')
+            pre_csv.to_csv(tmp_csv_path, index=None)
+            diffdock_l_cmd = f"python3 {cache_dir}/DiffDock-L/inference.py --config {cache_dir}/DiffDock-L/default_inference_args.yaml --protein_ligand_csv {tmp_csv_path} --out_dir {args.outdir}".split()
+
+        elif len(args.ligand) == 1 and args.ligand[0].endswith('.txt'):
+            with open(args.ligand[0], 'r') as file:
+                sdf_paths = file.readlines()
+            data = []
+
+            for sdf_path in sdf_paths:
+                sdf_path = sdf_path.strip()
+                if os.path.exists(sdf_path):
+                    sdf_filename = os.path.basename(sdf_path)
+                    sdf_name = os.path.splitext(sdf_filename)[0]
+                    protein_name = os.path.splitext(os.path.basename(args.protein))[0]
+                    complex_name = f"{protein_name}_{sdf_name}"
+                    
+                    row = {
+                        'complex_name': complex_name,
+                        'protein_path': args.protein,
+                        'ligand_description': sdf_path,
+                        'protein_sequence': ''
+                    }
+                    data.append(row)
+
+            df = pd.DataFrame(data, columns=['complex_name', 'protein_path', 'ligand_description', 'protein_sequence'])
+            tmp_csv_path = os.path.join(args.outdir, f'tmp_{args.name}_DiffDock-L_input.csv')
+            df.to_csv(tmp_csv_path, index=False)
+            diffdock_l_cmd = f"python3 {cache_dir}/DiffDock-L/inference.py --config {cache_dir}/DiffDock-L/default_inference_args.yaml --protein_ligand_csv {tmp_csv_path} --out_dir {args.outdir}".split()
+
+        if args.save_visualisation:
+            diffdock_l_cmd.append('--save_visualization')
+        diffdock_l_cmd.append('--inference_steps')
+        diffdock_l_cmd.append(f'{args.inference_steps}')
+        diffdock_l_cmd.append('--samples_per_complex')
+        diffdock_l_cmd.append(f'{args.samples_per_complex}')
+        
+        subprocess.run(diffdock_l_cmd)
+        if tmp_csv_path and os.path.exists(tmp_csv_path):
+            os.remove(tmp_csv_path)
+
+    

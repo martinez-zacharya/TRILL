@@ -7,6 +7,7 @@ from io import StringIO
 import pkg_resources
 from pathlib import Path
 import pdbfixer
+from Bio import SeqIO
 from Bio.PDB import PDBParser, Superimposer, PDBIO
 from biobb_vs.fpocket.fpocket_filter import fpocket_filter
 from biobb_vs.fpocket.fpocket_run import fpocket_run
@@ -104,6 +105,31 @@ def convert_ligand_to_pdbqt(ligand_file, lig_pdbqt, lig_ext, args=None):
     #         '-O', lig_pdbqt
     #     ]
     # subprocess.run(convert_lig, stdout=subprocess.DEVNULL)
+
+def extract_sequences(file_path):
+    def extract_sequence_from_pdb(pdb_path):
+        parser = PDBParser(QUIET=True)
+        structure = parser.get_structure(os.path.basename(pdb_path), pdb_path)
+        sequence = ''
+        for model in structure:
+            for chain in model:
+                for residue in chain:
+                    if residue.id[0] == ' ':  # Ensure it's a standard residue
+                        sequence += SeqIO.Polypeptide.three_to_one(residue.resname)
+        return sequence
+
+    sequences = []
+    
+    if file_path.endswith('.txt'):
+        with open(file_path, 'r') as file:
+            pdb_paths = file.readlines()
+        for pdb_path in pdb_paths:
+            pdb_path = pdb_path.strip()
+            sequences.append(extract_sequence_from_pdb(pdb_path))
+    elif file_path.endswith('.pdb'):
+        sequences.append(extract_sequence_from_pdb(file_path))
+    
+    return sequences
 
 def perform_docking(args, ligands):
     protein_file = os.path.abspath(args.protein)
@@ -287,6 +313,12 @@ def extract_box_info_from_pdb(pdb_file_path):
             size = tuple(map(float, parts[2].strip().split()))
             return center, size
         
+def create_init_file(dir_path):
+    init_file = os.path.join(dir_path, "__init__.py")
+    if not os.path.exists(init_file):
+        with open(init_file, 'w') as f:
+            f.write('# Automatically created __init__.py\n')
+            
 def smina_dock(args, pocket_file, ligand_file):
     # print(f"Smina docking with {args.protein} and {ligand_file} in pocket {pocket_file}")
     if args.blind:
@@ -647,7 +679,8 @@ def lightdock(args, ligands):
             lightdock_run(os.path.join(args.outdir, 'setup.json'), args.sim_steps, args.outdir, args.n_workers)
             generate_ant_thony_list(args)
             rank_lightdock(args)
-            
+            generate_lightdock_conformations(args)
+            cluster_lightdock_conformations(args)
     else:  # If there's only one ligand, proceed as usual
         ligand_file = os.path.basename(args.ligand)
         prot_dest = os.path.join(args.outdir, os.path.basename(args.protein))
@@ -659,22 +692,24 @@ def lightdock(args, ligands):
             shutil.copy(args.ligand, args.outdir)  
 
         args.protein = os.path.join(args.outdir, protein_file)
-        args.ligand = os.path.join(args.outdir, ligand_file)  # Make sure it's an absolute path
+        args.ligand = os.path.join(args.outdir, ligand_file)
         fixed_prot = fix_pdb(args.protein, {}, args)
         args.protein = fixed_prot
         fixed_ligand = fix_pdb(args.ligand, {}, args)
-        args.ligand = fixed_ligand     
+        args.ligand = fixed_ligand  
         lightdock_setup(args)
         lightdock_run(os.path.join(args.outdir, 'setup.json'), args.sim_steps, args.outdir, args.n_workers)
         generate_ant_thony_list(args)
         rank_lightdock(args)
+        generate_lightdock_conformations(args)
+        cluster_lightdock_conformations(args)
     upgrade_biopython(og_biopython_ver, og_np_ver, pypar_ver)
 
 def lightdock_setup(args):
     if args.restraints:
-      cmd = ["lightdock3_setup.py", args.protein, args.ligand, "--outdir", args.outdir, "--noxt", "--noh", "--now", "-s", str(args.swarms), "--seed_points", str(args.RNG_seed), "--seed_anm", str(args.RNG_seed), "--rst", args.restraints]
+      cmd = ["lightdock3_setup.py", args.protein, args.ligand, "--outdir", args.outdir, "--noxt", "--noh", "--now", "-s", str(args.swarms), "--seed_points", str(args.RNG_seed), "--seed_anm", str(args.RNG_seed), "--rst", args.restraints, "-g", str(args.glowworms)]
     else:
-      cmd = ["lightdock3_setup.py", args.protein, args.ligand,"--outdir", args.outdir, "--noxt", "--noh", "--now", "-s", str(args.swarms), "--seed_points", str(args.RNG_seed), "--seed_anm", str(args.RNG_seed)]
+      cmd = ["lightdock3_setup.py", args.protein, args.ligand,"--outdir", args.outdir, "--noxt", "--noh", "--now", "-s", str(args.swarms), "--seed_points", str(args.RNG_seed), "--seed_anm", str(args.RNG_seed),"-g", str(args.glowworms)]
     subprocess.run(cmd)
 
 def lightdock_run(setup_json, steps, outdir, cpus):
@@ -699,3 +734,42 @@ def generate_ant_thony_list(args):
 def rank_lightdock(args):
     cmd = ["lgd_rank.py", str(args.swarms), str(args.sim_steps), "--outdir", args.outdir]
     subprocess.run(cmd)
+
+def generate_lightdock_conformations(args):
+    for i in range(args.swarms):
+        swarm_dir = os.path.join(args.outdir, f"swarm_{i}")
+        if not os.path.exists(swarm_dir):
+            print(f"Directory {swarm_dir} does not exist. Skipping.")
+            continue
+
+        gso_file = os.path.join(swarm_dir, f"gso_{args.sim_steps}.out")
+        if not os.path.exists(gso_file):
+            print(f"GSO file {gso_file} does not exist in {swarm_dir}. Skipping.")
+            continue
+
+        cmd = [
+            "lgd_generate_conformations.py",
+            f"{args.protein}",
+            f"{args.ligand}",
+            gso_file,
+            str(args.glowworms)
+        ]
+        subprocess.run(cmd)
+
+def cluster_lightdock_conformations(args):
+    for i in range(args.swarms):
+        swarm_dir = os.path.join(args.outdir, f"swarm_{i}")
+        if not os.path.exists(swarm_dir):
+            print(f"Directory {swarm_dir} does not exist. Skipping.")
+            continue
+
+        gso_file = os.path.join(swarm_dir, f"gso_{args.sim_steps}.out")
+        if not os.path.exists(gso_file):
+            print(f"GSO file {gso_file} does not exist in {swarm_dir}. Skipping.")
+            continue
+
+        cmd = [
+            "lgd_cluster_bsas.py",
+            gso_file
+        ]
+        subprocess.run(cmd)
