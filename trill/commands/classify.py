@@ -196,6 +196,7 @@ def run(args):
     from icecream import ic
     from sklearn.metrics import precision_recall_fscore_support
     import trill.utils.ephod_utils as eu
+    import pkg_resources
     from trill.commands.fold import process_sublist
     from trill.utils.MLP import MLP_C2H2, inference_epoch
     from trill.utils.classify_utils import prep_data, setup_esm2_hf, prep_foldseek_dbs, get_3di_embeddings, log_results, sweep, prep_hf_data, custom_esm2mlp_test, train_model, load_model, custom_model_test, predict_and_evaluate
@@ -203,9 +204,9 @@ def run(args):
     from trill.utils.lightning_models import ProtT5, CustomWriter, ProstT5
     from unittest.mock import patch
     from ecpick import ECPICK
+    from trill.utils.dock_utils import downgrade_biopython, upgrade_biopython, get_current_biopython_version
     import matplotlib.pyplot as plt
-    from psalm import psalm
-    from psalm.viz_utils import plot_predictions
+   
     from .commands_common import cache_dir, get_logger
 
     ml_logger = get_logger(args)
@@ -516,6 +517,15 @@ def run(args):
         logger.info(f'Foldseek output can be found at {output_path}!')
 
     elif args.classifier == "PSALM":
+        og_biopython_ver, og_np_ver, pypar_ver = get_current_biopython_version()
+        upgrade_biopython('1.83', og_np_ver, pypar_ver)
+        try:
+            pkg_resources.get_distribution("psalm")
+        except pkg_resources.DistributionNotFound:
+            install_cmd = "pip install protein-sequence-annotation".split(" ")
+            subprocess.run(install_cmd)
+        from psalm import psalm
+        from psalm.viz_utils import plot_predictions
         outfile = os.path.join(args.outdir, f"{args.name}_{args.classifier}.out")
         if not args.preComputed_Embs:
             embed_command = (
@@ -607,3 +617,4 @@ def run(args):
 
         fam_aa_df.to_csv(os.path.join(args.outdir, f'{args.name}_{args.classifier}_pfam_AA_preds.csv'), index=True)
         clan_aa_df.to_csv(os.path.join(args.outdir, f'{args.name}_{args.classifier}_clan_AA_preds.csv'), index=True)
+        upgrade_biopython(og_biopython_ver, og_np_ver, pypar_ver)

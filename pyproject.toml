@@ -17,6 +17,7 @@ setuptools = "69.5.1"
 urllib3 = "1.26.18"
 numpy = "^1.26.3"
 numba = "^0.58.1"
+meeko = "^0.5.1"
 loguru = "^0.7.2"
 llvmlite = "^0.41.0"
 pytest = "^8.2.0"
@@ -53,7 +54,7 @@ lightgbm = "^4.4.0"
 evaluate = "^0.4.2"
 ml-collections = "^0.1.1"
 dm-tree = "^0.1.8"
-# protein-sequence-annotation = "^1.0.6"
+#protein-sequence-annotation = "^1.0.6"
 
 
 [tool.poetry.scripts]
