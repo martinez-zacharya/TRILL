@@ -24,7 +24,7 @@ dependencies:
     - h5py
     - loguru
     - setuptools
-    - pytorch-lightning
+    - pytorch-lightning==1.7.7
     - transformers
     - datasets
     - biotite
