@@ -52,8 +52,8 @@ def setup(subparsers):
     dock.add_argument(
         "--no_final_step_noise",
         help="DiffDock: Use no noise in the final step of the reverse diffusion",
-        action="store_true",
-        default=False
+        action="store_false",
+        default=True
     )
 
     dock.add_argument(
@@ -69,7 +69,7 @@ def setup(subparsers):
         help="DiffDock: Number of denoising steps that are actually performed",
         type=int,
         action="store",
-        default=None
+        default=0
     )
 
     # dock.add_argument(
@@ -309,7 +309,7 @@ def run(args):
         from inference import main
 
         if len(args.ligand) == 1 and args.protein.endswith('.pdb'):
-            diffdock_l_cmd = f"python3 {cache_dir}/DiffDock-L/inference.py --config {cache_dir}/DiffDock-L/default_inference_args.yaml --protein_path {args.protein} --ligand {args.ligand[0]} --out_dir {args.outdir}".split()
+            diffdock_l_cmd = f"python3 {cache_dir}/DiffDock-L/inference.py --config {cache_dir}/DiffDock-L/default_inference_args.yaml --protein_path {args.protein} --ligand {args.ligand[0]} --out_dir {args.outdir} --no_final_step_noise {args.no_final_step_noise}".split()
 
         elif args.protein.endswith('.csv'):
             pre_csv = pd.read_csv(args.protein)
@@ -317,7 +317,7 @@ def run(args):
             tmp_csv_path = os.path.join(args.outdir, f'tmp_{args.name}_DiffDock-L_input.csv')
             pre_csv.to_csv(tmp_csv_path, index=None)
             # diffdock_l_cmd = f"python3 {cache_dir}/DiffDock-L/inference.py --config {cache_dir}/DiffDock-L/default_inference_args.yaml --protein_ligand_csv {tmp_csv_path} --out_dir {args.outdir}".split()
-            diffdock_l_cmd = f"python3 {cache_dir}/DiffDock-L/inference.py --config {cache_dir}/DiffDock-L/default_inference_args.yaml --protein_ligand_csv {tmp_csv_path} --out_dir {args.outdir}".split()
+            diffdock_l_cmd = f"python3 {cache_dir}/DiffDock-L/inference.py --config {cache_dir}/DiffDock-L/default_inference_args.yaml --protein_ligand_csv {tmp_csv_path} --samples_per_complex {args.samples_per_complex} --actual_steps {args.actual_steps} --out_dir {args.outdir} --inference_steps {args.inference_steps} ".split()
 
         elif len(args.ligand) == 1 and args.ligand[0].endswith('.txt'):
             with open(args.ligand[0], 'r') as file:
@@ -343,7 +343,7 @@ def run(args):
             df = pd.DataFrame(data, columns=['complex_name', 'protein_path', 'ligand_description', 'protein_sequence'])
             tmp_csv_path = os.path.join(args.outdir, f'tmp_{args.name}_DiffDock-L_input.csv')
             df.to_csv(tmp_csv_path, index=False)
-            diffdock_l_cmd = f"python3 {cache_dir}/DiffDock-L/inference.py --config {cache_dir}/DiffDock-L/default_inference_args.yaml --protein_ligand_csv {tmp_csv_path} --out_dir {args.outdir}".split()
+            diffdock_l_cmd = f"python3 {cache_dir}/DiffDock-L/inference.py --config {cache_dir}/DiffDock-L/default_inference_args.yaml --protein_ligand_csv {tmp_csv_path} --out_dir {args.outdir} --samples_per_complex {args.samples_per_complex} --inference_steps {args.inference_steps} --no_final_step_noise {args.no_final_step_noise} --actual_steps {args.actual_steps} ".split()
 
         if args.save_visualisation:
             diffdock_l_cmd.append('--save_visualisation')
