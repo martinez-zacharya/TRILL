@@ -6,7 +6,7 @@ channels:
   - pyg
 dependencies:
   - python=3.8
-  - pip
+  - pip=24.0
   - openmm
   - swig
   - pdbfixer
