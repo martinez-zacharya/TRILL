@@ -132,7 +132,7 @@ def sweep(train_df, args):
     if model_type == 'LightGBM':
         model = lgb.LGBMRegressor(metric=['mae'])
     param_grid = {
-        'boosting_type': Categorical(['gbdt', 'dart', 'rf']),
+        'boosting_type': Categorical(['gbdt', 'dart']),
         'learning_rate': Real(0.01, 0.2),
         'num_leaves': Integer(20, 100),
         'max_depth': Integer(3, 15), 
@@ -149,7 +149,7 @@ def sweep(train_df, args):
     mse_scorer = make_scorer(mean_squared_error)
 
 
-    clf = BayesSearchCV(estimator=model, search_spaces=param_grid, n_iter=20, n_jobs=int(args.n_workers),scoring=mse_scorer, cv=int(args.sweep_cv), return_train_score=True, verbose=0)
+    clf = BayesSearchCV(estimator=model, search_spaces=param_grid, n_iter=100, n_jobs=int(args.n_workers),scoring=mse_scorer, cv=int(args.sweep_cv), return_train_score=True, verbose=False)
     
     logger.info("Sweeping...")
     clf.fit(train_df.iloc[:, :-2], train_df['Score'])
