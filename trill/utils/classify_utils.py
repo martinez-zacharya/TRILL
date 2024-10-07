@@ -461,7 +461,7 @@ def sweep(train_df, args):
     
     f1_scorer = make_scorer(f1_score, average=f1_avg_method)
     
-    clf = BayesSearchCV(estimator=model, search_spaces=param_grid, n_iter=10, n_jobs=int(args.n_workers),scoring=f1_scorer, cv=int(args.sweep_cv), return_train_score=True, verbose=1)
+    clf = BayesSearchCV(estimator=model, search_spaces=param_grid, n_iter=int(args.sweep_iters), n_jobs=int(args.n_workers),scoring=f1_scorer, cv=int(args.sweep_cv), return_train_score=True, verbose=1)
     
     logger.info("Sweeping...")
     clf.fit(train_df.iloc[:, :-2], train_df['NewLab'])

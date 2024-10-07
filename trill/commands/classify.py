@@ -152,6 +152,12 @@ def setup(subparsers):
         default=3
     )
     classify.add_argument(
+        "--sweep_iters",
+        help="XGBoost/LightGBM: Change the number of optimization iterations. Default is 10.",
+        action="store",
+        default=10
+    )
+    classify.add_argument(
         "--f1_avg_method",
         help="XGBoost/LightGBM: Change the scoring method used for calculated F1. Default is with no averaging.",
         action="store",
