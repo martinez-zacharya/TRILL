@@ -283,7 +283,6 @@ def custom_model_test(model, test_df, args):
     # Prepare and save the predictions to a CSV file
     pred_df = pd.DataFrame(test_preds, columns=['Prediction'])
     pred_df['Label'] = test_df['Label']
-    print(pred_df)
     pred_file_name = f'{args.name}_{model_type}_predictions.csv'
     pred_df.to_csv(os.path.join(args.outdir, pred_file_name), index=False)
 
