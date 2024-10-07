@@ -65,8 +65,11 @@ def prep_data(df, args):
             condition = key_df[key_df['Class'] == cls]['Label'].tolist()
             df.loc[df['Label'].isin(condition), 'NewLab'] = cls
         df = df.sample(frac=1)
-        train_df, test_df = train_test_split(df, train_size=float(args.train_split), stratify=df['NewLab'])
-    return train_df, test_df, n_classes
+        if not float(args.train_split) == 1 or not float(args.train_split) == 1.0:
+            train_df, test_df = train_test_split(df, train_size=float(args.train_split), stratify=df['NewLab'])
+            return train_df, test_df, n_classes
+        else:
+            return df, df, n_classes
 
 
 def prep_hf_data(args):
@@ -240,7 +243,7 @@ def train_model(train_df, args):
 def predict_and_evaluate(model, le, test_df, args):
     if args.classifier == 'LightGBM':
         test_preds = model.predict(test_df.iloc[:, :-2])
-        # test_preds = np.argmax(test_preds, axis=0)
+        test_preds = np.argmax(test_preds, axis=1)
     elif args.classifier == 'XGBoost':
         if args.sweep:
             d_test = test_df.iloc[:, :-2]
@@ -250,7 +253,7 @@ def predict_and_evaluate(model, le, test_df, args):
         # test_preds = model.predict(test_df.iloc[:, :-2])
         if not args.sweep:
             test_preds = np.argmax(test_preds, axis=1)
-    transformed_preds = le.inverse_transform(test_preds)
+    # transformed_preds = le.inverse_transform(test_preds)
     precision, recall, fscore, support = precision_recall_fscore_support(test_df['NewLab'].values, test_preds, average=args.f1_avg_method,labels=np.unique(test_df['NewLab']))
     label_order = np.unique(test_df['NewLab'])                                                           
     return precision, recall, fscore, support, label_order
@@ -280,7 +283,7 @@ def custom_model_test(model, test_df, args):
     # Prepare and save the predictions to a CSV file
     pred_df = pd.DataFrame(test_preds, columns=['Prediction'])
     pred_df['Label'] = test_df['Label']
-    
+    print(pred_df)
     pred_file_name = f'{args.name}_{model_type}_predictions.csv'
     pred_df.to_csv(os.path.join(args.outdir, pred_file_name), index=False)
 

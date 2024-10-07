@@ -18,8 +18,11 @@ def prep_reg_data(df, args):
         key_df = pd.read_csv(args.key)
         df = df.merge(key_df, on='Label', how='left')
         df = df.sample(frac=1)
-        train_df, test_df = train_test_split(df, train_size=float(args.train_split))
-    return train_df, test_df
+        if not float(args.train_split) == 1 or not float(args.train_split) == 1.0:
+            train_df, test_df = train_test_split(df, train_size=float(args.train_split))
+            return train_df, test_df
+        else:
+            return df, df
 
 def train_reg_model(train_df, args):
     # if args.regressor == 'LightGBM':

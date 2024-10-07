@@ -176,8 +176,9 @@ def run(args):
             sio.dump(clf, os.path.join(args.outdir, f"{args.name}_LightGBM-Regression.skops"))
         elif args.regressor == 'Linear':
             sio.dump(clf, os.path.join(args.outdir, f"{args.name}_Linear-Regression.skops"))
-        r2, rmse = predict_and_evaluate_reg(clf, test_df, args)
-        log_reg_results(outfile, command_line_str, args, r2=r2, rmse=rmse)
+        if not args.train_split == 1 or not args.train_split == 1.0:
+            r2, rmse = predict_and_evaluate_reg(clf, test_df, args)
+            log_reg_results(outfile, command_line_str, args, r2=r2, rmse=rmse)
     else:
         model = load_reg_model(args)
         custom_model_reg_test(model, df, args)

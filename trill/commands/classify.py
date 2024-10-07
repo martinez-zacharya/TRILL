@@ -423,22 +423,34 @@ def run(args):
             unique_c = np.unique(test_df["NewLab"])
             classes = train_df["NewLab"].unique()
             train_df["NewLab"] = le.fit_transform(train_df["NewLab"])
-            test_df["NewLab"] = le.transform(test_df["NewLab"])
+            if not float(args.train_split) == 1.0:
+                test_df["NewLab"] = le.transform(test_df["NewLab"])
             command_line_args = sys.argv
             command_line_str = " ".join(command_line_args)
+            label_data = []
+            for clas in classes:
+                encoded_label = le.transform([clas])[0]
+                label_data.append((encoded_label, clas))
 
             if args.sweep:
                 sweeped_clf = sweep(train_df, args)
-                precision, recall, fscore, support, LabelOrder = predict_and_evaluate(sweeped_clf, le, test_df, args)
-                log_results(outfile, command_line_str, n_classes, args, classes=unique_c, sweeped_clf=sweeped_clf,precision=precision, recall=recall, fscore=fscore, support=support, le=le, LabelOrder=LabelOrder)
+                if not float(args.train_split) == 1 or not float(args.train_split) == 1.0:
+                    precision, recall, fscore, support, LabelOrder = predict_and_evaluate(sweeped_clf, le, test_df, args)
+                    log_results(outfile, command_line_str, n_classes, args, classes=unique_c, sweeped_clf=sweeped_clf,precision=precision, recall=recall, fscore=fscore, support=support, le=le, LabelOrder=LabelOrder)
             else:
                 clf = train_model(train_df, args)
                 clf.save_model(os.path.join(args.outdir, f"{args.name}_{args.classifier}_{len(train_df.columns) - 2}.json"))
-                precision, recall, fscore, support, LabelOrder = predict_and_evaluate(clf, le, test_df, args)
-                log_results(outfile, command_line_str, n_classes, args, classes=classes, precision=precision,recall=recall, fscore=fscore, support=support, le=le, LabelOrder=LabelOrder)
+                if not float(args.train_split) == 1 or not float(args.train_split) == 1.0:
+                    precision, recall, fscore, support, LabelOrder = predict_and_evaluate(clf, le, test_df, args)
+                    log_results(outfile, command_line_str, n_classes, args, classes=classes, precision=precision,recall=recall, fscore=fscore, support=support, le=le, LabelOrder=LabelOrder)
 
+            df = pd.DataFrame(label_data, columns=['EncodedLabel', 'OriginalLabel'])
+
+            output_csv_path = os.path.join(args.outdir, f"{args.name}_{args.classifier}_prediction_class_key.csv")
+            df.to_csv(output_csv_path, index=False)
             if not args.save_emb and not args.preComputed_Embs:
                 os.remove(os.path.join(args.outdir, f"{args.name}_{args.emb_model}_AVG.csv"))
+            logger.info(f'Saving prediction output key for this model at {output_csv_path}')
 
         elif args.classifier not in ['3Di-Search','ECPICK', 'PSALM']:
             if not args.preTrained:
