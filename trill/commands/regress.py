@@ -90,18 +90,18 @@ def setup(subparsers):
         action="store",
         default=115
     )
-    # classify.add_argument(
-    #     "--sweep",
-    #     help="XGBoost/LightGBM: Use this flag to perform cross-validated bayesian optimization over the hyperparameter space.",
-    #     action="store_true",
-    #     default=False
-    # )
-    # classify.add_argument(
-    #     "--sweep_cv",
-    #     help="XGBoost/LightGBM: Change the number of folds used for cross-validation.",
-    #     action="store",
-    #     default=3
-    # )
+    classify.add_argument(
+        "--sweep",
+        help="LightGBM: Use this flag to perform cross-validated bayesian optimization over the hyperparameter space.",
+        action="store_true",
+        default=False
+    )
+    classify.add_argument(
+        "--sweep_cv",
+        help="LightGBM: Change the number of folds used for cross-validation.",
+        action="store",
+        default=3
+    )
     # classify.add_argument(
     #     "--f1_avg_method",
     #     help="XGBoost/LightGBM: Change the scoring method used for calculated F1. Default is with no averaging.",
@@ -145,7 +145,7 @@ def run(args):
     from trill.commands.fold import process_sublist
     from trill.utils.MLP import MLP_C2H2, inference_epoch
     from trill.utils.classify_utils import prep_data, log_results, sweep, prep_hf_data, custom_esm2mlp_test, train_model, load_model, custom_model_test, predict_and_evaluate
-    from trill.utils.regression_utils import log_reg_results, train_reg_model, prep_reg_data, predict_and_evaluate_reg, load_reg_model, custom_model_reg_test
+    from trill.utils.regression_utils import log_reg_results, train_reg_model, prep_reg_data, predict_and_evaluate_reg, load_reg_model, custom_model_reg_test, sweep
     from trill.utils.esm_utils import parse_and_save_all_predictions, convert_outputs_to_pdb
     from .commands_common import cache_dir, get_logger
 
@@ -166,11 +166,15 @@ def run(args):
         df = pd.read_csv(os.path.join(args.outdir, f"{args.name}_{args.emb_model}_AVG.csv"))
     else:
         df = pd.read_csv(args.preComputed_Embs)
+
     if args.train_split is not None:
         train_df, test_df = prep_reg_data(df, args)
         command_line_args = sys.argv
         command_line_str = " ".join(command_line_args)
-        clf = train_reg_model(train_df, args)
+        if not args.sweep:
+            clf = train_reg_model(train_df, args)
+        else:
+            clf = sweep(train_df, args)
         if args.regressor == 'LightGBM':
             # clf.booster_.save_model(os.path.join(args.outdir, f"{args.name}_LightGBM-Regression.json"))
             sio.dump(clf, os.path.join(args.outdir, f"{args.name}_LightGBM-Regression.skops"))

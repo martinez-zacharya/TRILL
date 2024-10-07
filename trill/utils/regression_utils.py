@@ -9,12 +9,16 @@ from sklearn.model_selection import train_test_split
 from sklearn.linear_model import LinearRegression
 from sklearn.metrics import root_mean_squared_error, r2_score
 import skops.io as sio
+import multiprocessing
+from skopt import BayesSearchCV
+from skopt.space import Real, Categorical, Integer
+from sklearn.metrics import mean_squared_error, make_scorer
 
 def prep_reg_data(df, args):
     if args.train_split is not None:
         if args.key == None:
             logger.error('Training a regressor requires a value key CSV!')
-            raise Exception('Training a classifier requires a value key CSV!')
+            raise Exception('Training a regressor requires a value key CSV!')
         key_df = pd.read_csv(args.key)
         df = df.merge(key_df, on='Label', how='left')
         df = df.sample(frac=1)
@@ -32,7 +36,7 @@ def train_reg_model(train_df, args):
     
     config = {
         'lightgbm': {
-            'metric': ['mae, rmse'],
+            'metric': ['mae', 'rmse'],
             'learning_rate': args.lr,
             'max_depth': args.max_depth,
             'num_leaves': args.num_leaves,
@@ -114,3 +118,46 @@ def log_reg_results(out_file, command_str, args, rmse=None, r2=None, best_params
             out.write('\nAdditional Metrics:\n')
             for metric, value in args.other_metrics.items():
                 out.write(f'\t{metric}: {value}\n')
+
+def sweep(train_df, args):
+    model_type = args.regressor
+    logger.info(f"Setting up hyperparameter sweep for {model_type}")
+    np.int = np.int64
+    if args.n_workers == 1:
+        logger.warning("WARNING!")
+        logger.warning("You are trying to perform a hyperparameter sweep with only 1 core!")
+        logger.warning(f"In your case, you have {multiprocessing.cpu_count()} CPU cores available!")
+    logger.info(f"Using {args.n_workers} CPU cores for sweep")
+    # Define model and parameter grid based on the specified model_type
+    if model_type == 'LightGBM':
+        model = lgb.LGBMRegressor(metric=['mae'])
+    param_grid = {
+        'boosting_type': Categorical(['gbdt', 'dart', 'rf']),
+        'learning_rate': Real(0.01, 0.2),
+        'num_leaves': Integer(20, 100),
+        'max_depth': Integer(3, 15), 
+        'min_split_gain': Real(0.0, 0.1), 
+        'min_child_weight': Real(1e-5, 1e-3),  
+        'n_estimators': Integer(100, 1000),
+        'subsample_for_bin': Integer(50000, 300000),
+        'subsample': Real(0.5, 1.0),
+        'colsample_bytree': Real(0.5, 1.0),
+        'reg_alpha': Real(0.0, 1.0),
+        'reg_lambda': Real(0.0, 1.0),
+    }
+    
+    mse_scorer = make_scorer(mean_squared_error)
+
+
+    clf = BayesSearchCV(estimator=model, search_spaces=param_grid, n_iter=20, n_jobs=int(args.n_workers),scoring=mse_scorer, cv=int(args.sweep_cv), return_train_score=True, verbose=0)
+    
+    logger.info("Sweeping...")
+    clf.fit(train_df.iloc[:, :-2], train_df['Score'])
+    
+    # Save the best model
+    if model_type == 'LightGBM':
+        clf.best_estimator_.booster_.save_model(os.path.join(args.outdir, f'{args.name}_LightGBM-Regression_sweeped.json'))
+
+    logger.info("Sweep Complete! Now evaluating...")
+    
+    return clf
