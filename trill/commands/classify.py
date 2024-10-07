@@ -412,7 +412,7 @@ def run(args):
                 args.query,
                 "--avg",
                 "--batch_size",
-                args.batch_size
+                str(args.batch_size)
             )
             subprocess.run(embed_command, check=True)
             df = pd.read_csv(os.path.join(args.outdir, f"{args.name}_{args.emb_model}_AVG.csv"))
