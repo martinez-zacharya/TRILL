@@ -3,7 +3,8 @@ import os
 import random
 # from colossalai.nn.optimizer import HybridAdam, CPUAdam
 import re
-
+from torch import nn
+from torchmetrics.classification import BinaryF1Score, MulticlassF1Score
 import pytorch_lightning as pl
 import torch
 import torch.nn.functional as F
@@ -26,6 +27,109 @@ from .mask import maskInputs
 
 ESM_ALLOWED_AMINO_ACIDS = "ACDEFGHIKLMNPQRSTVWY"
 
+class MLP_Emb_Dataset_train(Dataset):
+  def __init__(self, dataframe):
+      self.data = dataframe.iloc[:, :-2].values  # All columns except 'Label' and 'Class'
+      self.labels = dataframe['NewLab'].values    # 'Class' column
+
+  def __len__(self):
+      return len(self.data)
+
+  def __getitem__(self, idx):
+      data = torch.tensor(self.data[idx], dtype=torch.float32)
+      label = torch.tensor(self.labels[idx], dtype=torch.long)  # Use torch.long for classification
+      return data, label
+
+class MLP_Emb_Dataset_test(Dataset):
+  def __init__(self, dataframe):
+      self.data = dataframe.iloc[:, :-1].values  # All columns except 'Label' and 'Class'
+
+  def __len__(self):
+      return len(self.data)
+
+  def __getitem__(self, idx):
+      data = torch.tensor(self.data[idx], dtype=torch.float32)
+      return data
+
+
+class MLP_Classifier(pl.LightningModule):
+
+    def __init__(self, input_size=480, hidden_layers=[128, 64, 32], dropout_rate=0.3, num_classes=2, learning_rate=0.0001):
+        super().__init__()
+        self.save_hyperparameters()
+        self.num_classes = num_classes
+        layers = []
+        in_features = input_size
+        self.lr = learning_rate
+        # Dynamically build the layers based on hidden_layers
+        for hidden_units in hidden_layers:
+            layers.append(nn.Linear(in_features, hidden_units))
+            layers.append(nn.ReLU())
+            layers.append(nn.Dropout(dropout_rate))  # Dropout for regularization
+            in_features = hidden_units
+
+        # Output layer
+        layers.append(nn.Linear(in_features, num_classes))
+
+        # Add the appropriate activation function based on the number of classes
+        if num_classes == 1:
+            layers.append(nn.Sigmoid())  # Binary classification
+        else:
+            layers.append(nn.Softmax(dim=1))  # Multiclass classification
+
+        self.model = nn.Sequential(*layers)
+
+        # # Choose appropriate loss function based on the number of classes
+        # if num_classes == 1:
+        #     self.loss_fn = nn.BCELoss()  # Binary Cross-Entropy Loss
+        #     self.f1 = BinaryF1Score()
+        # else:
+        self.loss_fn = nn.CrossEntropyLoss()  # Cross-Entropy Loss for multiclass
+        self.f1 = MulticlassF1Score(num_classes=num_classes, average='macro')
+
+    def forward(self, x):
+        return self.model(x)
+  
+    def training_step(self, batch, batch_idx):
+        x, y = batch
+        x = x.view(x.size(0), -1)
+        y_hat = self.forward(x).squeeze(1) if self.num_classes == 1 else self.forward(x)
+        
+        if self.num_classes == 1:
+            y = y.float()
+            loss = self.loss_fn(y_hat, y)
+        else:
+            y = y.long()
+            loss = self.loss_fn(y_hat, y)
+
+        self.log('train_loss', loss)
+        return loss
+  
+    def validation_step(self, batch, batch_idx):
+        x, y = batch
+        x = x.view(x.size(0), -1)
+        y_hat = self.forward(x)
+
+        # Calculate F1 score
+        if self.num_classes == 1:
+            preds = torch.round(y_hat.squeeze(1))
+            f1_score = self.f1(preds, y.int())
+        else:
+            preds = torch.argmax(y_hat, dim=1)
+            f1_score = self.f1(preds, y)
+
+        self.log('val_f1', f1_score, prog_bar=True)
+        return f1_score
+
+    def predict_step(self, batch, batch_idx):
+        x = batch.view(batch.size(0), -1)
+        preds = self.model(x)
+        return preds
+
+
+    def configure_optimizers(self):
+        optimizer = torch.optim.Adam(self.parameters(), lr=self.lr)
+        return optimizer
 
 class SaProt(pl.LightningModule):
     def __init__(self, args):

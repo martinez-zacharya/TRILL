@@ -6,8 +6,8 @@ def setup(subparsers):
     classify.add_argument(
         "classifier",
         help="Predict thermostability/optimal enzymatic pH using TemStaPro/EpHod or choose custom to train/use your "
-             "own XGBoost, LightGBM or Isolation Forest classifier. ESM2+MLP allows you to train an ESM2 model with a classification head end-to-end.",
-        choices=("TemStaPro", "EpHod", "ECPICK", "PSALM", "XGBoost", "LightGBM", "iForest", "ESM2+MLP", "3Di-Search")
+             "own XGBoost, Multilayer perceptron, LightGBM or Isolation Forest classifier. ESM2+MLP allows you to train an ESM2 model with a classification head end-to-end.",
+        choices=("TemStaPro", "EpHod", "ECPICK", "PSALM", "MLP", "XGBoost", "LightGBM", "iForest", "ESM2+MLP", "3Di-Search")
     )
     classify.add_argument(
         "query",
@@ -57,8 +57,15 @@ def setup(subparsers):
     )
 
     classify.add_argument(
-        "--batch_size",
+        "--batch_size_emb",
         help="EpHod: Sets batch_size for embedding with ESM1v.",
+        action="store",
+        default=1
+    )
+
+    classify.add_argument(
+        "--batch_size_mlp",
+        help="MLP: Sets batch_size for training/evaluating",
         action="store",
         default=1
     )
@@ -73,7 +80,7 @@ def setup(subparsers):
 
     classify.add_argument(
         "--lr",
-        help="XGBoost/LightGBM/ESM2+MLP: Sets the learning rate. Default is 0.0001 for ESM2+MLP, 0.2 for XGBoost and LightGBM",
+        help="XGBoost/LightGBM/ESM2+MLP/MLP: Sets the learning rate. Default is 0.0001 for ESM2+MLP/MLP, 0.2 for XGBoost and LightGBM",
         action="store",
         default=0.2
     )
@@ -167,9 +174,23 @@ def setup(subparsers):
 
     classify.add_argument(
         "--epochs",
-        help="ESM2+MLP: Set number of epochs to train ESM2+MLP classifier.",
+        help="ESM2+MLP/MLP: Set number of epochs to train ESM2+MLP classifier.",
         action="store",
         default=3
+    )
+
+    classify.add_argument(
+        "--hidden_layers",
+        help="MLP: Set number of hidden layers. Default is [128,64,32]",
+        action="store",
+        default=[128,64,32]
+    )
+
+    classify.add_argument(
+        "--dropout",
+        help="MLP: Set dropout rate. Default is 0.3",
+        action="store",
+        default=0.3
     )
 
     classify.add_argument(
@@ -207,9 +228,10 @@ def run(args):
     from trill.utils.MLP import MLP_C2H2, inference_epoch
     from trill.utils.classify_utils import prep_data, setup_esm2_hf, prep_foldseek_dbs, get_3di_embeddings, log_results, sweep, prep_hf_data, custom_esm2mlp_test, train_model, load_model, custom_model_test, predict_and_evaluate
     from trill.utils.esm_utils import parse_and_save_all_predictions, convert_outputs_to_pdb
-    from trill.utils.lightning_models import ProtT5, CustomWriter, ProstT5
+    from trill.utils.lightning_models import ProtT5, CustomWriter, ProstT5, MLP_Classifier, MLP_Emb_Dataset_train, MLP_Emb_Dataset_test
     from unittest.mock import patch
     from ecpick import ECPICK
+    from torch.utils.data import DataLoader, Dataset
     from trill.utils.dock_utils import downgrade_biopython, upgrade_biopython, get_current_biopython_version
     import matplotlib.pyplot as plt
    
@@ -229,6 +251,7 @@ def run(args):
 
         def __getitem__(self, idx):
             return self.data[idx]
+
     if args.sweep and not args.train_split:
         logger.error("You need to provide a train-test fraction with --train_split!")
         raise Exception("You need to provide a train-test fraction with --train_split!")
@@ -446,11 +469,33 @@ def run(args):
                     precision, recall, fscore, support, LabelOrder = predict_and_evaluate(sweeped_clf, le, test_df, args)
                     log_results(outfile, command_line_str, n_classes, args, classes=unique_c, sweeped_clf=sweeped_clf,precision=precision, recall=recall, fscore=fscore, support=support, le=le, LabelOrder=LabelOrder)
             else:
-                clf = train_model(train_df, args)
-                clf.save_model(os.path.join(args.outdir, f"{args.name}_{args.classifier}_{len(train_df.columns) - 2}.json"))
-                if not float(args.train_split) == 1 or not float(args.train_split) == 1.0:
-                    precision, recall, fscore, support, LabelOrder = predict_and_evaluate(clf, le, test_df, args)
-                    log_results(outfile, command_line_str, n_classes, args, classes=classes, precision=precision,recall=recall, fscore=fscore, support=support, le=le, LabelOrder=LabelOrder)
+                if args.classifier == 'MLP':
+                    if args.lr == 0.2:
+                        args.lr = 0.0001
+                    model = MLP_Classifier(input_size=len(train_df.columns)-2, hidden_layers=args.hidden_layers, dropout_rate=float(args.dropout), num_classes=len(unique_c), learning_rate=float(args.lr))
+                    train_dataset = MLP_Emb_Dataset_train(train_df)
+                    test_dataset = MLP_Emb_Dataset_train(test_df)
+                    train_loader = DataLoader(train_dataset, shuffle=True, batch_size=int(args.batch_size_mlp), num_workers=0)
+                    test_loader = DataLoader(test_dataset, shuffle=False, batch_size=int(args.batch_size_mlp), num_workers=0)
+                    # print(train_df)
+                    trainer = pl.Trainer(
+                        max_epochs=int(args.epochs),
+                        accelerator = 'gpu' if int(args.GPUs) != 0 else 'cpu',
+                        devices=0 if int(args.GPUs) == 0 else int(args.GPUs),
+                        # callbacks=[checkpoint_callback, rich_progress_bar],
+                        deterministic=True,  # Ensure reproducibility
+                        precision='16' if int(args.GPUs) != 0 else '32-true',
+                        num_nodes=int(args.nodes),
+                        check_val_every_n_epoch=1
+                    )
+                    trainer.fit(model, train_dataloaders = train_loader, val_dataloaders = test_loader)
+                    trainer.save_checkpoint(os.path.join(args.outdir, f"{args.name}_{args.emb_model}_MLP_{args.epochs}.pt"))
+                else:
+                    clf = train_model(train_df, args)
+                    clf.save_model(os.path.join(args.outdir, f"{args.name}_{args.classifier}_{len(train_df.columns) - 2}.json"))
+                    if not float(args.train_split) == 1 or not float(args.train_split) == 1.0:
+                        precision, recall, fscore, support, LabelOrder = predict_and_evaluate(clf, le, test_df, args)
+                        log_results(outfile, command_line_str, n_classes, args, classes=classes, precision=precision,recall=recall, fscore=fscore, support=support, le=le, LabelOrder=LabelOrder)
 
             df = pd.DataFrame(label_data, columns=['EncodedLabel', 'OriginalLabel'])
 
@@ -464,6 +509,34 @@ def run(args):
             if not args.preTrained:
                 logger.error("You need to provide a model with --preTrained to perform inference!")
                 raise Exception("You need to provide a model with --preTrained to perform inference!")
+            elif args.classifier == 'MLP':
+                model = MLP_Classifier()
+                model = model.load_from_checkpoint(args.preTrained)
+                test_dataset = MLP_Emb_Dataset_test(df)
+                test_loader = DataLoader(test_dataset, shuffle=False, batch_size=int(args.batch_size_mlp), num_workers=0)
+                trainer = pl.Trainer(
+                    max_epochs=int(args.epochs),
+                    accelerator = 'gpu' if int(args.GPUs) != 0 else 'cpu',
+                    devices=0 if int(args.GPUs) == 0 else int(args.GPUs),
+                    # callbacks=[checkpoint_callback, rich_progress_bar],
+                    deterministic=True,  # Ensure reproducibility
+                    precision='16' if int(args.GPUs) != 0 else '32-true',
+                    num_nodes=int(args.nodes),
+                    )
+                preds = trainer.predict(model, test_loader)
+                classifications = [torch.argmax(tensor).item() for tensor in preds]
+
+                results = []
+
+                # Loop through the labels and predictions, and append them to the results list
+                for lab, pred in zip(df['Label'], classifications):
+                    results.append({'Label': lab, 'Prediction': pred})
+
+                results_df = pd.DataFrame(results)
+
+                # Save the DataFrame to a CSV file
+                results_df.to_csv(os.path.join(args.outdir, f'{args.name}_MLP_predictions.csv'), index=False)
+
             else:
                 clf = load_model(args)
                 custom_model_test(clf, df, args)
