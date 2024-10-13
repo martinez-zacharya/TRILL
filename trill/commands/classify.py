@@ -363,13 +363,13 @@ def run(args):
         phout_file = os.path.join(args.outdir, f"{args.name}_EpHod.csv")
         embed_file = os.path.join(args.outdir, f"{args.name}_ESM1v_embeddings.csv")
         ephod_model = eu.EpHodModel(args)
-        num_batches = int(np.ceil(numseqs / args.batch_size))
+        num_batches = int(np.ceil(numseqs / args.batch_size_emb))
         all_ypred, all_emb_ephod = [], []
         batches = range(1, num_batches + 1)
         batches = tqdm(batches, desc="Predicting pHopt")
         for batch_step in batches:
-            start_idx = (batch_step - 1) * args.batch_size
-            stop_idx = batch_step * args.batch_size
+            start_idx = (batch_step - 1) * args.batch_size_emb
+            stop_idx = batch_step * args.batch_size_emb
             accs = accessions[start_idx: stop_idx]
             seqs = sequences[start_idx: stop_idx]
 
@@ -441,7 +441,7 @@ def run(args):
                 args.query,
                 "--avg",
                 "--batch_size",
-                str(args.batch_size)
+                str(args.batch_size_emb)
             )
             subprocess.run(embed_command, check=True)
             df = pd.read_csv(os.path.join(args.outdir, f"{args.name}_{args.emb_model}_AVG.csv"))
