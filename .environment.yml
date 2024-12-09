@@ -4,6 +4,7 @@ channels:
   - defaults
   - pytorch
   - pyg
+  - nvidia
 dependencies:
   - python=3.8
   - pip=24.0
@@ -12,6 +13,7 @@ dependencies:
   - pdbfixer
   - llvm-openmp
   - pytorch=2.3.0=py3.8_cpu_0
+  - cuda-cudart=11.8
   - cpuonly
   - pyg=2.5.2=py38_torch_2.2.0_cpu 
   - pytorch-cluster=1.6.3=py38_torch_2.3.0_cpu 
