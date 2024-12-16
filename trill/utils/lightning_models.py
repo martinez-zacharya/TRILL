@@ -16,9 +16,9 @@ from icecream import ic
 from loguru import logger
 from transformers import pipeline, AutoTokenizer, AutoModelForCausalLM, DataCollatorForLanguageModeling, T5EncoderModel, \
     T5Tokenizer, AutoModelForSeq2SeqLM, EsmTokenizer, EsmForMaskedLM
-import rinalmo.model.model
-from rinalmo.config import model_config
-import rinalmo.data.alphabet
+# import rinalmo.model.model
+# from rinalmo.config import model_config
+# import rinalmo.data.alphabet
 import calm
 import fm
 from icecream import ic
