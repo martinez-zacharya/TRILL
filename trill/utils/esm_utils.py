@@ -14,6 +14,7 @@ from tqdm import tqdm
 from loguru import logger
 from transformers.models.esm.openfold_utils.feats import atom14_to_atom37
 from transformers.models.esm.openfold_utils.protein import to_pdb, Protein as OFProtein
+from icecream import ic
 from typing import Iterator, List, Tuple
 import math
 import random
@@ -39,7 +40,7 @@ def ESM_IF1_Wrangle(infile):
     data = coordDataset([data])
     return data
 
-def ESM_IF1(data, genIters, temp, GPUs):
+def ESM_IF1(data, genIters, temp, GPUs, args):
     complex_flag = False
     model_data, _ = esm.pretrained._download_model_and_regression_data('esm_if1_gvp4_t16_142M_UR50')
     model, alphabet = load_model_and_alphabet_core('esm_if1_gvp4_t16_142M_UR50', model_data)
@@ -78,11 +79,11 @@ def ESM_IF1(data, genIters, temp, GPUs):
                 model = model.cuda()
                 pass
             for i in loop_gen_iters:
-                sampled_seq = sample_sequence_in_complex(model, coords, chain, temperature=temp)
+                sampled_seq = sample_sequence_in_complex(model, coords, chain, args.contig_redesign, native_seq[chain][0], temperature=temp)
                 if complex_flag == False:
                     ll, _ = score_sequence(
                     model, alphabet, coords[chain], sampled_seq)
-
+                    ic(ll)
                 else:
                     try:
                         coords_4scoring = {}
@@ -129,7 +130,7 @@ def convert_outputs_to_pdb(outputs):
         pdbs.append(to_pdb(pred))
     return pdbs
 
-def sample_sequence_in_complex(model, coords, target_chain_id, temperature=1.,
+def sample_sequence_in_complex(model, coords, target_chain_id, contig_redesign, seq, temperature=1.,
         padding_length=10):
     """
     From fair-esm repo
@@ -143,18 +144,89 @@ def sample_sequence_in_complex(model, coords, target_chain_id, temperature=1.,
     Returns:
         Sampled sequence for the target chain
     """
-    target_chain_len = coords[target_chain_id].shape[0]
+    if contig_redesign:
+        # Parse start and end from contig_redesign
+        parts = contig_redesign.split(":")
+        start = int(parts[0])
+        end = int(parts[1]) if len(parts) > 1 and parts[1] else coords[target_chain_id].shape[0]
+        
+        # Calculate target_chain_len
+        target_chain_len = min(coords[target_chain_id].shape[0], end) - (start - 1)
+    else:
+        target_chain_len = coords[target_chain_id].shape[0]
+
+    ic(target_chain_len)
+
+    # Concatenate coordinates and set device
     all_coords = _concatenate_coords(coords, target_chain_id)
     device = next(model.parameters()).device
 
     # Supply padding tokens for other chains to avoid unused sampling for speed
     padding_pattern = ['<pad>'] * all_coords.shape[0]
-    for i in range(target_chain_len):
-        padding_pattern[i] = '<mask>'
+
+    if contig_redesign:
+        start_idx = max(0, start - 1)  # Ensure 0-based index
+        end_idx = min(all_coords.shape[0], end)  # Ensure end does not exceed length
+        ic(start_idx)
+        ic(end_idx)
+        for i in range(start_idx, end_idx):
+            padding_pattern[i] = '<mask>'
+    else:
+        for i in range(target_chain_len):
+            padding_pattern[i] = '<mask>'
+    # ic(padding_pattern)
+    # Generate sampled sequence
     sampled = model.sample(all_coords, partial_seq=padding_pattern,
-            temperature=temperature, device = device)
-    sampled = sampled[:target_chain_len]
-    return sampled
+                        temperature=temperature, device=device)
+    sampled_tokens = re.findall(r'<pad>|.', sampled)  # Regex matches '<pad>' and individual characters
+    # ic(len(sampled_tokens))
+    # ic(sampled_tokens)
+
+    # Ensure merged_sampled accumulates correctly
+    merged_sampled = []  # Use a list for efficient string concatenation
+    sampled_index = 0  # Pointer for the sampled tokens
+
+    # for i, token in enumerate(sampled_tokens):
+    #     if token == '<mask>':
+    #         if sampled_index < len(sampled_tokens):
+    #             # Append the sampled token
+    #             merged_sampled.append(sampled_tokens[sampled_index])
+    #             sampled_index += 1
+    #         else:
+    #             raise ValueError(f"Sampled sequence index out of range at {sampled_index}")
+    #     elif token == '<pad>':
+    #         if i < len(seq):
+    #             # Append the corresponding original sequence residue
+    #             merged_sampled.append(seq[i])
+    #         else:
+    #             raise ValueError(f"Original sequence index out of range at {i}")
+    #     else:
+    #         raise ValueError(f"Unexpected token in padding_pattern: {token}")
+    if contig_redesign:
+        for i, token in enumerate(sampled_tokens):
+            if token == '<pad>':
+                merged_sampled.append(seq[i])
+            else:
+                merged_sampled.append(token)
+
+    # Convert the merged list back to a string
+        merged_sampled = ''.join(merged_sampled)
+        # ic(merged_sampled)
+        # # Debugging outputs
+        # # ic(padding_pattern[:100])  # Inspect the first 100 tokens of the pattern
+        # ic(seq[:100])              # Inspect the first 100 characters of the original sequence
+        # ic(sampled[:100])          # Inspect the first 100 characters of the sampled sequence
+        # ic(merged_sampled[:100])   # Inspect the first 100 characters of the merged sequence
+        # # ic(padding_pattern[:-100])  # Inspect the first 100 tokens of the pattern
+        # ic(seq[:-100])              # Inspect the first 100 characters of the original sequence
+        # ic(sampled[:-100])          # Inspect the first 100 characters of the sampled sequence
+        # ic(merged_sampled[:-100])   # Inspect the first 100 characters of the merged sequence
+        return merged_sampled
+
+    else:
+        sampled = sampled[:target_chain_len]
+        return sampled
+
 
 def _concatenate_coords(coords, target_chain_id, padding_length=10):
     """
@@ -290,7 +362,7 @@ def parse_and_save_all_predictions(args):
         
         # Initialize a list to hold per amino acid embeddings and labels for each batch
         batched_per_aa_embeddings_with_labels = []  # Modified to store labels
-
+        # ic(preds)
         # Start parsing
         for outer_list in preds:
             batch_per_aa_embeddings = []  # To hold per_AA embeddings for the current batch

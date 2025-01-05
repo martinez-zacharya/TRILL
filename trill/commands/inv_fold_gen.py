@@ -121,6 +121,13 @@ def setup(subparsers):
     inv_fold_gen.add_argument("--verbose", type=int, default=1, help="LigandMPNN: Print stuff")
 
     inv_fold_gen.add_argument(
+        "--contig_redesign",
+        type=str,
+        default=False,
+        help="ESM-IF1: Provide range of contiguous residues to redesign, with the first residue being 1. For example, 1:100 would redesign the first 100 amino acids during sampling.",
+    )
+
+    inv_fold_gen.add_argument(
         "--pdb_path_multi",
         type=str,
         default="",
@@ -378,8 +385,7 @@ def run(args):
             raise Exception("A PDB or CIF file is needed for generating new proteins with ESM-IF1")
         data = ESM_IF1_Wrangle(args.query)
         dataloader = torch.utils.data.DataLoader(data, batch_size=1, shuffle=False)
-        sample_df, native_seq_df = ESM_IF1(dataloader, genIters=int(args.num_return_sequences), temp=float(args.temp),
-                                           GPUs=int(args.GPUs))
+        sample_df, native_seq_df = ESM_IF1(dataloader, genIters=int(args.num_return_sequences), temp=float(args.temp), GPUs=int(args.GPUs), args = args)
         pdb_name = os.path.splitext(os.path.basename(args.query))[0]
         with open(os.path.join(args.outdir, f"{args.name}_ESM-IF1_gen.fasta"), "w+") as fasta:
             for ix, row in native_seq_df.iterrows():

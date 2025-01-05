@@ -33,6 +33,7 @@ for command in {
     "dock",
     "score",
     "utils",
+    "workflow"
 }:
     commands[command] = importlib.import_module(f"trill.commands.{command}")
 

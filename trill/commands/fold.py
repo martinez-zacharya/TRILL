@@ -7,7 +7,7 @@ def setup(subparsers):
     fold.add_argument(
         "model",
         help="Choose your desired model.",
-        choices=("ESMFold", "ProstT5")
+        choices=("Chai-1", "Boltz-1", "ESMFold", "ProstT5")
     )
     fold.add_argument(
         "--strategy",
@@ -22,6 +22,13 @@ def setup(subparsers):
         action="store",
         default=1,
         dest="batch_size",
+    )
+
+    fold.add_argument(
+        "--msa",
+        help="Boltz-1/Chai-1: Use ColabFold Server to generate MSA for input and subsequent inference, may improve results",
+        action="store_true",
+        default=False,
     )
 
     fold.add_argument(
@@ -48,11 +55,19 @@ def run(args):
     import pandas as pd
     import pytorch_lightning as pl
     import torch
+    import subprocess
+    import sys
+    import numpy as np
     from tqdm import tqdm
+    from pathlib import Path
     from transformers import AutoTokenizer, EsmForProteinFolding
     from loguru import logger
     from trill.utils.esm_utils import convert_outputs_to_pdb
+    from trill.utils.dock_utils import create_init_file
     from trill.utils.lightning_models import CustomWriter, ProstT5
+    from git import Repo
+    import re
+    import textwrap
     # from trill.utils.rosettafold_aa import rfaa_setup
     from .commands_common import cache_dir, get_logger
 
@@ -174,5 +189,186 @@ def run(args):
         for file in pt_files:
             os.remove(os.path.join(args.outdir, file))
 
-    # elif args.model == "RFAA":
-    #     rfaa_setup(args, cache_dir)
+    
+    elif args.model == 'Chai-1':
+        if not os.path.exists(os.path.join(cache_dir, "chai-lab")):
+            logger.info("Cloning Chai-Lab")
+            os.makedirs(os.path.join(cache_dir, "chai-lab"))
+            chai = Repo.clone_from("https://github.com/chaidiscovery/chai-lab",
+                                       os.path.join(cache_dir, "chai-lab"))
+            chai_root = chai.git.rev_parse("--show-toplevel")
+            sys.path.insert(0, os.path.join(cache_dir, "chai-lab"))
+        else:
+            sys.path.insert(0, os.path.join(cache_dir, "chai-lab"))
+
+        from chai_lab.chai1 import run_inference
+
+        candidates = run_inference(
+            fasta_file=Path(args.query),
+            output_dir=Path(f'{args.outdir}/{args.name}_Chai_output'),
+            # 'default' setup
+            num_trunk_recycles=3,
+            num_diffn_timesteps=200,
+            msa_server=True if args.msa else False,
+            seed=int(args.RNG_seed),
+            # device="cuda:0",
+            use_esm_embeddings=True,
+        )
+
+
+        npz_dir = Path(f'{args.outdir}/{args.name}_Chai_output')
+        npz_files = [os.path.join(npz_dir, f) for f in os.listdir(npz_dir) if f.endswith(".npz")]
+
+        data = []
+
+        # Iterate through the .npz files
+        for file_path in npz_files:
+            # Load the .npz file
+            npz_data = np.load(file_path)
+            
+            # Dictionary to store row data
+            row_data = {"file_name": os.path.basename(file_path)}
+            
+            # Extract data for each key
+            for key in npz_data.keys():
+                value = npz_data[key]
+                
+                # Handle different data shapes
+                if value.shape == (1,):
+                    # Scalar-like values
+                    row_data[key] = value[0]
+                elif value.shape == (1, 3):
+                    # 1D arrays with 3 elements
+                    row_data[key] = value.flatten().tolist()
+                elif value.shape == (1, 3, 3):
+                    # 2D arrays with 3x3 elements
+                    row_data[key] = value.squeeze().tolist()
+                else:
+                    row_data[key] = value.tolist()  # General fallback
+            
+            # Append the row data to the list
+            data.append(row_data)
+
+        df = pd.DataFrame(data)
+        df.to_csv(os.path.join(npz_dir, f'{args.name}_Chai_scores.csv'), index=False)
+
+    elif args.model == 'Boltz-1':
+
+        if not os.path.exists(os.path.join(cache_dir, "boltz")):
+            logger.info("Cloning Boltz")
+            os.makedirs(os.path.join(cache_dir, "boltz"))
+            boltz = Repo.clone_from("https://github.com/jwohlwend/boltz",
+                                       os.path.join(cache_dir, "boltz"))
+            boltz_root = boltz.git.rev_parse("--show-toplevel")
+            sys.path.insert(0, os.path.join(cache_dir, "boltz/src"))
+            prim_py = os.path.join(cache_dir, 'boltz/src/boltz/model/layers/triangular_attention/primitives.py')
+
+            with open(prim_py, 'r') as file:
+                lines = file.readlines()
+
+            # Modify the file content
+            new_lines = []
+            for line in lines:
+                # Comment out the specific lines
+                if 'fa_is_installed = importlib.util.find_spec("flash_attn") is not None' in line or \
+                'if fa_is_installed:' in line or \
+                'from flash_attn.bert_padding import unpad_input' in line or \
+                'from flash_attn.flash_attn_interface import flash_attn_unpadded_kvpacked_func' in line:
+                    new_lines.append(f"# {line}")
+                else:
+                    new_lines.append(line)
+            with open(prim_py, 'w') as file:
+                file.writelines(new_lines)
+
+            boltz_main_path = os.path.join(cache_dir, 'boltz/src/boltz/main.py')
+
+            # Read the file
+            with open(boltz_main_path, "r") as file:
+                lines = file.readlines()
+
+            # Define patterns to identify CLI-related lines and the main block
+            cli_patterns = [
+                "@click.group",
+                "@cli.command",
+                "@click.argument",
+                "@click.option",
+                "cli()",
+            ]
+            main_block_pattern = "if __name__ == \"__main__\":"
+
+            # Start processing the lines
+            new_lines = []
+            inside_multiline_block = False
+            inside_main_block = False
+            parentheses_count = 0  # Track open and close parentheses for multiline blocks
+
+            for line in lines:
+                stripped_line = line.strip()
+
+                # Start of a multi-line CLI decorator (e.g., @click.option)
+                if any(pattern in stripped_line for pattern in cli_patterns):
+                    new_lines.append(f"# {line}")  # Comment out the starting line
+                    if stripped_line.endswith("(") and not stripped_line.endswith(")"):
+                        inside_multiline_block = True
+                        parentheses_count = stripped_line.count("(") - stripped_line.count(")")
+                    continue
+
+                # Handle lines inside multi-line blocks
+                if inside_multiline_block:
+                    new_lines.append(f"# {line}")  # Comment out each line in the block
+                    parentheses_count += stripped_line.count("(") - stripped_line.count(")")
+                    if parentheses_count <= 0:  # Block ends when parentheses are balanced
+                        inside_multiline_block = False
+                    continue
+
+                # Detect and comment out the main block
+                if stripped_line.startswith(main_block_pattern):
+                    new_lines.append(f"# {line}")  # Comment out the start of the main block
+                    inside_main_block = True
+                    continue
+
+                if inside_main_block:
+                    new_lines.append(f"# {line}")  # Comment out all lines in the main block
+                    if stripped_line == "":  # Empty line indicates the block might have ended
+                        inside_main_block = False
+                    continue
+
+                # Replace `click.echo` with `print`
+                if "click.echo" in stripped_line:
+                    new_lines.append(line.replace("click.echo", "print"))
+                    continue
+
+                # Keep all other lines unchanged
+                new_lines.append(line)
+
+            # Dedent the entire file to ensure consistent formatting
+            dedented_code = textwrap.dedent("".join(new_lines))
+
+            # Save the modified file back
+            with open(boltz_main_path, "w") as file:
+                file.write(dedented_code)
+                
+        else:
+            boltz = Repo(os.path.join(cache_dir, "boltz"))
+            boltz_root = boltz.git.rev_parse("--show-toplevel")
+            sys.path.insert(0, os.path.join(cache_dir, "boltz/src"))
+
+        directories = ['src/boltz']
+        for directory in directories:
+            create_init_file(os.path.join(boltz_root, directory))
+
+
+        from boltz.main import predict as boltz_predict
+        try:
+            boltz_predict(args.query, args.outdir, seed = int(args.RNG_seed), use_msa_server = True if args.msa else False)
+        except RuntimeError as e:
+            if "Missing MSA's in input and --use_msa_server flag not set." in str(e):
+                logger.error("Error: Missing MSA's in input and --msa flag not set.")
+                logger.error(
+                    "You can run single-sequence mode without an MSA by adding 'empty' "
+                    "to the end of the FASTA header like '>A|protein|empty'."
+                    ""
+                )
+                raise
+            else:
+                raise
