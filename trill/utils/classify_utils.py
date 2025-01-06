@@ -252,8 +252,7 @@ def predict_and_evaluate(model, le, test_df, args):
         test_preds = model.predict(d_test)
         # test_preds = model.predict(test_df.iloc[:, :-2])
         if not args.sweep:
-            # test_preds = np.argmax(test_preds, axis=1)
-            test_preds = np.argmax(test_preds)
+            test_preds = np.argmax(test_preds, axis=1)
     # transformed_preds = le.inverse_transform(test_preds)
     precision, recall, fscore, support = precision_recall_fscore_support(test_df['NewLab'].values, test_preds, average=args.f1_avg_method,labels=np.unique(test_df['NewLab']))
     label_order = np.unique(test_df['NewLab'])                                                           

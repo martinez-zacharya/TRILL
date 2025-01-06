@@ -7,7 +7,7 @@ def setup(subparsers):
             For RiNALMo, RNA-FM and mRNA-FM (must be multiples of 3 for mRNA-FM) the input is RNA while CaLM takes as input DNA sequences. ",
         action="store",
         choices=("Ankh", "Ankh-Large", "CaLM", "esm2_t6_8M", "esm2_t12_35M", "esm2_t30_150M", "esm2_t33_650M", "esm2_t36_3B", "esm2_t48_15B",
-                 "ProtT5-XL", "ProstT5", "RiNALMo", "mRNA-FM", "RNA-FM", "SaProt")
+                 "ProtT5-XL", "ProstT5", "mRNA-FM", "RNA-FM", "SaProt")
     )
 
     embed.add_argument(

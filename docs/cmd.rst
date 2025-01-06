@@ -16,3 +16,4 @@ Home
    cmd_simulate
    cmd_score
    cmd_utils
+   cmd_workflow

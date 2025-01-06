@@ -14,6 +14,7 @@ from biobb_vs.fpocket.fpocket_run import fpocket_run
 from biobb_vs.fpocket.fpocket_select import fpocket_select
 from biobb_vs.utils.box import box
 from openmm.app import element
+import inspect
 from openmm.app.pdbfile import PDBFile
 from rdkit import Chem
 import numpy as np
@@ -289,7 +290,7 @@ def run_fpocket_hunting(protein_file, protein_name, args):
     with Capturing() as output1:
         fpocket_run(input_pdb_path=protein_file,
                     output_pockets_zip=f'{protein_name}_raw_pockets.zip',
-                    output_summmolary=f'{protein_name}_fpocket_info.json',
+                    output_summary=f'{protein_name}_fpocket_info.json',
                     properties=prop)
     return output1
 
@@ -297,7 +298,7 @@ def run_fpocket_filtering(protein_name):
     prop = {'score': [0.2, 1]}
     logger.info('Pocket filtering...')
     with Capturing() as output2:
-        fpocket_filter(f'{protein_name}_raw_pockets.zip', f'{protein_name}_fpocket_info.json', f'{protein_name}_filtered_pockets.zip', properties=prop)
+        fpocket_filter(input_pockets_zip = f'{protein_name}_raw_pockets.zip', input_summary = f'{protein_name}_fpocket_info.json', output_filter_pockets_zip = f'{protein_name}_filtered_pockets.zip', properties=prop)
     pockets = parse_pocket_output(output2)
     shutil.unpack_archive(f'{protein_name}_filtered_pockets.zip', f'{protein_name}_filtered_pockets', 'zip')
     return pockets
