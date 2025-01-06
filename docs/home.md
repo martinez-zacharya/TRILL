@@ -17,19 +17,19 @@ TRILL (**TR**aining and **I**nference using the **L**anguage of **L**ife) is a s
 
 | **Command** | **Function** | **Available Models** |
 |:-----------:|:------------:|:--------------------:|
-| **Embed** | Generates numerical representations or "embeddings" of protein sequences for quantitative analysis and comparison. | [ESM2](https://doi.org/10.1101/2022.07.20.500902), [ProtT5-XL](https://doi.org/10.1109/TPAMI.2021.3095381), [ProstT5](https://doi.org/10.1101/2023.07.23.550085), [Ankh](https://doi.org/10.48550/arXiv.2301.06568)|
+| **Embed** | Generates numerical representations or "embeddings" of protein sequences for quantitative analysis and comparison. | [ESM2](https://doi.org/10.1101/2022.07.20.500902), [ProtT5-XL](https://doi.org/10.1109/TPAMI.2021.3095381), [ProstT5](https://doi.org/10.1101/2023.07.23.550085), [Ankh](https://doi.org/10.48550/arXiv.2301.06568), [CaLM](https://doi.org/10.1038/s42256-024-00791-0), [mRNA-FM/RNA-FM](https://doi.org/10.48550/arXiv.2204.00300), [SaProt](https://doi.org/10.1101/2023.10.01.560349)|
 | **Visualize** | Creates interactive 2D visualizations of embeddings for exploratory data analysis. | PCA, t-SNE, UMAP |
-| **Finetune** | Finetunes protein language models for specific tasks. | [ESM2](https://doi.org/10.1101/2022.07.20.500902), [ProtGPT2](https://doi.org/10.1038/s41467-022-32007-7), [ZymCTRL](https://www.mlsb.io/papers_2022/ZymCTRL_a_conditional_language_model_for_the_controllable_generation_of_artificial_enzymes.pdf) |
-| **Language Model Protein Generation** | Generates proteins using pretrained language models. | [ESM2](https://doi.org/10.1101/2022.07.20.500902), [ProtGPT2](https://doi.org/10.1038/s41467-022-32007-7), [ZymCTRL](https://www.mlsb.io/papers_2022/ZymCTRL_a_conditional_language_model_for_the_controllable_generation_of_artificial_enzymes.pdf) |
+| **Finetune** | Finetunes protein language models for specific tasks. | [ESM2](https://doi.org/10.1101/2022.07.20.500902), [ProtGPT2](https://doi.org/10.1038/s41467-022-32007-7), [ZymCTRL](https://www.mlsb.io/papers_2022/ZymCTRL_a_conditional_language_model_for_the_controllable_generation_of_artificial_enzymes.pdf), [ProGen2](https://doi.org/10.1016/j.cels.2023.10.002)|
+| **Language Model Protein Generation** | Generates proteins using pretrained language models. | [ESM2](https://doi.org/10.1101/2022.07.20.500902), [ProtGPT2](https://doi.org/10.1038/s41467-022-32007-7), [ZymCTRL](https://www.mlsb.io/papers_2022/ZymCTRL_a_conditional_language_model_for_the_controllable_generation_of_artificial_enzymes.pdf), [ProGen2](https://doi.org/10.1016/j.cels.2023.10.002)|
 | **Inverse Folding Protein Generation** | Designs proteins to fold into specific 3D structures. | [ESM-IF1](https://doi.org/10.1101/2022.04.10.487779), [LigandMPNN](https://doi.org/10.1101/2023.12.22.573103), [ProstT5](https://doi.org/10.1101/2023.07.23.550085) |
 | **Diffusion Based Protein Generation** | Uses denoising diffusion models to generate proteins. | [RFDiffusion](https://doi.org/10.1101/2022.12.09.519842) |
-| **Fold** | Predicts 3D protein structures. | [ESMFold](https://doi.org/10.1101/2022.07.20.500902), [ProstT5](https://doi.org/10.1101/2023.07.23.550085) |
+| **Fold** | Predicts 3D protein structures. | [ESMFold](https://doi.org/10.1101/2022.07.20.500902), [ProstT5](https://doi.org/10.1101/2023.07.23.550085), [Chai-1](https://doi.org/10.1101/2024.10.10.615955), [Boltz-1](https://doi.org/10.1101/2024.11.19.624167) |
 | **Dock** | Simulates protein-ligand interactions. | [DiffDock](https://doi.org/10.48550/arXiv.2210.01776), [Smina](https://doi.org/10.1021/ci300604z), [Autodock Vina](https://doi.org/10.1021/acs.jcim.1c00203), [Lightdock](https://doi.org/10.1093/bioinformatics/btx555), [GeoDock](https://doi.org/10.1101/2023.06.29.547134) |
 | **Classify** | Predicts protein properties with pretrained models or train custom classifiers | [TemStaPro](https://doi.org/10.1101/2023.03.27.534365), [EpHod](https://doi.org/10.1101/2023.06.22.544776), [ECPICK](https://github.com/datax-lab/ECPICK?tab=readme-ov-file), [LightGBM](https://papers.nips.cc/paper_files/paper/2017/hash/6449f44a102fde848669bdd9eb6b76fa-Abstract.html), [XGBoost](https://doi.org/10.48550/arXiv.1603.02754), [Isolation Forest](https://doi.org/10.1109/ICDM.2008.17) |
 | **Regress** | Train custom regression models. | [LightGBM](https://papers.nips.cc/paper_files/paper/2017/hash/6449f44a102fde848669bdd9eb6b76fa-Abstract.html), [Linear](https://scikit-learn.org/stable/modules/generated/sklearn.linear_model.LinearRegression.html)|
 | **Simulate** | Uses molecular dynamics to simulate protein-ligand interactions. | [OpenMM](https://doi.org/10.1371/journal.pcbi.1005659) |
-| **Score** | Utilize ESM1v or ESM2 to score protein sequences or ProteinMPNN to score protein structures in a zero-shot manner. | [COMPSS](https://www.nature.com/articles/s41587-024-02214-2#change-history)  |
-
+| **Score** | Utilize ESM1v or ESM2 to score protein sequences or ProteinMPNN/LigandMPNN to score protein structures in a zero-shot manner. | [COMPSS](https://www.nature.com/articles/s41587-024-02214-2#change-history)  |
+| **Workflow** | Automated protein design workflows. | [Foldtuning](https://doi.org/10.1101/2023.12.22.573145)  |
 
 
 ## Set-Up
@@ -40,13 +40,12 @@ TRILL (**TR**aining and **I**nference using the **L**anguage of **L**ife) is a s
 2. Once micromamba is set up, create a new environment with
 ```shell
 micromamba create -n TRILL python=3.10 ; micromamba activate TRILL
-micromamba install -c pytorch -c nvidia pytorch=2.1.2 pytorch-cuda=12.1 torchdata
-micromamba install -c conda-forge openbabel pdbfixer swig openmm smina fpocket vina openff-toolkit openmmforcefields setuptools=69.5.1
-micromamba install -c bioconda foldseek pyrsistent
-micromamba install -c "dglteam/label/cu121" dgl
-micromamba install -c pyg pyg pytorch-cluster pytorch-sparse pytorch-scatter
-pip install git+https://github.com/martinez-zacharya/lightdock.git@03a8bc4888c0ff8c98b7f0df4b3c671e3dbf3b1f git+https://github.com/martinez-zacharya/ECPICK.git setuptools==69.5.1
-```
+micromamba install -c pytorch -c nvidia pytorch=2.3.0 pytorch-cuda=12.1 torchdata python=3.11
+micromamba install -c conda-forge openbabel pdbfixer swig openmm smina fpocket vina openff-toolkit openmmforcefields setuptools=69.5.1 python=3.11
+micromamba install -c bioconda foldseek pyrsistent python=3.11
+micromamba install -c "dglteam/label/cu121" dgl python=3.11
+micromamba install -c pyg pyg pytorch-cluster pytorch-sparse pytorch-scatter python=3.11 pytorch=2.3.0 pytorch-cuda=12.1
+pip install git+https://github.com/martinez-zacharya/lightdock.git@03a8bc4888c0ff8c98b7f0df4b3c671e3dbf3b1f git+https://github.com/martinez-zacharya/ECPICK.git git+https://github.com/martinez-zacharya/CaLM.git setuptools==69.5.1 rna-fm flash-attn==2.7.2.post1```
 3. Next, simply install TRILL!
 ```shell
 pip install trill-proteins
@@ -56,25 +55,26 @@ pip install trill-proteins
 
 ```shell
 usage: trill [-h] [--nodes NODES] [--logger LOGGER] [--profiler] [--RNG_seed RNG_SEED] [--outdir OUTDIR] [--n_workers N_WORKERS]
-             name GPUs {finetune,visualize,utils,simulate,inv_fold_gen,lang_gen,classify,regress,embed,dock,diff_gen,fold} ...
+             name GPUs {dock,classify,inv_fold_gen,embed,score,diff_gen,regress,finetune,simulate,fold,visualize,utils,lang_gen,workflow} ...
 
 positional arguments:
   name                  Name of run
   GPUs                  Input total number of GPUs per node
-  {finetune,visualize,utils,simulate,inv_fold_gen,lang_gen,classify,regress,embed,dock,diff_gen,fold}
+  {dock,classify,inv_fold_gen,embed,score,diff_gen,regress,finetune,simulate,fold,visualize,utils,lang_gen,workflow}
+    dock                Perform molecular docking with proteins and ligands. Note that you should relax your protein receptor with Simulate or another method before docking.
+    classify            Classify proteins using either pretrained classifiers or train/test your own.
+    inv_fold_gen        Generate proteins using inverse folding
+    embed               Embed sequences of interest
+    score               Use ESM-1v or ESM2 to score protein sequences or ProteinMPNN to score protein structures
+    diff_gen            Generate proteins using RFDiffusion
+    regress             Train you own regressors on input protein sequences and some sort of score.
     finetune            Finetune protein language models
+    simulate            Use OpenMM to perform molecular dynamics
+    fold                Predict 3D protein structures using ESMFold or obtain 3Di structure for use with Foldseek to perform remote homology detection
     visualize           Reduce dimensionality of embeddings to 2D
     utils               Misc utilities
-    simulate            Use OpenMM to perform molecular dynamics
-    inv_fold_gen        Generate proteins using inverse folding
     lang_gen            Generate proteins using large language models
-    classify            Classify proteins using either pretrained classifiers or train/test your own.
-    regress             Train you own regressors on input protein sequences and some sort of score.
-    embed               Embed proteins of interest
-    dock                Perform molecular docking with proteins and ligands. Note that you should relax your protein receptor with Simulate or another method before docking.
-    diff_gen            Generate proteins using RFDiffusion
-    fold                Predict 3D protein structures using ESMFold or obtain 3Di structure for use with Foldseek to perform remote homology detection
-    score               Score protein sequences using ESM1v or ESM2 and protein structure with various ProteinMPNN models
+    workflow            Perform workflow of interest
 
 options:
   -h, --help            show this help message and exit
@@ -83,7 +83,8 @@ options:
   --profiler            Utilize PyTorchProfiler
   --RNG_seed RNG_SEED   Input RNG seed. Default is 123
   --outdir OUTDIR       Input full path to directory where you want the output from TRILL
-  --n_workers N_WORKERS Change number of CPU cores/'workers' TRILL uses
+  --n_workers N_WORKERS
+                        Change number of CPU cores/'workers' TRILL uses
 
 
 ```
