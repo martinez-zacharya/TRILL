@@ -45,7 +45,8 @@ micromamba install -c conda-forge openbabel pdbfixer swig openmm smina fpocket v
 micromamba install -c bioconda foldseek pyrsistent python=3.11
 micromamba install -c "dglteam/label/cu121" dgl python=3.11
 micromamba install -c pyg pyg pytorch-cluster pytorch-sparse pytorch-scatter python=3.11 pytorch=2.3.0 pytorch-cuda=12.1
-pip install git+https://github.com/martinez-zacharya/lightdock.git@03a8bc4888c0ff8c98b7f0df4b3c671e3dbf3b1f git+https://github.com/martinez-zacharya/ECPICK.git git+https://github.com/martinez-zacharya/CaLM.git setuptools==69.5.1 rna-fm flash-attn==2.7.2.post1```
+pip install git+https://github.com/martinez-zacharya/lightdock.git@03a8bc4888c0ff8c98b7f0df4b3c671e3dbf3b1f git+https://github.com/martinez-zacharya/ECPICK.git git+https://github.com/martinez-zacharya/CaLM.git setuptools==69.5.1 rna-fm flash-attn==2.7.2.post1
+```
 3. Next, simply install TRILL!
 ```shell
 pip install trill-proteins
