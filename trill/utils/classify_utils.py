@@ -40,7 +40,7 @@ def load_data(args):
 def load_model(args):
     # Check the model type and load accordingly
     if args.classifier == 'XGBoost':
-        clf = xgb.XGBClassifier()
+        clf = xgb.Booster()
         clf.load_model(args.preTrained)  
     elif args.classifier == 'LightGBM':
         clf = lgb.Booster(model_file=args.preTrained)  
@@ -236,7 +236,6 @@ def train_model(train_df, args):
         clf = lgb.train(config['lightgbm'], d_train, args.n_estimators)
     elif args.classifier == 'XGBoost':
         clf = xgb.train(config['xgboost'], d_train)
-    
     return clf
 
 
@@ -262,7 +261,10 @@ def custom_model_test(model, test_df, args):
     # Generate probability predictions based on the model type
     model_type = args.classifier
     if model_type == 'XGBoost':
-        test_preds_proba = model.predict_proba(test_df.iloc[:, :-1])
+        test_df_dmat = xgb.DMatrix(test_df.iloc[:, :-1])
+        # test_preds_proba = model.predict(test_df.iloc[:, :-1])
+        test_preds_proba = model.predict(test_df_dmat)
+        # test_preds_proba = model.predict(test_df.iloc[:, :-1])
         proba_df = pd.DataFrame(test_preds_proba)
         test_preds = proba_df.idxmax(axis=1)
     elif model_type == 'LightGBM':

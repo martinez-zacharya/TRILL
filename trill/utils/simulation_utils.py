@@ -107,6 +107,7 @@ def combine_pdb_files(receptor_file, ligand_file, output_file):
 
 def relax_structure(args, fixed_pdb_files):
     platform, properties = set_platform_properties(args)
+    ic(fixed_pdb_files)
     for filename in tqdm(fixed_pdb_files, desc="Relaxing PDBs"):
         simulation = set_simulation_parameters(filename, platform, properties, args)
         minimize_and_save(simulation, args.outdir, filename)

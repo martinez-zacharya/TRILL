@@ -21,6 +21,7 @@ import numpy as np
 from tqdm import tqdm
 import re
 from rdkit.Chem import AllChem
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from meeko import MoleculePreparation, RDKitMolCreate, PDBQTMolecule, PDBQTWriterLegacy
 from loguru import logger
 
@@ -457,15 +458,30 @@ def find_best_match(structure1, structure2):
 def fixer_of_pdbs(args):
     fixed_pdb_files = []
     if args.just_relax:
-      if len(args.receptor) > 1:
-        for rec in args.receptor:
-          alterations = {}
-          fixed_pdb = fix_pdb(rec, alterations, args)
-          fixed_pdb_files.append(fixed_pdb)
-      else:
-          alterations = {}
-          fixed_pdb = fix_pdb(args.receptor[0], alterations, args)
-          fixed_pdb_files.append(fixed_pdb)   
+        if len(args.receptor) > 1:
+            if int(args.n_workers) > 1:
+                with ThreadPoolExecutor(max_workers=int(args.n_workers)) as executor:
+                    futures = {
+                        executor.submit(fix_pdb, rec, {}, args): rec
+                        for rec in args.receptor
+                    }
+                    
+                    for future in tqdm(as_completed(futures), total=len(futures), desc="Fixing PDBs"):
+                        rec = futures[future]
+                        try:
+                            fixed_pdb = future.result()
+                            fixed_pdb_files.append(fixed_pdb)
+                        except Exception as e:
+                            print(f"Error processing receptor {rec}: {e}")
+            else:
+                for rec in tqdm(args.receptor, desc="Fixing PDBs"):
+                    alterations = {}
+                    fixed_pdb = fix_pdb(rec, alterations, args)
+                    fixed_pdb_files.append(fixed_pdb)
+        else:
+            alterations = {}
+            fixed_pdb = fix_pdb(args.receptor[0], alterations, args)
+            fixed_pdb_files.append(fixed_pdb)   
     elif not args.ligand:
       receptor = fix_pdb(args.receptor, alterations={}, args=args)
       fixed_pdb_files.append(receptor)
