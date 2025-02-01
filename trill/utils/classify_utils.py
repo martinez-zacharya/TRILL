@@ -27,6 +27,7 @@ import requests
 from Bio import SeqIO
 from loguru import logger
 from tqdm import tqdm
+import optuna
 
 def load_data(args):
     if not args.preComputed_Embs:
@@ -222,7 +223,6 @@ def train_model(train_df, args):
             'num_class': len(train_df['NewLab'].unique()),
             'learning_rate': args.lr,
             'max_depth': args.max_depth,
-            'n_estimators': args.n_estimators,
             'gamma': args.xg_gamma,
             'reg_alpha': args.xg_reg_alpha,
             'reg_lambda': args.xg_reg_lambda,
@@ -241,20 +241,32 @@ def train_model(train_df, args):
 
 def predict_and_evaluate(model, le, test_df, args):
     if args.classifier == 'LightGBM':
-        test_preds = model.predict(test_df.iloc[:, :-2])
-        test_preds = np.argmax(test_preds, axis=1)
+        test_preds_raw = model.predict(test_df.iloc[:, :-2], raw_score=True)
+        if test_preds_raw.ndim == 1:  # Binary classification case
+            # Apply sigmoid transformation manually
+            test_preds_proba = 1 / (1 + np.exp(-test_preds_raw))
+            
+            # Convert to a probability distribution: P(class_0) = 1 - P(class_1)
+            test_preds_proba = np.column_stack([1 - test_preds_proba, test_preds_proba])
+            
+            # Convert to predicted labels (threshold at 0.5)
+            test_preds = (test_preds_proba[:, 1] > 0.5).astype(int)
+
+        else:  # Multi-class classification case
+            # Apply softmax transformation manually
+            exp_scores = np.exp(test_preds_raw - np.max(test_preds_raw, axis=1, keepdims=True))
+            test_preds_proba = exp_scores / exp_scores.sum(axis=1, keepdims=True)
+            
+            # Get predicted labels
+            test_preds = test_preds_proba.argmax(axis=1)
     elif args.classifier == 'XGBoost':
-        if args.sweep:
-            d_test = test_df.iloc[:, :-2]
-        else:
-            d_test = xgb.DMatrix(test_df.iloc[:, :-2])
+        d_test = xgb.DMatrix(test_df.iloc[:, :-2])
         test_preds = model.predict(d_test)
-        # test_preds = model.predict(test_df.iloc[:, :-2])
-        if not args.sweep:
-            test_preds = np.argmax(test_preds, axis=1)
-    # transformed_preds = le.inverse_transform(test_preds)
+        if test_preds.ndim == 1:
+            test_preds = np.column_stack([1 - test_preds, test_preds])
+        test_preds = np.argmax(test_preds, axis=1)
     precision, recall, fscore, support = precision_recall_fscore_support(test_df['NewLab'].values, test_preds, average=args.f1_avg_method,labels=np.unique(test_df['NewLab']))
-    label_order = np.unique(test_df['NewLab'])                                                           
+    label_order = np.unique(test_df['NewLab'])
     return precision, recall, fscore, support, label_order
 
 def custom_model_test(model, test_df, args):
@@ -268,12 +280,25 @@ def custom_model_test(model, test_df, args):
         proba_df = pd.DataFrame(test_preds_proba)
         test_preds = proba_df.idxmax(axis=1)
     elif model_type == 'LightGBM':
-        test_preds_proba = model.predict(test_df.iloc[:, :-1], raw_score=True)
-        proba_df = pd.DataFrame(test_preds_proba)
-        if test_preds_proba.ndim == 1:
-            test_preds = (test_preds_proba > 0).astype(int)
-        else:
-            test_preds = proba_df.idxmax(axis=1)
+        test_preds_raw = model.predict(test_df.iloc[:, :-1], raw_score=True)
+        if test_preds_raw.ndim == 1:  # Binary classification case
+            # Apply sigmoid transformation manually
+            test_preds_proba = 1 / (1 + np.exp(-test_preds_raw))
+            # Convert to a probability distribution: P(class_0) = 1 - P(class_1)
+            test_preds_proba = np.column_stack([1 - test_preds_proba, test_preds_proba])
+            # Convert to predicted labels (threshold at 0.5)
+            test_preds = (test_preds_proba[:, 1] > 0.5).astype(int)
+
+        else:  # Multi-class classification case
+            # Apply softmax transformation manually
+            exp_scores = np.exp(test_preds_raw - np.max(test_preds_raw, axis=1, keepdims=True))
+            test_preds_proba = exp_scores / exp_scores.sum(axis=1, keepdims=True)
+            
+            # Get predicted labels
+            test_preds = test_preds_proba.argmax(axis=1)
+
+        # Convert probabilities back into DataFrame for easy inspection
+        proba_df = pd.DataFrame(test_preds_proba, columns=[f'{i}' for i in range(test_preds_proba.shape[1])])
 
     # Add the original labels to the DataFrame
     proba_df['Label'] = test_df['Label'].values
@@ -301,21 +326,21 @@ def custom_xg_test(model, test_df, args):
     pred_df.to_csv(os.path.join(args.outdir, f'{args.name}_XGBoost_predictions.csv'), index=False)
     return 
 
-def log_results(out_file, command_str, n_classes, args, classes = None, sweeped_clf=None, precision=None, recall=None, fscore=None, support=None, le=None, LabelOrder=None):
+def log_results(out_file, command_str, n_classes, args, classes = None, sweeped_clf=None, precision=None, recall=None, fscore=None, support=None, le=None, LabelOrder=None, study=None):
     with open(out_file, 'w+') as out:
         out.write('TRILL command used: ' + command_str + '\n\n')
         out.write(f'Classes trained on: {classes}\n\n')
 
         if sweeped_clf and args.f1_avg_method != None:
-            out.write(f'Best sweep params: {sweeped_clf.best_params_}\n\n')
-            out.write(f'Best sweep F1 score: {sweeped_clf.best_score_}\n\n')
+            out.write(f'Best sweep params: {study.best_params}\n\n')
+            out.write(f'Best sweep F1 score: {study.best_trial.value}\n\n')
             out.write(f"{args.f1_avg_method}-averaged classification metrics:\n")
             out.write(f"\tPrecision: {precision}\n")
             out.write(f"\tRecall: {recall}\n")
             out.write(f"\tF-score: {fscore}\n")
         elif sweeped_clf and args.f1_avg_method == None:
-            out.write(f'Best sweep params: {sweeped_clf.best_params_}\n\n')
-            out.write(f'Best sweep F1 score: {sweeped_clf.best_score_}\n\n')
+            out.write(f'Best sweep params: {study.best_params}\n\n')
+            out.write(f'Best sweep F1 score: {study.best_trial.value}\n\n')
             out.write("Classification Metrics Per Class:\n")
             for i, num_label in enumerate(LabelOrder):
                 label = le.inverse_transform([num_label])
@@ -412,71 +437,94 @@ def generate_class_key_csv(args):
     df.to_csv(outpath, index=False)
     logger.info(f"Class key CSV generated and saved as '{outpath}'.")
 
-
-
-def sweep(train_df, args):
+def sweep(train_df, test_df, args):
     model_type = args.classifier
     logger.info(f"Setting up hyperparameter sweep for {model_type}")
+    
     np.int = np.int64
     if args.n_workers == 1:
         logger.warning("WARNING!")
         logger.warning("You are trying to perform a hyperparameter sweep with only 1 core!")
         logger.warning(f"In your case, you have {multiprocessing.cpu_count()} CPU cores available!")
+    
     logger.info(f"Using {args.n_workers} CPU cores for sweep")
-    # Define model and parameter grid based on the specified model_type
-    if model_type == 'LightGBM':
-        if train_df['NewLab'].nunique() == 2:
-            objective = 'binary'
-            f1_avg_method = 'binary'
-        else:
-            objective = 'multiclass'
-            f1_avg_method = 'macro'
-        model = lgb.LGBMClassifier(objective=objective, verbose=-1)
-        param_grid = {
-            'learning_rate': Real(0.01, 0.3),
-            'num_leaves': Integer(10, 255),
-            'max_depth': Integer(-1, 20),
-            'n_estimators': Integer(50, 250),
-            'feature_fraction': Real(0.1, 1.0),
-            'bagging_fraction': Real(0, 1),
-            'bagging_freq': Integer(0, 10),
-        }
-    elif model_type == 'XGBoost':
-        if train_df['NewLab'].nunique() == 2:
-            model = xgb.XGBClassifier(objective='binary:logitraw')
-            f1_avg_method = 'binary'
-        else:
-            model = xgb.XGBClassifier(objective='multi:softprob')
-            f1_avg_method = 'macro'
-        param_grid = {
-            'booster': Categorical(['gbtree']),
-            'gamma': Real(0, 5),
-            'learning_rate': Real(0.01, 0.3),
-            'max_depth': Integer(5, 20),
-            'n_estimators': Integer(50, 250),
-            'reg_alpha': Real(0, 1),
-            'reg_lambda': Real(0, 1),
-            'subsample': Real(0.5, 1.0),
-            'colsample_bytree': Real(0.5, 1.0),
-            'min_child_weight': Integer(1, 10),
-        }
     
-    f1_scorer = make_scorer(f1_score, average=f1_avg_method)
+
+    train_x = train_df.iloc[:, :-2]
+    train_y = train_df['NewLab']
+    valid_x = test_df.iloc[:, :-2]
+    valid_y = test_df['NewLab']
+    num_classes = train_df['NewLab'].nunique()
+    def objective(trial):
+        if model_type == "LightGBM":
+            param = {
+                "objective": "binary" if num_classes == 2 else "multiclass",
+                "metric": "binary" if num_classes==2 else 'multi_logloss',
+                "verbosity": -1,
+                "boosting_type": "gbdt",
+                "lambda_l1": trial.suggest_float("lambda_l1", 1e-8, 10.0, log=True),
+                "lambda_l2": trial.suggest_float("lambda_l2", 1e-8, 10.0, log=True),
+                "num_leaves": trial.suggest_int("num_leaves", 2, 256),
+                "feature_fraction": trial.suggest_float("feature_fraction", 0.4, 1.0),
+                "bagging_fraction": trial.suggest_float("bagging_fraction", 0.4, 1.0),
+                "bagging_freq": trial.suggest_int("bagging_freq", 1, 7),
+                "min_child_samples": trial.suggest_int("min_child_samples", 5, 100),
+                "learning_rate": trial.suggest_float("learning_rate", 0.01, 0.99, log=True),
+                "num_class": 1 if num_classes == 2 else num_classes
+            }
+            dtrain = lgb.Dataset(train_x, label=train_y)
+            model = lgb.train(param, dtrain)
+            preds = model.predict(valid_x)
+            if train_df['NewLab'].nunique() == 2:
+                pred_labels = np.rint(preds)  # Rounding works for binary classification
+            else:
+                pred_labels = np.argmax(preds, axis=1) 
+            return f1_score(valid_y, pred_labels, average='binary' if num_classes == 2 else 'macro')
+            # return f1_score(valid_y, pred_labels, average='macro')
+        
+        elif model_type == "XGBoost":
+            param = {
+                "verbosity": 0,
+                "objective": "multi:softprob",
+                "booster": "gbtree",
+                "lambda": trial.suggest_float("lambda", 1e-8, 1.0, log=True),
+                "alpha": trial.suggest_float("alpha", 1e-8, 1.0, log=True),
+                "subsample": trial.suggest_float("subsample", 0.2, 1.0),
+                "colsample_bytree": trial.suggest_float("colsample_bytree", 0.2, 1.0),
+                "max_depth": trial.suggest_int("max_depth", 3, 9, step=2),
+                "min_child_weight": trial.suggest_int("min_child_weight", 2, 10),
+                "eta": trial.suggest_float("eta", 0.01, 1.0, log=True),
+                "gamma": trial.suggest_float("gamma", 1e-8, 1.0, log=True),
+                "grow_policy": trial.suggest_categorical("grow_policy", ["depthwise", "lossguide"]),
+                "num_class": train_df['NewLab'].nunique()
+            }
+
+            dtrain = xgb.DMatrix(train_x, label=train_y)
+            model = xgb.train(param, dtrain)
+            preds = model.predict(xgb.DMatrix(valid_x))
+            
+            return f1_score(valid_y, np.argmax(preds, axis=1), average='macro')
     
-    clf = BayesSearchCV(estimator=model, search_spaces=param_grid, n_iter=int(args.sweep_iters), n_jobs=int(args.n_workers),scoring=f1_scorer, cv=int(args.sweep_cv), return_train_score=True, verbose=1)
+    study = optuna.create_study(direction="maximize", pruner=optuna.pruners.HyperbandPruner())
+    study.optimize(objective, n_trials=int(args.sweep_iters), n_jobs=int(args.n_workers))
     
-    logger.info("Sweeping...")
-    clf.fit(train_df.iloc[:, :-2], train_df['NewLab'])
+    logger.info("Sweep Complete! Now saving the best model...")
+    best_params = study.best_params
     
-    # Save the best model
-    if model_type == 'LightGBM':
-        clf.best_estimator_.booster_.save_model(os.path.join(args.outdir, f'{args.name}_LightGBM_sweeped.json'))
-    elif model_type == 'XGBoost':
-        clf.best_estimator_.save_model(os.path.join(args.outdir, f'{args.name}_XGBoost_sweeped.json'))
+    if model_type == "LightGBM":
+        dtrain = lgb.Dataset(train_x, label=train_y)
+        best_params["objective"] = "binary" if num_classes == 2 else "multiclass"
+        best_params['num_class'] = 1 if num_classes == 2 else num_classes
+        best_model = lgb.train(best_params, dtrain)
+        best_model.save_model(os.path.join(args.outdir, f"{args.name}_LightGBM_sweeped.json"))
+    elif model_type == "XGBoost":
+        dtrain = xgb.DMatrix(train_x, label=train_y)
+        best_params["objective"] = "multi:softprob"
+        best_params['num_class'] = train_df['NewLab'].nunique()
+        best_model = xgb.train(best_params, dtrain)
+        best_model.save_model(os.path.join(args.outdir, f"{args.name}_XGBoost_sweeped.json"))
     
-    logger.info("Sweep Complete! Now evaluating...")
-    
-    return clf
+    return best_model, study
 
 
 # From mheinzinger at https://github.com/mheinzinger/ProstT5/blob/main/scripts/predict_3Di_encoderOnly.py

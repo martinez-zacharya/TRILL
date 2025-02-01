@@ -210,6 +210,7 @@ def run(args):
     import esm
     import numpy as np
     import pandas as pd
+    import re
     import pytorch_lightning as pl
     import skops.io as sio
     import torch
@@ -234,6 +235,8 @@ def run(args):
     from torch.utils.data import DataLoader, Dataset
     from trill.utils.dock_utils import downgrade_biopython, upgrade_biopython, get_current_biopython_version
     import matplotlib.pyplot as plt
+    from urllib.request import urlretrieve
+
    
     from .commands_common import cache_dir, get_logger
 
@@ -261,68 +264,153 @@ def run(args):
         ecpick = ECPICK(args)
         ecpick.predict_fasta(fasta_path=args.query, output_path=args.outdir, args=args)
 
+    # if args.classifier == "TemStaPro":
+        # if not args.preComputed_Embs:
+        #     data = esm.data.FastaBatchedDataset.from_file(args.query)
+        #     model = ProtT5(args)
+        #     pred_writer = CustomWriter(output_dir=args.outdir, write_interval="epoch")
+        #     dataloader = torch.utils.data.DataLoader(data, shuffle=False, batch_size=1, num_workers=0)
+        #     if int(args.GPUs) > 0:
+        #         trainer = pl.Trainer(enable_checkpointing=False, callbacks=[pred_writer], devices=int(args.GPUs), accelerator="gpu",
+        #                              logger=ml_logger, num_nodes=int(args.nodes))
+        #     else:
+        #         trainer = pl.Trainer(enable_checkpointing=False, callbacks=[pred_writer], logger=ml_logger, num_nodes=int(args.nodes))
+        #     reps = trainer.predict(model, dataloader)
+        #     parse_and_save_all_predictions(args)
+        # if not os.path.exists(os.path.join(cache_dir, "TemStaPro_models")):
+        #     temstapro_models = Repo.clone_from("https://github.com/martinez-zacharya/TemStaPro_models",
+        #                                        os.path.join(cache_dir, "TemStaPro_models"))
+        #     temstapro_models_root = temstapro_models.git.rev_parse("--show-toplevel")
+        # else:
+        #     temstapro_models = Repo(os.path.join(cache_dir, "TemStaPro_models"))
+        #     temstapro_models_root = temstapro_models.git.rev_parse("--show-toplevel")
+        # THRESHOLDS = ("40", "45", "50", "55", "60", "65")
+        # SEEDS = ("41", "42", "43", "44", "45")
+        # if not args.preComputed_Embs:
+        #     emb_df = pd.read_csv(os.path.join(args.outdir, f"{args.name}_ProtT5_AVG.csv"))
+        # else:
+        #     emb_df = pd.read_csv(args.preComputed_Embs)
+        # embs = emb_df[emb_df.columns[:-1]].applymap(lambda x: torch.tensor(x)).values.tolist()
+        # labels = emb_df.iloc[:, -1]
+        # list_of_tensors = [torch.tensor(l) for l in embs]
+        # input_data = list(zip(list_of_tensors, labels))
+        # custom_dataset = CustomDataset(input_data)
+        # emb_loader = torch.utils.data.DataLoader(custom_dataset, shuffle=False, batch_size=1, num_workers=0)
+        # inferences = {}
+        # for thresh in THRESHOLDS:
+        #     threshold_inferences = {}
+        #     for seed in SEEDS:
+        #         clf = MLP_C2H2(1024, 512, 256)
+        #         clf.load_state_dict(torch.load(os.path.join(
+        #             temstapro_models_root, f"mean_major_imbal-{thresh}_s{seed}.pt")))
+        #         clf.eval()
+        #         if int(args.GPUs) > 0:
+        #             clf.to("cuda")
+        #             threshold_inferences[seed] = inference_epoch(clf, emb_loader, device="cuda")
+        #         else:
+        #             threshold_inferences[seed] = inference_epoch(clf, emb_loader, device="cpu")
+        #     for seq in threshold_inferences["41"].keys():
+        #         mean_prediction = 0
+        #         for seed in SEEDS:
+        #             mean_prediction += threshold_inferences[seed][seq]
+        #         mean_prediction /= len(SEEDS)
+        #         binary_pred = builtins.round(mean_prediction)
+        #         inferences[f"{seq}$%#{thresh}"] = (mean_prediction, binary_pred)
+        # inference_df = pd.DataFrame.from_dict(inferences, orient="index", columns=("Mean_Pred", "Binary_Pred"))
+        # inference_df = inference_df.reset_index(names="RawLab")
+        # inference_df["Protein"] = inference_df["RawLab"].apply(lambda x: x.split("$%#")[0])
+        # inference_df["Threshold"] = inference_df["RawLab"].apply(lambda x: x.split("$%#")[-1])
+        # inference_df = inference_df.drop(columns="RawLab")
+        # inference_df = inference_df[["Protein", "Threshold", "Mean_Pred", "Binary_Pred"]]
+        # inference_df.to_csv(os.path.join(args.outdir, f"{args.name}_TemStaPro_preds.csv"), index=False)
+        # if not args.save_emb and not args.preComputed_Embs:
+        #     os.remove(os.path.join(args.outdir, f"{args.name}_ProtT5_AVG.csv"))
+
+
     if args.classifier == "TemStaPro":
         if not args.preComputed_Embs:
             data = esm.data.FastaBatchedDataset.from_file(args.query)
             model = ProtT5(args)
             pred_writer = CustomWriter(output_dir=args.outdir, write_interval="epoch")
-            dataloader = torch.utils.data.DataLoader(data, shuffle=False, batch_size=1, num_workers=0)
-            if int(args.GPUs) > 0:
-                trainer = pl.Trainer(enable_checkpointing=False, callbacks=[pred_writer], devices=int(args.GPUs), accelerator="gpu",
-                                     logger=ml_logger, num_nodes=int(args.nodes))
-            else:
-                trainer = pl.Trainer(enable_checkpointing=False, callbacks=[pred_writer], logger=ml_logger, num_nodes=int(args.nodes))
+            dataloader = DataLoader(data, shuffle=False, batch_size=1, num_workers=0)
+            trainer = pl.Trainer(
+                enable_checkpointing=False,
+                callbacks=[pred_writer],
+                devices=int(args.GPUs) if int(args.GPUs) > 0 else None,
+                accelerator="gpu" if int(args.GPUs) > 0 else None,
+                logger=ml_logger,
+                num_nodes=int(args.nodes),
+            )
             reps = trainer.predict(model, dataloader)
             parse_and_save_all_predictions(args)
-        if not os.path.exists(os.path.join(cache_dir, "TemStaPro_models")):
-            temstapro_models = Repo.clone_from("https://github.com/martinez-zacharya/TemStaPro_models",
-                                               os.path.join(cache_dir, "TemStaPro_models"))
-            temstapro_models_root = temstapro_models.git.rev_parse("--show-toplevel")
-        else:
-            temstapro_models = Repo(os.path.join(cache_dir, "TemStaPro_models"))
-            temstapro_models_root = temstapro_models.git.rev_parse("--show-toplevel")
-        THRESHOLDS = ("40", "45", "50", "55", "60", "65")
-        SEEDS = ("41", "42", "43", "44", "45")
+
+        model_dir = os.path.join(cache_dir, "TemStaPro_new_models")
+        os.makedirs(model_dir, exist_ok=True)
+        
+        THRESHOLDS = ("40", "45", "50", "55", "60", "65", "70", "75", "80")
+        SEEDS = ("1", "2", "3", "4", "5")
+        
+        def download_model(thresh, seed):
+            model_name = f"mean_major_imbal-{thresh}_s{seed}.pt"
+            model_path = os.path.join(model_dir, model_name)
+            model_url = f"https://github.com/ievapudz/TemStaPro/raw/main/models/{model_name}"
+            if not os.path.exists(model_path):
+                print(f"Downloading {model_name}...")
+                urlretrieve(model_url, model_path)
+            return model_path
+
         if not args.preComputed_Embs:
             emb_df = pd.read_csv(os.path.join(args.outdir, f"{args.name}_ProtT5_AVG.csv"))
         else:
             emb_df = pd.read_csv(args.preComputed_Embs)
-        embs = emb_df[emb_df.columns[:-1]].applymap(lambda x: torch.tensor(x)).values.tolist()
+
+        embs = emb_df.iloc[:, :-1].applymap(lambda x: torch.tensor(x)).values.tolist()
         labels = emb_df.iloc[:, -1]
         list_of_tensors = [torch.tensor(l) for l in embs]
         input_data = list(zip(list_of_tensors, labels))
         custom_dataset = CustomDataset(input_data)
-        emb_loader = torch.utils.data.DataLoader(custom_dataset, shuffle=False, batch_size=1, num_workers=0)
+        emb_loader = DataLoader(custom_dataset, shuffle=False, batch_size=1, num_workers=0)
+
         inferences = {}
-        for thresh in THRESHOLDS:
-            threshold_inferences = {}
-            for seed in SEEDS:
-                clf = MLP_C2H2(1024, 512, 256)
-                clf.load_state_dict(torch.load(os.path.join(
-                    temstapro_models_root, f"mean_major_imbal-{thresh}_s{seed}.pt")))
-                clf.eval()
-                if int(args.GPUs) > 0:
-                    clf.to("cuda")
-                    threshold_inferences[seed] = inference_epoch(clf, emb_loader, device="cuda")
-                else:
-                    threshold_inferences[seed] = inference_epoch(clf, emb_loader, device="cpu")
-            for seq in threshold_inferences["41"].keys():
-                mean_prediction = 0
+        with tqdm(THRESHOLDS) as pbar:
+            for thresh in pbar:
+                pbar.set_description(f"Threshold = {thresh}")
+                threshold_inferences = {}
                 for seed in SEEDS:
-                    mean_prediction += threshold_inferences[seed][seq]
-                mean_prediction /= len(SEEDS)
-                binary_pred = builtins.round(mean_prediction)
-                inferences[f"{seq}$%#{thresh}"] = (mean_prediction, binary_pred)
+                    model_path = download_model(thresh, seed)
+                    clf = MLP_C2H2(1024, 256, 128)
+                    state_dict = torch.load(model_path)['state_dict']
+                    for key in list(state_dict.keys()):
+                        state_dict[key.replace('model.model.', 'model.')] = state_dict.pop(key)
+                    clf.load_state_dict(state_dict)
+                    clf.eval()
+                    device = "cuda" if int(args.GPUs) > 0 else "cpu"
+                    clf.to(device)
+                    threshold_inferences[seed] = inference_epoch(clf, emb_loader, device=device)
+
+                for seq in threshold_inferences["1"].keys():
+                    mean_prediction = sum(threshold_inferences[seed][seq] for seed in SEEDS) / len(SEEDS)
+                    binary_pred = round(mean_prediction)
+                    inferences[f"{seq}$%#{thresh}"] = (mean_prediction, binary_pred)
         inference_df = pd.DataFrame.from_dict(inferences, orient="index", columns=("Mean_Pred", "Binary_Pred"))
         inference_df = inference_df.reset_index(names="RawLab")
-        inference_df["Protein"] = inference_df["RawLab"].apply(lambda x: x.split("$%#")[0])
-        inference_df["Threshold"] = inference_df["RawLab"].apply(lambda x: x.split("$%#")[-1])
-        inference_df = inference_df.drop(columns="RawLab")
-        inference_df = inference_df[["Protein", "Threshold", "Mean_Pred", "Binary_Pred"]]
+        split_values = inference_df["RawLab"].apply(lambda x: re.split(r"\$%#", x, maxsplit=1))
+        if all(len(x) == 2 for x in split_values):
+            inference_df["Protein"] = [x[0] for x in split_values]
+            inference_df["Threshold"] = [x[1] for x in split_values]
+        else:
+            print("ERROR: Some rows did not split correctly.")
+            failed_rows = [x for x in split_values if len(x) != 2]
+            print("Rows that failed split:", failed_rows[:10])  # Show first few problem cases
+
+
+        # inference_df[["Protein", "Threshold"]] = inference_df["RawLab"].str.split("$%#", expand=True)
+        inference_df = inference_df.drop(columns="RawLab")[["Protein", "Threshold", "Mean_Pred", "Binary_Pred"]]
         inference_df.to_csv(os.path.join(args.outdir, f"{args.name}_TemStaPro_preds.csv"), index=False)
+        
         if not args.save_emb and not args.preComputed_Embs:
             os.remove(os.path.join(args.outdir, f"{args.name}_ProtT5_AVG.csv"))
-
+            
     elif args.classifier == "EpHod":
         logging.getLogger("pytorch_lightning.utilities.rank_zero").addHandler(logging.NullHandler())
         logging.getLogger("pytorch_lightning.accelerators.cuda").addHandler(logging.NullHandler())
@@ -464,10 +552,10 @@ def run(args):
                 label_data.append((encoded_label, clas))
 
             if args.sweep:
-                sweeped_clf = sweep(train_df, args)
+                sweeped_clf, study = sweep(train_df, test_df, args)
                 if not float(args.train_split) == 1 or not float(args.train_split) == 1.0:
                     precision, recall, fscore, support, LabelOrder = predict_and_evaluate(sweeped_clf, le, test_df, args)
-                    log_results(outfile, command_line_str, n_classes, args, classes=unique_c, sweeped_clf=sweeped_clf,precision=precision, recall=recall, fscore=fscore, support=support, le=le, LabelOrder=LabelOrder)
+                    log_results(outfile, command_line_str, n_classes, args, classes=unique_c, sweeped_clf=sweeped_clf,precision=precision, recall=recall, fscore=fscore, support=support, le=le, LabelOrder=LabelOrder, study=study)
             else:
                 if args.classifier == 'MLP':
                     if args.lr == 0.2:
