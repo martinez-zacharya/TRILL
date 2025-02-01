@@ -63,6 +63,7 @@ gemmi = "^0.6.3"
 pandera = "^0.22.1"
 antipickle = "^0.2.0"
 scikit-learn = "1.4.1.post1"
+optuna = "4.2.0"
 #protein-sequence-annotation = "^1.0.6"
 
 
