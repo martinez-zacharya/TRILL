@@ -50,10 +50,10 @@ def setup(subparsers):
     )
 
     dock.add_argument(
-        "--no_final_step_noise",
-        help="DiffDock: Use no noise in the final step of the reverse diffusion",
-        action="store_false",
-        default=True
+        "--final_step_noise",
+        help="DiffDock: Use noise in the final step of the reverse diffusion, the default is no noise in the final step.",
+        action="store_true",
+        default=False
     )
 
     dock.add_argument(
@@ -153,8 +153,31 @@ def setup(subparsers):
         "--restraints",
         help="LightDock: If restraints_file is provided, residue restraints will be considered during the setup and "
              "the simulation",
-        action="store",
+        action="store_true",
         default=None
+    )
+
+    dock.add_argument(
+        "--membrane",
+        help="LightDock: If selected, TRILL will insert your protein into a lipid bilary using Insane",
+        action="store_true",
+        default=None
+    )
+
+    dock.add_argument(
+        "--lipid_upper",
+        help="LightDock: Use to change the lipid composition for the upper leaflet (format: LIPID:ratio). Can be repeated like --lipid_upper POPC:1 DOPE:1",
+        action="append",
+        nargs="+",
+        default=["POPC:1"]
+    )
+
+    dock.add_argument(
+        "--lipid_lower",
+        help="LightDock: Use to change the lipid composition for the lower leaflet (format: LIPID:ratio). Can be repeated",
+        action="append",
+        nargs="+",
+        default=["POPC:1"]
     )
 
 
@@ -171,6 +194,7 @@ def run(args):
     from esm.inverse_folding.util import load_coords
     from git import Repo
     import pandas as pd
+    from icecream import ic
     from loguru import logger
     from trill.utils.dock_utils import perform_docking, write_docking_results_to_file, create_init_file
     from trill.utils.esm_utils import parse_and_save_all_predictions
@@ -309,7 +333,10 @@ def run(args):
         from inference import main
 
         if len(args.ligand) == 1 and args.protein.endswith('.pdb'):
-            diffdock_l_cmd = f"python3 {cache_dir}/DiffDock-L/inference.py --config {cache_dir}/DiffDock-L/default_inference_args.yaml --protein_path {args.protein} --ligand {args.ligand[0]} --out_dir {args.outdir} --no_final_step_noise {args.no_final_step_noise}".split()
+            if args.final_step_noise:
+                diffdock_l_cmd = f"python3 {cache_dir}/DiffDock-L/inference.py --config {cache_dir}/DiffDock-L/default_inference_args.yaml --protein_path {args.protein} --ligand {args.ligand[0]} --out_dir {args.outdir}".split()
+            else:
+                diffdock_l_cmd = f"python3 {cache_dir}/DiffDock-L/inference.py --config {cache_dir}/DiffDock-L/default_inference_args.yaml --protein_path {args.protein} --ligand {args.ligand[0]} --no_final_step_noise --out_dir {args.outdir}".split()
 
         elif args.protein.endswith('.csv'):
             pre_csv = pd.read_csv(args.protein)
@@ -343,7 +370,10 @@ def run(args):
             df = pd.DataFrame(data, columns=['complex_name', 'protein_path', 'ligand_description', 'protein_sequence'])
             tmp_csv_path = os.path.join(args.outdir, f'tmp_{args.name}_DiffDock-L_input.csv')
             df.to_csv(tmp_csv_path, index=False)
-            diffdock_l_cmd = f"python3 {cache_dir}/DiffDock-L/inference.py --config {cache_dir}/DiffDock-L/default_inference_args.yaml --protein_ligand_csv {tmp_csv_path} --out_dir {args.outdir} --samples_per_complex {args.samples_per_complex} --inference_steps {args.inference_steps} --no_final_step_noise {args.no_final_step_noise} --actual_steps {args.actual_steps} ".split()
+            if args.final_step_noise:
+                diffdock_l_cmd = f"python3 {cache_dir}/DiffDock-L/inference.py --config {cache_dir}/DiffDock-L/default_inference_args.yaml --protein_ligand_csv {tmp_csv_path} --out_dir {args.outdir} --samples_per_complex {args.samples_per_complex} --inference_steps {args.inference_steps} --actual_steps {args.actual_steps} ".split()
+            else:
+                diffdock_l_cmd = f"python3 {cache_dir}/DiffDock-L/inference.py --config {cache_dir}/DiffDock-L/default_inference_args.yaml --protein_ligand_csv {tmp_csv_path} --out_dir {args.outdir} --samples_per_complex {args.samples_per_complex} --inference_steps {args.inference_steps} --no_final_step_noise --actual_steps {args.actual_steps} ".split()
 
         if args.save_visualisation:
             diffdock_l_cmd.append('--save_visualisation')
@@ -351,7 +381,7 @@ def run(args):
         diffdock_l_cmd.append(f'{args.inference_steps}')
         diffdock_l_cmd.append('--samples_per_complex')
         diffdock_l_cmd.append(f'{args.samples_per_complex}')
-        
+        ic(diffdock_l_cmd)
         subprocess.run(diffdock_l_cmd)
         if tmp_csv_path and os.path.exists(tmp_csv_path):
             os.remove(tmp_csv_path)

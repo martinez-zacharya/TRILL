@@ -20,10 +20,14 @@ from rdkit import Chem
 import numpy as np
 from tqdm import tqdm
 import re
+from icecream import ic
 from rdkit.Chem import AllChem
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from meeko import MoleculePreparation, RDKitMolCreate, PDBQTMolecule, PDBQTWriterLegacy
 from loguru import logger
+from os import linesep
+# from .membrane_utils import insane, gro2pdb, prep4ldock
+
 
 class Capturing(list):
     def __enter__(self):
@@ -34,6 +38,27 @@ class Capturing(list):
         self.extend(self._stringio.getvalue().splitlines())
         del self._stringio    # free up some memory
         sys.stdout = self._stdout
+
+# Prepping input PDB file with protein and lipid bilayer for docking
+# def prep4ldock(args):
+#     cg_pdb_file_name = args.protein
+#     output_pdb_file_name = args.protein.replace('.pdb', '_4ldock.pdb')
+
+#     with open(cg_pdb_file_name) as ih:
+#         with open(output_pdb_file_name, "w") as oh:
+#             for line in ih:
+#                 if line.startswith("ATOM  "):
+#                     line = line.rstrip(linesep)
+#                     if "PO4" in line:
+#                         line = line.replace("PO4", " BJ").replace("DPPC", " MMB")
+#                         oh.write(f"{line}{linesep}")
+#                     else:
+#                         res_name = line[12:16]
+#                         if res_name in ["0BTN", "0BEN", "0BHN"] or res_name[0] == "B" or res_name[:2] == "5B":
+#                             line = line.replace(res_name, "CA  ")
+#                             oh.write(f"{line}{linesep}")
+#     return output_pdb_file_name
+
 
 
 def load_molecule(filename, removeHs=False):
@@ -712,6 +737,14 @@ def lightdock(args, ligands):
         args.ligand = os.path.join(args.outdir, ligand_file)
         fixed_prot = fix_pdb(args.protein, {}, args)
         args.protein = fixed_prot
+        # if not args.membrane:
+        #     fixed_prot = fix_pdb(args.protein, {}, args)
+        #     args.protein = fixed_prot
+        # else:
+        #     insane(args)
+        #     # gro2pdb(args)
+        #     prep4ldock(args)
+        # # args.protein = prep4ldock(args)
         fixed_ligand = fix_pdb(args.ligand, {}, args)
         args.ligand = fixed_ligand  
         lightdock_setup(args)
@@ -725,6 +758,8 @@ def lightdock(args, ligands):
 def lightdock_setup(args):
     if args.restraints:
       cmd = ["lightdock3_setup.py", args.protein, args.ligand, "--outdir", args.outdir, "--noxt", "--noh", "--now", "-s", str(args.swarms), "--seed_points", str(args.RNG_seed), "--seed_anm", str(args.RNG_seed), "--rst", args.restraints, "-g", str(args.glowworms)]
+    elif args.membrane:
+        cmd = ["lightdock3_setup.py", args.protein, args.ligand, "--outdir", args.outdir, "--noxt", "--noh", "--now", "--membrane", "-s", str(args.swarms), "--seed_points", str(args.RNG_seed), "--seed_anm", str(args.RNG_seed), "-g", str(args.glowworms)]
     else:
       cmd = ["lightdock3_setup.py", args.protein, args.ligand,"--outdir", args.outdir, "--noxt", "--noh", "--now", "-s", str(args.swarms), "--seed_points", str(args.RNG_seed), "--seed_anm", str(args.RNG_seed),"-g", str(args.glowworms)]
     subprocess.run(cmd)
