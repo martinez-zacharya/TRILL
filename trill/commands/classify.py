@@ -232,6 +232,7 @@ def run(args):
     from trill.utils.lightning_models import ProtT5, CustomWriter, ProstT5, MLP_Classifier, MLP_Emb_Dataset_train, MLP_Emb_Dataset_test
     from unittest.mock import patch
     from ecpick import ECPICK
+    import torch.nn.functional as F
     from torch.utils.data import DataLoader, Dataset
     from trill.utils.dock_utils import downgrade_biopython, upgrade_biopython, get_current_biopython_version
     import matplotlib.pyplot as plt
@@ -539,6 +540,8 @@ def run(args):
         if args.train_split is not None:
             le = LabelEncoder()
             train_df, test_df, n_classes = prep_data(df, args)
+            train_df = train_df.dropna(subset=['NewLab'])
+            test_df = test_df.dropna(subset=['NewLab'])
             unique_c = np.unique(test_df["NewLab"])
             classes = train_df["NewLab"].unique()
             train_df["NewLab"] = le.fit_transform(train_df["NewLab"])
@@ -725,10 +728,9 @@ def run(args):
         else:
             perAA = torch.load(args.preComputed_Embs)
         device = 'cuda' if int(args.GPUs) > 0 else 'cpu'
-        PSALM = psalm(clan_model_name="ProteinSequenceAnnotation/PSALM-1-clan",
-                    fam_model_name="ProteinSequenceAnnotation/PSALM-1-family",
-                    device = device)
-        
+        PSALM = psalm(clan_model_name="ProteinSequenceAnnotation/PSALM-1b-clan",
+                    fam_model_name="ProteinSequenceAnnotation/PSALM-1b-family",
+                    device = device)  
         embeddings = [emb for emb, label in perAA[0]]
         labels = [label for emb, label in perAA[0]]
         max_length = max([emb.shape[0] for emb in embeddings])
@@ -743,12 +745,30 @@ def run(args):
             logger.info("Using ESM2 embeddings for PSALM predictions...")
 
             for i, (emb, lab) in tqdm(enumerate(zip(embeddings, labels)), total=len(embeddings), desc="Performing PSALM predictions"):
-                fixed = emb[1:len(emb)+1, :]
-                fixed = torch.tensor(fixed)
-                clan_preds = PSALM.clan_model(fixed.to(device))
-                fam_preds = PSALM.fam_model(fixed.to(device), clan_preds, PSALM.clan_fam_matrix)
-                with patch('matplotlib.pyplot.show', new=noop):
-                    plot_predictions(fam_preds.detach().cpu(), clan_preds.detach().cpu(), PSALM.fam_maps, 0.72, seq_name=lab, save_path=args.outdir)
+                # fixed = emb[1:len(emb), :]
+                fixed = torch.tensor(emb)
+                mask = torch.ones(len(fixed), dtype=torch.bool)
+                mask = mask.to(device)
+                mask = mask.unsqueeze(-1)
+                # clan_preds = PSALM.clan_model(fixed.to(device))
+                fixed = fixed.unsqueeze(0)
+                mask = mask.transpose(0, 1)
+                clan_logits = PSALM.clan_model(fixed.to(device), mask.to(device))
+                clan_preds = F.softmax(clan_logits, dim=2)
+                # fam_preds = PSALM.fam_model(fixed.to(device), clan_preds, PSALM.clan_fam_matrix)
+                fam_preds, fam_logits = PSALM.fam_model(fixed.to(device), mask, clan_preds)
+                for i in range(PSALM.clan_fam_matrix.shape[0]):  # shape is cxf
+                    indices = torch.nonzero(PSALM.clan_fam_matrix[i]).squeeze()
+                    if i == PSALM.clan_fam_matrix.shape[0] - 1:
+                        fam_preds[:, :, indices] = 1  # IDR is 1:1 map
+                    else:
+                        fam_preds[:, :, indices] = F.softmax(fam_preds[:, :, indices], dim=2)
+                clan_preds_f = torch.matmul(clan_preds, PSALM.clan_fam_matrix)
+                fam_preds = fam_preds * clan_preds_f
+                clan_preds = clan_preds.squeeze(0)
+                fam_preds = fam_preds.squeeze(0)
+                # with patch('matplotlib.pyplot.show', new=noop):
+                #     plot_predictions(fam_preds.detach().cpu(), clan_preds.detach().cpu(), PSALM.fam_maps, 0.72, seq_name=lab, save_path=args.outdir)
             
 
                 fam_top_val, fam_top_index = torch.topk(fam_preds,k=1,dim=1)
@@ -766,15 +786,12 @@ def run(args):
                 fam_pred_vals = fam_top_val
                 clan_pred_labels = clan_top_index
                 clan_pred_vals = clan_top_val
-
                 fam_unique_test = torch.unique(fam_pred_labels)
                 clan_unique_test = torch.unique(clan_pred_labels)
-
                 if fam_unique_test[-1] == 19632:
                     fam_unique_test = fam_unique_test[:-1]
                 if clan_unique_test[-1] == 656:
                     clan_unique_test = clan_unique_test[:-1]
-
                 fams = []
                 for entry in fam_unique_test:
                     idx = (fam_pred_labels == entry) & (fam_pred_vals >= 0.72)
@@ -786,10 +803,11 @@ def run(args):
                 clans = []
                 for entry in clan_unique_test:
                     idx = (clan_pred_labels == entry) & (clan_pred_vals >= 0.72)
-                    clans.append(clan_keys[entry.item()].split(".")[0])
-                    residues = torch.where(idx)[0]
-                    for residue in residues.cpu().numpy():
-                        clan_aa_df.loc[lab, residue] = f"{clan_keys[entry.item()].split('.')[0]}:{clan_pred_vals[idx][residues == residue].item()}"
+                    if torch.count_nonzero(idx) != 0:
+                        clans.append(clan_keys[entry.item()].split(".")[0])
+                        residues = torch.where(idx)[0]
+                        for residue in residues.cpu().numpy():
+                            clan_aa_df.loc[lab, residue] = f"{clan_keys[entry.item()].split('.')[0]}:{clan_pred_vals[idx][residues == residue].item()}"
 
 
                 clans = [x.replace("NC0001", "Non-Clan") for x in clans]
