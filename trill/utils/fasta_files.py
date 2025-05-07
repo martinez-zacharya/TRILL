@@ -24,5 +24,5 @@ def truncate_seqs(query, trunc_len):
     output_file = os.path.join(base_dir, f"truncated_{base_filename}")
     
     # Run the seqkit truncate command
-    seqkit_truncate_cmd = f'seqkit subseq --update-faidx -r 1:{trunc_len} {query} -o {output_file}'.split(' ')
+    seqkit_truncate_cmd = f'seqkit subseq -r 1:{trunc_len} {query} -o {output_file}'.split(' ')
     subprocess.run(seqkit_truncate_cmd)

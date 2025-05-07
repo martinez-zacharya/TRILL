@@ -82,9 +82,9 @@ def run(args):
         else:
             model = EsmForProteinFolding.from_pretrained("facebook/esmfold_v1", device_map="sequential",
                                                          torch_dtype="auto")
-            model = model.cuda()
+            # model = model.cuda()
             model.esm = model.esm.half()
-            model = model.cuda()
+            # model = model.cuda()
         if args.strategy is not None:
             model.trunk.set_chunk_size(int(args.strategy))
         fold_df = pd.DataFrame(list(data), columns=("Entry", "Sequence"))

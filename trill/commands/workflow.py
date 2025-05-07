@@ -22,6 +22,14 @@ def setup(subparsers):
     )
 
     workflow.add_argument(
+        "--finetune_strategy",
+        help="Change the training strategy for finetuning. Use this is running out of vRAM!.",
+        action="store",
+        default=False,
+        choices=("deepspeed_stage_1", "deepspeed_stage_2", "deepspeed_stage_2_offload", "deepspeed_stage_3", "deepspeed_stage_3_offload")
+    )
+
+    workflow.add_argument(
         "--finetune_batch_size",
         help="Change batch-size number for finetuning proteins. Default is 1, but with more GPU RAM, you can do more",
         action="store",
@@ -48,6 +56,14 @@ def setup(subparsers):
         action="store",
         default=1,
     )
+
+    workflow.add_argument(
+        "--fast_folding",
+        help="Use ProstT5 to speed up foldtuning by extracting 3di tokens from amino acid sequences directly instead of folding with ESMFold",
+        action="store_true",
+        default=False,
+    )
+
 def run(args):
     import os
 
@@ -64,7 +80,7 @@ def run(args):
     ml_logger = get_logger(args)
     args.cache_dir = cache_dir
 
-    if args.model == 'foldtune':
+    if args.workflow == 'foldtune':
         logger.info('Beginning Foldtuning')
         foldtune(args)
 
