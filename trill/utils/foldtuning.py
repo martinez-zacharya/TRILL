@@ -67,14 +67,15 @@ def foldtune(args):
             f"{args.name}_round{i}",
             args.GPUs,
             '--outdir', abspath,
-            '--RNG_seed', args.RNG_seed,
+            '--RNG_seed', str(args.RNG_seed),
             'lang_gen', 'ProtGPT2',
             '--finetuned', curr_ckpt,
             '--batch_size', str(args.lang_gen_batch_size),
             '--max_length', str(int(median[0])),
             '--temp', '1',
             '--seed_seq', '',
-            '--num_return_sequences', '1000'
+            '--num_return_sequences', '5'
+            # '--num_return_sequences', '1000'
         ]
         subprocess.run(gen_cmd)
         
