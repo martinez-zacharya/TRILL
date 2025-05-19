@@ -731,8 +731,17 @@ def run(args):
         PSALM = psalm(clan_model_name="ProteinSequenceAnnotation/PSALM-1b-clan",
                     fam_model_name="ProteinSequenceAnnotation/PSALM-1b-family",
                     device = device)  
-        embeddings = [emb for emb, label in perAA[0]]
-        labels = [label for emb, label in perAA[0]]
+
+
+        # embeddings = [emb for emb, label in perAA[0]]
+        # labels = [label for emb, label in perAA[0]]
+        data = [emb for emb, label in perAA]
+        embeddings = []
+        labels = []
+        for tup in data:
+            embeddings.append(tup[0])
+            labels.append(tup[1])
+
         max_length = max([emb.shape[0] for emb in embeddings])
 
         # Initialize DataFrames with NaN values

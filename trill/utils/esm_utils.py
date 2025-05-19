@@ -83,7 +83,6 @@ def ESM_IF1(data, genIters, temp, GPUs, args):
                 if complex_flag == False:
                     ll, _ = score_sequence(
                     model, alphabet, coords[chain], sampled_seq)
-                    ic(ll)
                 else:
                     try:
                         coords_4scoring = {}
@@ -155,7 +154,6 @@ def sample_sequence_in_complex(model, coords, target_chain_id, contig_redesign, 
     else:
         target_chain_len = coords[target_chain_id].shape[0]
 
-    ic(target_chain_len)
 
     # Concatenate coordinates and set device
     all_coords = _concatenate_coords(coords, target_chain_id)
@@ -167,8 +165,7 @@ def sample_sequence_in_complex(model, coords, target_chain_id, contig_redesign, 
     if contig_redesign:
         start_idx = max(0, start - 1)  # Ensure 0-based index
         end_idx = min(all_coords.shape[0], end)  # Ensure end does not exceed length
-        ic(start_idx)
-        ic(end_idx)
+
         for i in range(start_idx, end_idx):
             padding_pattern[i] = '<mask>'
     else:
@@ -365,20 +362,35 @@ def parse_and_save_all_predictions(args):
         # ic(preds)
         # Start parsing
         for outer_list in preds:
+            # ic(outer_list)
             batch_per_aa_embeddings = []  # To hold per_AA embeddings for the current batch
             for tuple_in_outer_list in outer_list:
-                if len(tuple_in_outer_list) == 2:
-                    per_aa_list, avg_list = tuple_in_outer_list
-                else:
-                    # Handle cases where there's only one type of representation
-                    if isinstance(tuple_in_outer_list[0][0], np.ndarray):
-                        if len(tuple_in_outer_list[0][0].shape) > 1:
-                            per_aa_list = tuple_in_outer_list
-                            avg_list = []
-                        else:
-                            avg_list = tuple_in_outer_list
-                            per_aa_list = []
-                
+                # ic(tuple_in_outer_list)
+
+                if len(tuple_in_outer_list) >= 1 and args.avg and not args.per_AA:
+                    for tup in tuple_in_outer_list:
+                        avg_list.append(tup)
+
+                elif len(tuple_in_outer_list) >= 1 and args.per_AA and not args.avg:
+                    avg_list = []
+                    per_aa_list = []
+                    for tup in tuple_in_outer_list:
+                        per_aa_list.append(tup)
+
+                elif args.per_AA and args.avg:
+                    if len(tuple_in_outer_list[0][0].shape) > 1:
+                        per_aa_list = tuple_in_outer_list
+                        avg_list = []
+                    else:
+                        avg_list = tuple_in_outer_list
+                        per_aa_list = []
+
+
+                elif len(tuple_in_outer_list) == 0 and not args.per_AA:
+                    # if int(args.batch_size) == 1:
+                    avg_list = tuple_in_outer_list
+                    per_aa_list = []
+
                 # Parsing per amino acid representations
                 for tuple_in_per_aa_list in per_aa_list:
                     embedding, label = tuple_in_per_aa_list
