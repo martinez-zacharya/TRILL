@@ -349,10 +349,10 @@ def parse_and_save_all_predictions(args):
     # Initialize lists to hold parsed data across all files
     all_parsed_data_avg = []
     all_batched_per_aa_embeddings_with_labels = []  # Modified to store labels
-
+    all_poolparti_embs = []
     for file_path in prediction_files:
         # Load the predictions file
-        preds = torch.load(file_path)
+        preds = torch.load(file_path, weights_only=False)
         
         # Initialize lists to hold parsed data
         parsed_data_avg = []
@@ -360,14 +360,21 @@ def parse_and_save_all_predictions(args):
         # Initialize a list to hold per amino acid embeddings and labels for each batch
         batched_per_aa_embeddings_with_labels = []  # Modified to store labels
         # ic(preds)
+        # ic(len(preds))
         # Start parsing
         for outer_list in preds:
             # ic(outer_list)
             batch_per_aa_embeddings = []  # To hold per_AA embeddings for the current batch
             for tuple_in_outer_list in outer_list:
+                avg_list = []
                 # ic(tuple_in_outer_list)
+                # ic(len(tuple_in_outer_list))
+                if any(isinstance(element, str) and 'poolparti' in element for tup in tuple_in_outer_list for element in tup):
+                    for tup in tuple_in_outer_list:
+                        all_poolparti_embs.append((tup[0], tup[1].split('_poolparti')[0]))
+                    continue
 
-                if len(tuple_in_outer_list) >= 1 and args.avg and not args.per_AA:
+                elif len(tuple_in_outer_list) >= 1 and args.avg and not args.per_AA:
                     for tup in tuple_in_outer_list:
                         avg_list.append(tup)
 
@@ -377,7 +384,7 @@ def parse_and_save_all_predictions(args):
                     for tup in tuple_in_outer_list:
                         per_aa_list.append(tup)
 
-                elif args.per_AA and args.avg:
+                elif args.per_AA and args.avg and len(tuple_in_outer_list) > 0  and not any(isinstance(element, str) and 'poolparti' in element for tup in tuple_in_outer_list for element in tup):
                     if len(tuple_in_outer_list[0][0].shape) > 1:
                         per_aa_list = tuple_in_outer_list
                         avg_list = []
@@ -386,21 +393,23 @@ def parse_and_save_all_predictions(args):
                         per_aa_list = []
 
 
-                elif len(tuple_in_outer_list) == 0 and not args.per_AA:
+                elif len(tuple_in_outer_list) == 0 and len(tuple_in_outer_list) > 0 and not args.per_AA and not any(isinstance(element, str) and 'poolparti' in element for tup in tuple_in_outer_list for element in tup):
                     # if int(args.batch_size) == 1:
                     avg_list = tuple_in_outer_list
                     per_aa_list = []
 
                 # Parsing per amino acid representations
-                for tuple_in_per_aa_list in per_aa_list:
-                    embedding, label = tuple_in_per_aa_list
-                    batch_per_aa_embeddings.append((embedding, label))  # Modified to store labels
-                    
-                # Parsing average representations
-                for tuple_in_avg_list in avg_list:
-                    embedding, label = tuple_in_avg_list
-                    parsed_data_avg.append((embedding.flatten(), label))
-            
+                if args.per_AA:
+                    for tuple_in_per_aa_list in per_aa_list:
+                        embedding, label = tuple_in_per_aa_list
+                        batch_per_aa_embeddings.append((embedding, label))  # Modified to store labels
+                        
+                if args.avg:
+                    # Parsing average representations
+                    for tuple_in_avg_list in avg_list:
+                        embedding, label = tuple_in_avg_list
+                        parsed_data_avg.append((embedding.flatten(), label))
+                
             # Append the batch of per_AA embeddings to the main list
             if batch_per_aa_embeddings:
                 batched_per_aa_embeddings_with_labels.append(batch_per_aa_embeddings)  # Modified to store labels
@@ -414,19 +423,60 @@ def parse_and_save_all_predictions(args):
         df_parsed_avg = pd.DataFrame(all_parsed_data_avg, columns=['Embeddings', 'Label'])
         finaldf_parsed_avg = df_parsed_avg['Embeddings'].apply(pd.Series)
         finaldf_parsed_avg['Label'] = df_parsed_avg['Label']
+        finaldf_parsed_avg = finaldf_parsed_avg[~finaldf_parsed_avg["Label"].str.contains("_poolparti")]
         if args.command == 'embed':
             outname = os.path.join(args.outdir, f'{args.name}_{args.model}_AVG.csv')
         elif args.command == 'classify':
             outname = os.path.join(args.outdir, f'{args.name}_ProtT5_AVG.csv')
+        finaldf_parsed_avg.drop_duplicates(inplace=True)
         finaldf_parsed_avg.to_csv(outname, index=False)
     
     # Save batched per_AA embeddings as .pt file
     if all_batched_per_aa_embeddings_with_labels:  # Modified to store labels
         if args.command == 'embed':
             outname = os.path.join(args.outdir, f'{args.name}_{args.model}_perAA.pt')
-            torch.save(all_batched_per_aa_embeddings_with_labels, outname)  # Modified to store labels
+            deduplicate_and_save_perAA(all_batched_per_aa_embeddings_with_labels, outname, int(args.batch_size))
+            # torch.save(all_batched_per_aa_embeddings_with_labels, outname)  # Modified to store labels
+
+    if all_poolparti_embs:
+        all_poolparti_embs_df = pd.DataFrame(all_poolparti_embs, columns=['Embeddings', 'Label'])
+        final_all_poolparti_embs_df = all_poolparti_embs_df['Embeddings'].apply(pd.Series)
+        final_all_poolparti_embs_df['Label'] = all_poolparti_embs_df['Label']
+        if args.command == 'embed':
+            outname = os.path.join(args.outdir, f'{args.name}_{args.model}_PoolParti.csv')
+        final_all_poolparti_embs_df.to_csv(outname, index=False)
+
 
     return 
+
+def deduplicate_and_save_perAA(perAA_batches, outpath, batch_size):
+    # Step 1: Flatten all (array, label) pairs from batches
+    flat = [
+        (embedding, label)
+        for batch in perAA_batches
+        for (embedding, label) in batch
+    ]
+
+    # Step 2: Deduplicate using bytes and label
+    seen = set()
+    deduped = []
+    for embedding, label in flat:
+        if isinstance(embedding, torch.Tensor):
+            emb_bytes = embedding.cpu().numpy().tobytes()
+        else:
+            emb_bytes = embedding.tobytes() 
+        key = (emb_bytes, label)
+        if key not in seen:
+            seen.add(key)
+            deduped.append((embedding, label))
+
+    # Step 3 (optional): Re-batch
+    rebatched = [
+        deduped[i:i + batch_size] for i in range(0, len(deduped), batch_size)
+    ]
+
+    torch.save(rebatched, outpath)
+
 
 class premasked_FastaBatchedDataset(object):
     def __init__(self, sequence_labels, sequence_strs, sequence_masked):

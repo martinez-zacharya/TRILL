@@ -7,7 +7,7 @@ def setup(subparsers):
         "classifier",
         help="Predict thermostability/optimal enzymatic pH using TemStaPro/EpHod or choose custom to train/use your "
              "own XGBoost, Multilayer perceptron, LightGBM or Isolation Forest classifier. ESM2+MLP allows you to train an ESM2 model with a classification head end-to-end.",
-        choices=("TemStaPro", "EpHod", "ECPICK", "PSALM", "MLP", "XGBoost", "LightGBM", "iForest", "ESM2+MLP", "3Di-Search")
+        choices=("TemStaPro", "EpHod", "M-Ionic", "ECPICK", "PSALM", "CatPred", "CataPro", "PSICHIC", "MLP", "XGBoost", "LightGBM", "iForest", "ESM2+MLP")
     )
     classify.add_argument(
         "query",
@@ -18,6 +18,11 @@ def setup(subparsers):
         "--key",
         help="Input a CSV, with your class mappings for your embeddings where the first column is the label and the "
              "second column is the class.",
+        action="store"
+    )
+    classify.add_argument(
+        "--smiles",
+        help="CatPred/CataPro: Input a plain text file with the ending .smiles that has a SMILES for inhibitor/substrate or a concatenated SMILES string for reactions with reactants separated by '.' Note that for CataPro, it only returns kcat and km, don't provide any multiple smiles with periods.",
         action="store"
     )
     classify.add_argument(
@@ -199,6 +204,13 @@ def setup(subparsers):
         action="store",
     )
 
+    classify.add_argument(
+        "--poolparti",
+        help="ESM2: Use Pool PaRTI based embeddings for training and evaluating classifier.",
+        action="store_true",
+        default=False
+    )
+
 def run(args):
     import builtins
     import logging
@@ -235,6 +247,11 @@ def run(args):
     import torch.nn.functional as F
     from torch.utils.data import DataLoader, Dataset
     from trill.utils.dock_utils import downgrade_biopython, upgrade_biopython, get_current_biopython_version
+    from trill.utils.mionic_utils import mionic, IonicProtein, download_mionic_checkpoint
+    from trill.utils.catpred import clone_and_install_catpred, download_catpred_weights, tupulize_fasta_smiles, create_csv_sh, get_rotary_emb_version, upgrade_rotary_emb, downgrade_rotary_emb, get_predictions
+    from trill.utils.catapro import clone_and_install_catapro, fetch_molt5, fetch_prott5, run_catapro_prediction
+    import trill.utils.catapro
+    from trill.utils.psichic import clone_and_install_psichic, fasta_smiles_to_dataframe, run_psichic
     import matplotlib.pyplot as plt
     from urllib.request import urlretrieve
 
@@ -259,7 +276,198 @@ def run(args):
     if args.sweep and not args.train_split:
         logger.error("You need to provide a train-test fraction with --train_split!")
         raise Exception("You need to provide a train-test fraction with --train_split!")
+
+    if args.classifier == 'M-Ionic':
+        mionic_path = download_mionic_checkpoint(cache_dir)
+        if not args.preComputed_Embs:
+            embed_command = (
+                "trill",
+                args.name,
+                args.GPUs,
+                "--outdir", args.outdir,
+                "embed",
+                "esm2_t33_650M",
+                args.query,
+                "--per_AA"
+            )
+            logger.info("Extracting embeddings from ESM2-650M...")
+            subprocess.run(embed_command, check=True)
+            perAA = torch.load(os.path.join(args.outdir, f"{args.name}_esm2_t33_650M_perAA.pt"), weights_only=False)
+        else:
+            perAA = torch.load(args.preComputed_Embs, weights_only=False)
+
+        model = IonicProtein(1280)
+        preds, peraa_preds = mionic(args, perAA, model, mionic_path)
+        mionic_preds = pd.DataFrame.from_dict(preds, orient='index').reset_index()
+        mionic_preds.rename(columns={'index': 'Label'}, inplace=True)
+        mionic_preds.to_csv(os.path.join(args.outdir, f"{args.name}_M-Ionic_preds.csv"), index=False)
+
+        max_residues = max(len(residues) for residues in peraa_preds.values())
+
+        rows = []
+
+        for seq_id, residue_preds in peraa_preds.items():
+            row = {'Label': seq_id}
+            
+            for i in range(max_residues):
+                if i < len(residue_preds):
+                    preds = residue_preds[i]
+                    ion_preds = ' '.join(f"{ion}:{int(val)}" for ion, val in preds.items())
+                else:
+                    ion_preds = "NA"
+                row[f"res{i+1}"] = ion_preds
+            
+            rows.append(row)
+
+        peraa_preds_df = pd.DataFrame(rows)
+        peraa_preds_df.to_csv(os.path.join(args.outdir, f"{args.name}_M-Ionic_perAA_preds.csv"), index=False)
+
+    if args.classifier == 'CataPro':
+        if not args.smiles:
+            logger.error("You need to provide a .smiles file for predicting kinetics with CataPro")
+            raise Exception("You need to provide a .smiles file for predicting kinetics with CataPro")
+        clone_and_install_catapro(cache_dir)
+        molt5_loc = fetch_molt5()
+        prott5_loc = fetch_prott5()
+        catapro_input_df = trill.utils.catapro.fasta_smiles_to_dataframe(args.query, args.smiles)
+        catapro_input_df.to_csv(f'{args.name}_CataPro_input.csv')
+        run_catapro_prediction(args, cache_dir)
+
+
+    if args.classifier == 'PSICHIC':
+        if not args.smiles:
+            logger.error("You need to provide a .smiles file for predicting interactions with PSICHIC")
+            raise Exception("You need to provide a .smiles file for predicting interactions with PSICHIC")
+        clone_and_install_psichic(cache_dir)
+        psichic_input_df = fasta_smiles_to_dataframe(args.query, args.smiles)
+        psichic_input_df.to_csv(f'{args.name}_PSICHIC_input.csv')
+        args.input_csv = f'{args.name}_PSICHIC_input.csv'
+        # Set up path to cache_dir/PSICHIC
+        psichic_path = os.path.join(cache_dir, "PSICHIC")
+        sys.path.insert(0, psichic_path)
+        run_psichic(args, cache_dir)
+
+    if args.classifier == 'CatPred':
+        preds_4_export = []
+
+        if not args.smiles:
+            logger.error("You need to provide a .smiles file for predicting kinetics with CatPred")
+            raise Exception("You need to provide a .smiles file for predicting kinetics with CatPred")
+
+        clone_and_install_catpred(cache_dir)
+        download_catpred_weights(cache_dir)
+
+        if not (args.smiles.endswith(".smiles") or args.smiles.endswith(".SMILES")):
+            raise ValueError("Input file must end with .smiles or .SMILES")
+
+        og_ver_rotary = get_rotary_emb_version()
+        downgrade_rotary_emb()
+
+        pairs_list = tupulize_fasta_smiles(args)
+        args.cache_dir = cache_dir
+        preds_4_export_ki = []
+        preds_4_export_km = []
+
+        for seq_name, seq_seq, smiles_name, smiles_smiles in pairs_list:
+            if smiles_smiles.count('.') >= 1:
+                _, _, sh_path = create_csv_sh('kcat', seq_name, seq_seq, smiles_smiles, smiles_name, args)
+                flag = int(int(args.GPUs) == 0)
+                command = (
+                    f"export PROTEIN_EMBED_USE_CPU={flag} && "
+                    f"chmod +x {os.path.join(args.outdir, sh_path)} && "
+                    f"bash {os.path.join(args.outdir, sh_path)}"
+                )
+                status = subprocess.call(command, shell=True, executable="/bin/bash", stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL)
+                if status == 0:
+                    logger.success('Prediction successful!\n')
+                    unc, epi_unc, alea_unc, prediction, prediction_linear = get_predictions('kcat', seq_name)
+                    preds_4_export.append((seq_name, smiles_name, unc, epi_unc, alea_unc, prediction_linear, seq_seq, smiles_smiles))
+                    logger.success(f'kcat Prediction = {prediction_linear} mM')
+                    logger.success(f'kcat Total Uncertainty = {unc}\n')
+                else:
+                    logger.error('Prediction failed!\n')
+
+                catpred_df = pd.DataFrame(
+                    preds_4_export,
+                    columns=[
+                        'Protein_Name',
+                        'SMILES_Name',
+                        'Total_Uncertainty',
+                        'Epistemic_Uncertainty',
+                        'Aleatoric_Uncertainty',
+                        'kcat_s^{-1}',
+                        'Protein_Sequence',
+                        'SMILES_String'
+                    ]
+                )
+                catpred_df.to_csv(os.path.join(args.outdir, f'{args.name}_kcat_catpred_results.csv'), index=False)
+
+            else:
+                for param in ['ki', 'km']:
+                    _, _, sh_path = create_csv_sh(param, seq_name, seq_seq, smiles_smiles, smiles_name, args)
+                    flag = int(int(args.GPUs) == 0)
+                    command = (
+                        f"export PROTEIN_EMBED_USE_CPU={flag} && "
+                        f"chmod +x {os.path.join(args.outdir, sh_path)} && "
+                        f"bash {os.path.join(args.outdir, sh_path)}"
+                    )
+                    status = subprocess.call(command, shell=True, executable="/bin/bash", stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL)
+                    if status == 0:
+                        logger.success('Prediction successful!')
+                        unc, epi_unc, alea_unc, prediction, prediction_linear = get_predictions(param, seq_name)
+                        record = (seq_name, smiles_name, unc, epi_unc, alea_unc, prediction_linear, seq_seq, smiles_smiles)
+                        if param == 'ki':
+                            preds_4_export_ki.append(record)
+                        elif param == 'km':
+                            preds_4_export_km.append(record)
+                        logger.success(f'{param} Prediction = {prediction_linear} mM')
+                        logger.success(f'{param} Total Uncertainty = {unc}\n')
+
+                    else:
+                        logger.error('Prediction failed!\n')
+
+        # Export ki predictions
+        if preds_4_export_ki:
+            df_ki = pd.DataFrame(
+                preds_4_export_ki,
+                columns=[
+                    'Protein_Name',
+                    'SMILES_Name',
+                    'ki_Total_Uncertainty',
+                    'ki_Epistemic_Uncertainty',
+                    'ki_Aleatoric_Uncertainty',
+                    'ki_mM',
+                    'Protein_Sequence',
+                    'SMILES_String'
+                ]
+            )
+            df_ki.to_csv(os.path.join(args.outdir, f'{args.name}_ki_catpred_results.csv'), index=False)
+
+        # Export k predictions
+        if preds_4_export_km:
+            df_km = pd.DataFrame(
+                preds_4_export_km,
+                columns=[
+                    'Protein_Name',
+                    'SMILES_Name',
+                    'km_Total_Uncertainty',
+                    'km_Epistemic_Uncertainty',
+                    'km_Aleatoric_Uncertainty',
+                    'km_mM',
+                    'Protein_Sequence',
+                    'SMILES_String'
+                ]
+            )
+            df_km.to_csv(os.path.join(args.outdir, f'{args.name}_km_catpred_results.csv'), index=False)
+
+            
+        upgrade_rotary_emb(og_ver_rotary)
+        # with open(args.smiles, 'r') as f:
+        #     content = f.read()
+        # rxn_counts = content.count('.')
     
+        
+
     if args.classifier == 'ECPICK':
         args.cache_dir = cache_dir
         ecpick = ECPICK(args)
@@ -517,23 +725,39 @@ def run(args):
             pred_df.to_csv(os.path.join(args.outdir, pred_file_name), index=False)
 
 
-    elif args.classifier not in ['3Di-Search','ECPICK', 'iForest', 'PSALM']:
+    elif args.classifier not in ['3Di-Search','ECPICK', 'iForest', 'PSALM', 'M-Ionic', 'CatPred', 'CataPro', 'PSICHIC', 'GraphEC']:
         outfile = os.path.join(args.outdir, f"{args.name}_{args.classifier}.out")
         if not args.preComputed_Embs:
-            embed_command = (
-                "trill",
-                args.name,
-                args.GPUs,
-                "--outdir", args.outdir,
-                "embed",
-                args.emb_model,
-                args.query,
-                "--avg",
-                "--batch_size",
-                str(args.batch_size_emb)
-            )
-            subprocess.run(embed_command, check=True)
-            df = pd.read_csv(os.path.join(args.outdir, f"{args.name}_{args.emb_model}_AVG.csv"))
+            if not args.poolparti:
+                embed_command = (
+                    "trill",
+                    args.name,
+                    args.GPUs,
+                    "--outdir", args.outdir,
+                    "embed",
+                    args.emb_model,
+                    args.query,
+                    "--avg",
+                    "--batch_size",
+                    str(args.batch_size_emb)
+                )            
+                subprocess.run(embed_command, check=True)
+                df = pd.read_csv(os.path.join(args.outdir, f"{args.name}_{args.emb_model}_AVG.csv"))
+            else:
+                embed_command = (
+                    "trill",
+                    args.name,
+                    args.GPUs,
+                    "--outdir", args.outdir,
+                    "embed",
+                    args.emb_model,
+                    args.query,
+                    "--poolparti",
+                    "--batch_size",
+                    str(args.batch_size_emb)
+                )
+                subprocess.run(embed_command, check=True)
+                df = pd.read_csv(os.path.join(args.outdir, f"{args.name}_{args.emb_model}_PoolParti.csv"))
         else:
             df = pd.read_csv(args.preComputed_Embs)
 
@@ -596,7 +820,7 @@ def run(args):
                 os.remove(os.path.join(args.outdir, f"{args.name}_{args.emb_model}_AVG.csv"))
             logger.info(f'Saving prediction output key for this model at {output_csv_path}')
 
-        elif args.classifier not in ['3Di-Search','ECPICK', 'PSALM']:
+        elif args.classifier not in ['3Di-Search','ECPICK', 'PSALM', 'M-Ionic', 'CatPred', 'CataPro', 'PSICHIC', 'GraphEC']:
             if not args.preTrained:
                 logger.error("You need to provide a model with --preTrained to perform inference!")
                 raise Exception("You need to provide a model with --preTrained to perform inference!")
@@ -635,21 +859,39 @@ def run(args):
                 if not args.save_emb and not args.preComputed_Embs:
                     os.remove(os.path.join(args.outdir, f"{args.name}_{args.emb_model}_AVG.csv"))
 
-    elif args.classifier not in ['iForest','ECPICK','PSALM']:
+    elif args.classifier not in ['iForest','ECPICK','PSALM', 'M-Ionic', 'CatPred', 'CataPro', 'PSICHIC', 'GraphEC']:
         # Load embeddings
         if not args.preComputed_Embs:
-            embed_command = (
-                "trill",
-                args.name,
-                args.GPUs,
-                "--outdir", args.outdir,
-                "embed",
-                args.emb_model,
-                args.query,
-                "--avg"
-            )
-            subprocess.run(embed_command, check=True)
-            df = pd.read_csv(os.path.join(args.outdir, f"{args.name}_{args.emb_model}_AVG.csv"))
+            if not args.poolparti:
+                embed_command = (
+                    "trill",
+                    args.name,
+                    args.GPUs,
+                    "--outdir", args.outdir,
+                    "embed",
+                    args.emb_model,
+                    args.query,
+                    "--avg",
+                    "--batch_size",
+                    str(args.batch_size_emb)
+                )            
+                subprocess.run(embed_command, check=True)
+                df = pd.read_csv(os.path.join(args.outdir, f"{args.name}_{args.emb_model}_AVG.csv"))
+            else:
+                embed_command = (
+                    "trill",
+                    args.name,
+                    args.GPUs,
+                    "--outdir", args.outdir,
+                    "embed",
+                    args.emb_model,
+                    args.query,
+                    "--poolparti",
+                    "--batch_size",
+                    str(args.batch_size_emb)
+                )
+                subprocess.run(embed_command, check=True)
+                df = pd.read_csv(os.path.join(args.outdir, f"{args.name}_{args.emb_model}_PoolParti.csv"))
         else:
             df = pd.read_csv(args.preComputed_Embs)
 
@@ -724,9 +966,9 @@ def run(args):
             )
             logger.info("Extracting embeddings from ESM2-650M...")
             subprocess.run(embed_command, check=True)
-            perAA = torch.load(os.path.join(args.outdir, f"{args.name}_esm2_t33_650M_perAA.pt"))
+            perAA = torch.load(os.path.join(args.outdir, f"{args.name}_esm2_t33_650M_perAA.pt"), weights_only=False)
         else:
-            perAA = torch.load(args.preComputed_Embs)
+            perAA = torch.load(args.preComputed_Embs, weights_only=False)
         device = 'cuda' if int(args.GPUs) > 0 else 'cpu'
         PSALM = psalm(clan_model_name="ProteinSequenceAnnotation/PSALM-1b-clan",
                     fam_model_name="ProteinSequenceAnnotation/PSALM-1b-family",

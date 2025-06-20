@@ -7,6 +7,7 @@ info_color = "\033[1;37m"  # Bolded White for INFO messages
 warning_color = "\033[1;33m"  # Bolded Orange for WARNING messages
 error_color = "\033[1;31m"  # Bolded Red for ERROR messages
 reset_color = "\033[0m"  # Resets the color to default
+success_color = "\033[1;32m"
 
 # Define a function to select the message color based on the log level
 def get_message_color(level):
@@ -16,6 +17,8 @@ def get_message_color(level):
         return warning_color
     elif level == "ERROR":
         return error_color
+    elif level == "SUCCESS":
+        return success_color
     else:
         return info_color
 

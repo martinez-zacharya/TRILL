@@ -3,8 +3,8 @@ def setup(subparsers):
 
     score.add_argument(
         "scorer",
-        help="Score protein sequences with ESM-1v, ESM2-650M or protein structures with ProteinMPNN",
-        choices=("ESM2_150M", "ESM1v", "ESM2_650M", "ProteinMPNN")
+        help="Score protein sequences with ESM-1v, ESM2-650M or protein structures with ProteinMPNN. You can also score protein-protein complexes with SC, by either passing a binary complex or by specifying --chain_group_A to score complexes that have more than two chains.",
+        choices=("ESM2_150M", "ESM1v", "ESM2_650M", "ProteinMPNN", "SC")
     )
     score.add_argument(
         "query",
@@ -77,6 +77,19 @@ def setup(subparsers):
         help="ProteinMPNN: Cutoff in angstroms between protein and context atoms to select residues for reporting score.",
     )
 
+    score.add_argument(
+        "--interface_distance",
+        type=float,
+        default=4.0,
+        help="SC: Distance parameter in Angstroms used for generating an interface between the two surfaces. Atoms with no neighbours within this range are excluded. Default is 4",
+    )
+
+    score.add_argument(
+        "--chain_group_A",
+        default=None,
+        help="SC: Designate what protein chains you want to be grouped together to perform binary shape complementary analysis. For example, if you had 6 chains in a complex, ABCDEF, and you wanted to see how chains ABC fit with DEF, you can pass --chain_group_A ABC. TRILL will automatically select DEF for the other half.",
+    )
+
     # score.add_argument(
     #     "--batch_size",
     #     type=int,
@@ -113,8 +126,12 @@ import sys
 from git import Repo
 import esm
 from trill.utils.esm_utils import ESM_sampler, ESM1v, ESM2_650M, ESM2_150M
+from trill.utils.scasa_utils import calculate_sc_score
 from trill.utils.inverse_folding.util import download_ligmpnn_weights
 from tqdm import tqdm
+from icecream import ic
+from pathlib import Path
+import pandas as pd
 import csv
  
 
@@ -151,6 +168,37 @@ def run(args):
         # args.transmembrane_buried = ""
         # args.transmembrane_interface = ""
         ligmpnn_score(args, cache_dir)
+    elif args.scorer == 'SC':
+        output_file = os.path.join(args.outdir, f'{args.name}_{args.scorer}_output.csv')
+        output_df = pd.DataFrame(columns=['PDB_Path', 'SC'])
+        if args.query.endswith('.pdb'):
+            sc_value = calculate_sc_score(args)
+            abs_name = os.path.abspath(args.query)
+            new_row = pd.DataFrame([{'PDB_Path': abs_name, 'SC': sc_value}])
+            output_df = pd.concat([output_df, new_row], ignore_index=True)
+
+        elif args.query.endswith('.txt'):
+            with open(args.query, 'r') as f:
+                pdb_paths = [line.strip() for line in f if line.strip()]
+            for pdb in pdb_paths:
+                args.query = pdb
+                sc_value = calculate_sc_score(args)
+                abs_name = os.path.abspath(args.query)
+                new_row = pd.DataFrame([{'PDB_Path': abs_name, 'SC': sc_value}])
+                output_df = pd.concat([output_df, new_row], ignore_index=True)
+
+
+        elif os.path.isdir(args.query):
+            pdb_paths = [str(p) for p in Path(args.query).glob("*.pdb")]
+            for pdb in pdb_paths:
+                args.query = pdb
+                sc_value = calculate_sc_score(args)
+                abs_name = os.path.abspath(args.query)
+                new_row = pd.DataFrame([{'PDB_Path': abs_name, 'SC': sc_value}])
+                output_df = pd.concat([output_df, new_row], ignore_index=True)
+
+
+        output_df.to_csv(output_file, index=None)
     else:
         if int(args.GPUs) == 0:
             device = 'cpu'

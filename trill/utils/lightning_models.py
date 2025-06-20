@@ -15,7 +15,8 @@ from tqdm import trange
 from icecream import ic
 from loguru import logger
 from transformers import pipeline, AutoTokenizer, AutoModelForCausalLM, DataCollatorForLanguageModeling, T5EncoderModel, \
-    T5Tokenizer, AutoModelForSeq2SeqLM, EsmTokenizer, EsmForMaskedLM
+    T5Tokenizer, AutoModelForSeq2SeqLM, EsmTokenizer, EsmForMaskedLM, AutoModel
+from .poolparti import poolparti_gen
 # import rinalmo.model.model
 # from rinalmo.config import model_config
 # import rinalmo.data.alphabet
@@ -202,6 +203,10 @@ class ESM(pl.LightningModule):
         if args.command == 'embed' or args.command == 'dock':
             self.per_AA = args.per_AA
             self.avg = args.avg
+        if args.poolparti:
+            self.poolparti = True
+        else:
+            self.poolparti = False
 
     def training_step(self, batch, batch_idx):
         torch.cuda.empty_cache()
@@ -232,18 +237,38 @@ class ESM(pl.LightningModule):
     
     def predict_step(self, batch, batch_idx):
         labels, seqs, toks = batch
-        pred = self.esm(toks, repr_layers=self.repr_layers, return_contacts=False)
+        if self.poolparti:
+            pred = self.esm(toks, repr_layers=self.repr_layers, return_contacts=True)
+        else:
+            pred = self.esm(toks, repr_layers=self.repr_layers, return_contacts=False)
         representations = {layer: t.to(device="cpu") for layer, t in pred["representations"].items()}
         rep_numpy = representations[self.repr_layers[0]].cpu().detach().numpy()[:, 1:-1, :]
         aa_reps = []
         avg_reps = []
+        poolparti_reps = []
         for i in range(len(rep_numpy)):
             if self.avg:              
                 avg_reps.append(tuple([rep_numpy[i].mean(0), labels[i]]))
             if self.per_AA:
                 aa_reps.append(tuple([rep_numpy[i], labels[i]]))
+            if self.poolparti:
+                attn_mean_pooled_layers = []
+                attn_max_pooled_layers = []
+                for layer in range(int(self.repr_layers[0])):
+                    attn_raw = pred["attentions"][i, layer]
+                    ic(attn_raw.shape)
+                    attn_mean_pooled_layers.append(torch.mean(attn_raw, dim=0))
+                    attn_max_pooled_layers.append(torch.max(attn_raw, dim=0).values)
 
-        return aa_reps, avg_reps
+                combined_attention = torch.stack([
+                    torch.stack(attn_mean_pooled_layers),
+                    torch.stack(attn_max_pooled_layers)
+                ]).unsqueeze(1)
+
+                poolparti_embs = poolparti_gen(rep_numpy[i], combined_attention.cpu())
+                poolparti_reps.append(tuple([poolparti_embs, f'{labels[i]}_poolparti']))
+
+        return aa_reps, avg_reps, poolparti_reps
     
 class RNAFM(pl.LightningModule):
     def __init__(self, args):
@@ -407,7 +432,132 @@ class RiNALMo(pl.LightningModule):
                 aa_reps.append(tuple([embs[i], labels[i]]))
  
         return aa_reps, avg_reps
+
+class AMPLIFY(pl.LightningModule):
+    def __init__(self, args):
+        super().__init__()
+        if int(args.GPUs) >= 1: 
+            self.model = AutoModel.from_pretrained(f"chandar-lab/{args.model}", device_map="auto", trust_remote_code=True)
+            self.gpu = True
+        else:
+            self.model = AutoModel.from_pretrained(f"chandar-lab/{args.model}", low_cpu_mem_usage=True, trust_remote_code=True)
+            self.gpu = False
+
+        self.tokenizer = AutoTokenizer.from_pretrained(f"chandar-lab/{args.model}")
+        if 'lr' in args:
+            self.lr = float(args.lr)
+            self.strat = str(args.strategy)
+        if args.command == 'embed':
+            self.per_AA = args.per_AA
+            self.avg = args.avg
+            self.batch_size = args.batch_size
+
+    def training_step(self, batch, batch_idx):
+        loss = 0
+        return {"loss": loss}
     
+    def configure_optimizers(self):
+        optimizer = torch.optim.Adam(self.esm.parameters(), lr=self.lr)
+        lr_scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=1)
+        return [optimizer], [lr_scheduler]
+
+    def tokenize(self, dataset):
+        tokenized_dataset = []
+        for entry in dataset:  # entry is a tuple of proteins
+            for protein in entry:
+                tokens = self.tokenizer.encode(protein, max_length=1024, truncation=True)
+                tokenized_dataset.append(torch.tensor(tokens, dtype=torch.long))
+        return tokenized_dataset
+
+
+    def collate(self, inputs):
+        max_length = ((max(x.size(0) for x in inputs) // 8) + 1) * 8
+        pad_x = torch.full((len(inputs), max_length), fill_value=self.tokenizer.pad_token_id, dtype=torch.long)
+        for i, x in enumerate(inputs):
+            pad_x[i, :x.size(0)] = x
+        pad_mask = pad_x == self.tokenizer.pad_token_id
+        return pad_x, pad_mask
+
+    def predict_step(self, batch, batch_idx):
+        n_last_layers = 1
+        aa_reps = []
+        avg_reps = []
+        labels, seqs = batch  # labels is (batch_size,), seqs is List[Tuple[str, str, ...]]
+
+        # Step 1: Flatten all sequences across the batch
+        flat_seqs = []
+        sample_boundaries = []  # Track how many sequences per sample
+        for sample in seqs:
+            sample_boundaries.append(len(sample))
+            flat_seqs.extend(sample)
+
+        # Step 2: Tokenize and collate all sequences
+        tokenized = [torch.tensor(self.tokenizer.encode(s, max_length=1024, truncation=True), dtype=torch.long) for s in flat_seqs]
+        pad_x, pad_mask = self.collate(tokenized)
+        hf_pad_mask = torch.where(pad_mask, float(0.0), float('-inf'))
+
+        if self.gpu:
+            pad_x = pad_x.cuda()
+            hf_pad_mask = hf_pad_mask.cuda()
+            self.model = self.model.cuda()
+        else:
+            pad_x = pad_x.cpu()
+            hf_pad_mask = hf_pad_mask.cpu()
+            self.model = self.model.cpu()
+        ic(type(pad_x))
+        ic(type(hf_pad_mask))
+        # Step 3: Get model output and mask padding
+        hidden_states = self.model(pad_x, hf_pad_mask, output_hidden_states=True).hidden_states
+        hidden = torch.stack(hidden_states[-n_last_layers:]).sum(0)
+        hidden = torch.masked_fill(hidden, pad_mask.unsqueeze(-1), 0)
+        embs = hidden.sum(1).cpu()  # Sum across sequence length for each sequence
+        lens = (~pad_mask).sum(1).cpu().unsqueeze(1)  # length for each sequence
+
+        # Step 4: Group back per-sample and compute final outputs
+        idx = 0
+        for i, n_seq in enumerate(sample_boundaries):
+            sample_embs = embs[idx:idx + n_seq]
+            if self.avg:
+                avg_emb = sample_embs.mean(dim=0)
+                avg_reps.append((avg_emb, labels[i]))
+            if self.per_AA:
+                for emb in sample_embs:
+                    aa_reps.append((emb, labels[i]))
+            idx += n_seq
+
+        return aa_reps, avg_reps
+
+
+        # modded_seqs = [' '.join(seq) for seq in seqs]
+
+        # # Get lengths of each sequence to slice embeddings later
+        # seq_lengths = [len(seq) for seq in seqs]
+
+        # token_encoding = self.tokenizer.batch_encode_plus(modded_seqs, 
+        #         add_special_tokens=True, padding='longest')
+        # input_ids = torch.tensor(token_encoding['input_ids'])
+        # attention_mask = torch.tensor(token_encoding['attention_mask'])
+
+        # if next(self.model.parameters()).is_cuda:
+        #     embedding_repr = self.model(input_ids.cuda(), attention_mask=attention_mask.cuda())
+        # else:
+        #     embedding_repr = self.model(input_ids, attention_mask=attention_mask)
+            
+        # embs = embedding_repr.last_hidden_state
+
+        # for i, (emb, lab) in enumerate(zip(embs, label)):
+        #     actual_len = seq_lengths[i]  # Length of the actual sequence without padding
+
+        #     # Remove padding from embeddings
+        #     emb = emb[:actual_len]
+        #     if self.avg:
+        #         avg_reps.append((emb.mean(dim=0), lab))
+        #     if self.per_AA:
+        #         aa_reps.append((emb, lab))
+
+        # return aa_reps, avg_reps
+
+
 class ProtGPT2(pl.LightningModule):
     def __init__(self, args):
         super().__init__()
@@ -1146,15 +1296,24 @@ class ProstT5(pl.LightningModule):
 class Ankh(pl.LightningModule):
     def __init__(self, args):
         super().__init__()
-        model_name = "ElnaggarLab/ankh-large" if args.model == "Ankh-Large" else "ElnaggarLab/ankh-base"
+        model_lookup = {
+            "Ankh-Large": "ElnaggarLab/ankh-large",
+            "Ankh2-Large": "ElnaggarLab/ankh2-large",
+            "Ankh3-Large": "ElnaggarLab/ankh3-large",
+            "Ankh3-XL": "ElnaggarLab/ankh3-xl",
+        }
+        model_name = model_lookup.get(args.model, "ElnaggarLab/ankh-base")
+        # model_name = "ElnaggarLab/ankh-large" if args.model == "Ankh-Large" else "ElnaggarLab/ankh-base"
         self.tokenizer = AutoTokenizer.from_pretrained(model_name)
         self.model = T5EncoderModel.from_pretrained(model_name, output_attentions=False)
         if args.command == 'embed':
             self.per_AA = args.per_AA
             self.avg = args.avg
+            self.poolparti = False
         else:
             self.avg = True
             self.per_AA = False
+            self.poolparti = False
 
     def training_step(self, batch, batch_idx):
         loss = 0  # Placeholder
@@ -1168,6 +1327,7 @@ class Ankh(pl.LightningModule):
     def predict_step(self, batch, batch_idx):
         aa_reps = []
         avg_reps = []
+        poolparti_reps = []
         label, seqs = batch
 
         seq_lengths = [len(seq) for seq in seqs]
@@ -1179,18 +1339,44 @@ class Ankh(pl.LightningModule):
         if next(self.model.parameters()).is_cuda:
             input_ids = input_ids.cuda()
             attention_mask = attention_mask.cuda()
-
-        outputs = self.model(input_ids=input_ids, output_hidden_states=True)
+        # ic(input_ids)
+        # ic(input_ids.shape)
+        outputs = self.model(input_ids=input_ids, output_hidden_states=True, output_attentions=True)
         embs = outputs.hidden_states[-2]
+        num_hidden_layers = self.model.config.num_layers
 
         for i, (emb, lab) in enumerate(zip(embs, label)):
+            # ic(self.tokenizer.convert_ids_to_tokens(inputs['input_ids'][i]))
+            # ic(len(seqs[i]), inputs['input_ids'][i].shape)
             actual_len = seq_lengths[i]
+            # ic(emb.shape)
             emb = emb[:actual_len]
+            # ic(emb.shape)
             if self.avg:
                 avg_reps.append((emb.mean(dim=0), lab))
             if self.per_AA:
                 aa_reps.append((emb, lab))
 
+            if self.poolparti:
+                attn_mean_pooled_layers = []
+                attn_max_pooled_layers = []
+                for layer in range(int(num_hidden_layers)):
+                    attn_raw = outputs.attentions[layer]
+                    # attn_raw = attn_raw[:, :, :-1, :-1]
+                    attn_raw = attn_raw.squeeze(0)
+                    # ic(attn_raw.shape)
+                    attn_mean_pooled_layers.append(torch.mean(attn_raw, dim=0))
+                    attn_max_pooled_layers.append(torch.max(attn_raw, dim=0).values)
+
+                combined_attention = torch.stack([
+                    torch.stack(attn_mean_pooled_layers),
+                    torch.stack(attn_max_pooled_layers)
+                ]).unsqueeze(1)
+                # ic(combined_attention.shape)
+                # poolparti_embs = poolparti_gen(emb.cpu().detach().numpy(), combined_attention.cpu().detach())
+                # poolparti_reps.append(tuple([poolparti_embs, f'{labels[i]}_poolparti']))
+
+        # return aa_reps, avg_reps, poolparti_reps
         return aa_reps, avg_reps
 
 
