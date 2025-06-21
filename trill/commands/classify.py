@@ -153,16 +153,16 @@ def setup(subparsers):
     )
     classify.add_argument(
         "--sweep",
-        help="XGBoost/LightGBM: Use this flag to perform cross-validated bayesian optimization over the hyperparameter space.",
+        help="XGBoost/LightGBM: Use this flag to perform optimization over the hyperparameter space.",
         action="store_true",
         default=False
     )
-    classify.add_argument(
-        "--sweep_cv",
-        help="XGBoost/LightGBM: Change the number of folds used for cross-validation.",
-        action="store",
-        default=3
-    )
+    # classify.add_argument(
+    #     "--sweep_cv",
+    #     help="XGBoost/LightGBM: Change the number of folds used for cross-validation.",
+    #     action="store",
+    #     default=3
+    # )
     classify.add_argument(
         "--sweep_iters",
         help="XGBoost/LightGBM: Change the number of optimization iterations. Default is 10.",
@@ -699,8 +699,9 @@ def run(args):
             preds = np.argmax(test_res[0], axis=1)
             transformed_preds = le.inverse_transform(preds)
             unique_c = np.unique(transformed_preds)
+            label_order = np.unique(test_df['NewLab'])
             precision, recall, fscore, support = precision_recall_fscore_support(test_df['NewLab'].values, preds, average=args.f1_avg_method, labels=np.unique(test_df['NewLab']))
-            log_results(outfile, command_line_str, n_classes, args, classes=unique_c, precision=precision, recall=recall, fscore=fscore, support=support, le=le)
+            log_results(outfile, command_line_str, n_classes, args, classes=unique_c, precision=precision, recall=recall, fscore=fscore, support=support, le=le, LabelOrder=label_order)
         else:
             trainer, dataset, label_list = custom_esm2mlp_test(args)
             test_res = trainer.predict(test_dataset=dataset)

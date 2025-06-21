@@ -68,6 +68,7 @@ def run(args):
     from git import Repo
     import re
     import textwrap
+    # from trill.utils.rarefold import setup_rarefold
     # from trill.utils.rosettafold_aa import rfaa_setup
     from .commands_common import cache_dir, get_logger
 
@@ -143,6 +144,9 @@ def run(args):
                     with open(os.path.join(args.outdir, f"{iden}.pdb"), "w") as f:
                         f.write("".join(out))
 
+    # elif args.model == "RareFold":
+    #     logger.info('Finding RareFold dependencies...')
+    #     setup_rarefold(cache_dir)
     elif args.model == "ProstT5":
         model = ProstT5(args)
         data = esm.data.FastaBatchedDataset.from_file(args.query)
@@ -209,7 +213,7 @@ def run(args):
             # 'default' setup
             num_trunk_recycles=3,
             num_diffn_timesteps=200,
-            msa_server=True if args.msa else False,
+            use_msa_server=True if args.msa else False,
             seed=int(args.RNG_seed),
             # device="cuda:0",
             use_esm_embeddings=True,

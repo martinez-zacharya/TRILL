@@ -125,15 +125,16 @@ def setup_esm2_hf(train, test, args, n_classes):
         # evaluation_strategy = "epoch",
         save_strategy = "no",
         learning_rate=float(args.lr),
-        per_device_train_batch_size=int(args.batch_size),
-        per_device_eval_batch_size=int(args.batch_size),
+        per_device_train_batch_size=int(args.batch_size_emb),
+        per_device_eval_batch_size=int(args.batch_size_emb),
         num_train_epochs=int(args.epochs),
         seed = int(args.RNG_seed),
         # load_best_model_at_end=True,
         # metric_for_best_model="f1",
         use_cpu = use_cpu, 
         # log_level='debug',
-        fp16 = fp16
+        fp16 = fp16,
+        report_to="none"
     )
     if n_classes == 2:
         trainer = Trainer(
@@ -180,15 +181,16 @@ def custom_esm2mlp_test(args):
         # evaluation_strategy = "epoch",
         save_strategy = "no",
         learning_rate=float(args.lr),
-        per_device_train_batch_size=int(args.batch_size),
-        per_device_eval_batch_size=int(args.batch_size),
+        per_device_train_batch_size=int(args.batch_size_emb),
+        per_device_eval_batch_size=int(args.batch_size_emb),
         num_train_epochs=int(args.epochs),
         seed = int(args.RNG_seed),
         load_best_model_at_end=True,
         metric_for_best_model="f1",
         use_cpu = use_cpu, 
         # log_level='debug',
-        fp16 = fp16
+        fp16 = fp16,
+        report_to="none"
     )
     trainer = Trainer(
         model,
@@ -353,7 +355,7 @@ def log_results(out_file, command_str, n_classes, args, classes = None, sweeped_
                 out.write(f"\tF-score: {fscore[i]}\n")
 
                 out.write(f"\tSupport: {support[i]}\n")
-        elif precision is not None and recall is not None and fscore is not None and support is not None:  
+        elif precision is not None and recall is not None and fscore is not None and support is not None and LabelOrder is not None:  
             out.write("Classification Metrics Per Class:\n")
             for i, num_label in enumerate(LabelOrder):
                 label = le.inverse_transform([num_label])
@@ -379,6 +381,10 @@ def log_results(out_file, command_str, n_classes, args, classes = None, sweeped_
             out.write(f"\tAverage Recall: {avg_recall:.4f}\n")
 
             out.write(f"\tAverage F-score: {avg_fscore:.4f}\n")
+        
+        # elif 'ESM2+MLP' in command_str:
+        #     out.write("Classification Metrics Per Class:\n")
+
         # elif precision is not None and recall is not None and fscore is not None:
         #     out.write("Classification Metrics Per Class:\n")
         #     for i in range(n_classes):
