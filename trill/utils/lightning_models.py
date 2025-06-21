@@ -256,7 +256,6 @@ class ESM(pl.LightningModule):
                 attn_max_pooled_layers = []
                 for layer in range(int(self.repr_layers[0])):
                     attn_raw = pred["attentions"][i, layer]
-                    ic(attn_raw.shape)
                     attn_mean_pooled_layers.append(torch.mean(attn_raw, dim=0))
                     attn_max_pooled_layers.append(torch.max(attn_raw, dim=0).values)
 
@@ -425,8 +424,6 @@ class RiNALMo(pl.LightningModule):
         avg_reps = []
         for i in range(len(embs)):
             if self.avg:
-                ic(embs[i])
-                ic(embs[i].shape)
                 avg_reps.append(tuple([embs[i].mean(0), labels[i]]))
             if self.per_AA:
                 aa_reps.append(tuple([embs[i], labels[i]]))
@@ -504,8 +501,6 @@ class AMPLIFY(pl.LightningModule):
             pad_x = pad_x.cpu()
             hf_pad_mask = hf_pad_mask.cpu()
             self.model = self.model.cpu()
-        ic(type(pad_x))
-        ic(type(hf_pad_mask))
         # Step 3: Get model output and mask padding
         hidden_states = self.model(pad_x, hf_pad_mask, output_hidden_states=True).hidden_states
         hidden = torch.stack(hidden_states[-n_last_layers:]).sum(0)

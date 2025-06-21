@@ -48,6 +48,26 @@ micromamba install -c pyg pyg pytorch-cluster pytorch-sparse pytorch-scatter pyt
 pip install git+https://github.com/martinez-zacharya/lightdock.git@03a8bc4888c0ff8c98b7f0df4b3c671e3dbf3b1f git+https://github.com/martinez-zacharya/ECPICK.git git+https://github.com/martinez-zacharya/CaLM.git setuptools==69.5.1 rna-fm
 pip install https://github.com/tridao/flash-attention-wheels/releases/download/v2.3.5.post7/flash_attn_wheels_test-2.3.5.post7+cu122torch2.1cxx11abiFALSE-cp311-cp311-linux_x86_64.whl
 ```
+2. Once micromamba is set up, create a new environment with
+```shell
+micromamba create -n TRILL python=3.11 ; micromamba activate TRILL
+# micromamba install -c pytorch -c nvidia pytorch=2.3.0 pytorch-cuda=12.1 torchdata python=3.11
+# micromamba install -c conda-forge openbabel pdbfixer swig openmm smina fpocket vina openff-toolkit openmmforcefields setuptools=69.5.1 python=3.11
+# pip install torch==2.7.1 torchdata==0.9.0
+micromamba install -c conda-forge pytorch=2.7.1 compilers
+micromamba install -c bioconda foldseek pyrsistent python=3.11
+micromamba install -c dglteam/label/th24_cu124 dgl
+# micromamba install -c "dglteam/label/cu121" dgl python=3.11
+pip install pyg_lib torch_scatter torch_sparse torch_cluster torch_spline_conv -f https://data.pyg.org/whl/torch-2.7.0+cu126.html
+pip install torch_geometric -f https://data.pyg.org/whl/torch-2.7.0+cu126.html
+# micromamba install -c pyg pyg pytorch-cluster pytorch-sparse pytorch-scatter python=3.11 pytorch=2.3.0 pytorch-cuda=12.1
+pip install git+https://github.com/martinez-zacharya/lightdock.git@03a8bc4888c0ff8c98b7f0df4b3c671e3dbf3b1f git+https://github.com/martinez-zacharya/ECPICK.git git+https://github.com/martinez-zacharya/CaLM.git git+https://github.com/martinez-zacharya/SCASA.git git+https://github.com/chemosim-lab/ProLIF.git setuptools==69.5.1 rna-fm
+pip install https://github.com/Dao-AILab/flash-attention/releases/download/v2.7.4.post1/flash_attn-2.7.4.post1+cu12torch2.6cxx11abiTRUE-cp311-cp311-linux_x86_64.whl
+# micromamba install -c conda-forge openbabel pdbfixer swig openmm smina fpocket vina openff-toolkit openmmforcefields setuptools=69.5.1 python=3.11
+micromamba install -c conda-forge openbabel pdbfixer smina fpocket vina openff-toolkit openmmforcefields setuptools=69.5.1 python=3.11 cuda-version=12.6
+# pip install https://github.com/tridao/flash-attention-wheels/releases/download/v2.3.5.post7/flash_attn_wheels_test-2.3.5.post7+cu122torch2.1cxx11abiFALSE-cp311-cp311-linux_x86_64.whl
+pip install OpenMM swig
+```
 3. Next, simply install TRILL!
 ```shell
 pip install trill-proteins
@@ -282,6 +302,15 @@ In the examples below the string immediately after `trill` specifies the name of
   ```
   trill example 1 classify iForest train.fasta --emb_model esm2_t30_150M
   trill example 1 classify iForest test.fasta --emb_model esm2_t30_150M --preTrained my_iforest.skops
+  ```
+### 12. Use end-to-end workflows.
+  While TRILL is mostly "choose your own adventure", as in you can chain together commands to achieve workflow, there is a "workflow" command that can perform these procedures with just one command. The only workflow currently included in TRILL is [Foldtuning](https://doi.org/10.1101/2023.12.22.573145). This automated pipeline takes as input just protein sequences and through an iterative process, generates protein sequences that are predicted to have similar fold/function to the inputs, but with decreasing sequence similarity over each round of fine-tuning. By default, five rounds of foldtuning will be performed on your inputs.
+  ```
+  trill test 1 workflow foldtune example.fasta
+  ```
+  While currently not experimentally validated, TRILL also offers "fast-foldtuning", which skips the time-consuming structural prediction with ESMFold step by extract 3Di tokens with ProstT5 instead to perform structural comparisons. In limited testing, this sped-up version of foldtuning can be ~7x faster than the original version.
+  ```
+  trill test 1 workflow foldtune example.fasta --fast_folding 
   ```
 ## Misc. Tips
 

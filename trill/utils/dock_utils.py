@@ -538,13 +538,9 @@ def run_vina_split(pdbqt_file):
     with open(pdbqt_file, 'r') as f:
         for line in f:
             if line.startswith("MODEL"):
-                try:
-                    model_num = int(line.strip().split()[1])
-                    if model_num > max_model:
-                        max_model = model_num
-                except (IndexError, ValueError):
-                    continue
-
+                model_num = int(line.strip().split()[1])
+                if model_num > max_model:
+                    max_model = model_num
     if max_model == 0:
         pdbqt_path = Path(pdbqt_file)
         new_name = pdbqt_path.with_name(pdbqt_path.stem + '_pose1' + pdbqt_path.suffix)
