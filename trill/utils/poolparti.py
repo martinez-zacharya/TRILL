@@ -26,9 +26,6 @@ def poolparti_gen(perAA_embs, comb_attn):
     # file_name = os.path.basename(path_token_emb)
     
     # Instantiate the TokenToSequencePooler
-    ic(perAA_embs.shape)
-    ic(type(perAA_embs))
-    ic(comb_attn.shape)
     pooler = TokenToSequencePooler(path_token_emb=perAA_embs, 
                                    path_attention_layers=comb_attn)
 
@@ -123,10 +120,7 @@ class TokenToSequencePooler:
         # Handles errors during the pooling process by printing detailed information.
                 
         matrix_to_pool = self.create_pooled_matrices_across_layers(mtx_all_layers=self.attn_all_layers).squeeze().numpy()
-        ic(matrix_to_pool.shape)
         dict_importance = self._page_rank(matrix_to_pool)
-        ic(len(dict_importance))
-        ic(dict_importance.keys())
         importance_weights = np.array(list(self._calculate_importance_weights(dict_importance).values()))
         if return_importance:
             return importance_weights
@@ -135,9 +129,7 @@ class TokenToSequencePooler:
             print(f'importance_weights dict of length {len(importance_weights)} looks like\n {importance_weights}')
             print(f'shape of the importance matrix is {len(importance_weights)} and for repr, its {self.representations.shape}')
             print(f"importance weights look like {sorted(importance_weights, reverse=True)[0:5]}")
-            
-        ic(self.representations.shape)
-        ic(importance_weights.shape)
+
         try:
             return torch.tensor(np.average(self.representations, weights=importance_weights, axis=0))
         except Exception as e:
