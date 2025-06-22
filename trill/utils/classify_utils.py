@@ -448,11 +448,14 @@ def sweep(train_df, test_df, args):
     logger.info(f"Setting up hyperparameter sweep for {model_type}")
     
     np.int = np.int64
-    if args.n_workers == 1:
+    if args.n_workers == 1 and int(args.GPUs) == 0:
         logger.warning("WARNING!")
         logger.warning("You are trying to perform a hyperparameter sweep with only 1 core!")
         logger.warning(f"In your case, you have {multiprocessing.cpu_count()} CPU cores available!")
     
+    if int(args.GPUs) >=1:
+        args.n_workers = 1
+        
     logger.info(f"Using {args.n_workers} CPU cores for sweep")
     
 

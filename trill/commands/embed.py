@@ -306,7 +306,7 @@ def run(args):
             trainer = pl.Trainer(enable_checkpointing=False, callbacks=[pred_writer], logger=ml_logger,
                                  num_nodes=int(args.nodes))
         else:
-            trainer = pl.Trainer(enable_checkpointing=False, precision=16, devices=int(args.GPUs),
+            trainer = pl.Trainer(enable_checkpointing=False, precision='16-mixed', devices=int(args.GPUs),
                                  callbacks=[pred_writer], accelerator="gpu", logger=ml_logger, num_nodes=int(args.nodes))
         if args.finetuned:
             model = weights_update(model=ESM(eval(model_import_name), 0.0001, args),

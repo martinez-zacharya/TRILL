@@ -205,45 +205,44 @@ def run(args):
     def try_run_simulation(args):
         attempt = 0
         while attempt <= max_retries:
-            try:
-                gbsa_df, rms_output, prolif_df = run_simulation(args)
+            # try:
+            gbsa_df, rms_output, prolif_df = run_simulation(args)
 
-                # RMSD
-                rmsd_df = pd.DataFrame(rms_output['rmsd_complex'], columns=[f'RMSD_pose-{ix+1}'])
-                rmsd_df['Frame'] = rmsd_df.index + 1
-                rmsd_df = rmsd_df[['Frame', f'RMSD_pose-{ix+1}']]
-                rmsd_df['Simulation_Path'] = args.sim_output_path
-                rmsd_df.rename(columns={'Simulation_Path': f'Simulation_Path_pose-{ix+1}'}, inplace=True)
+            # RMSD
+            rmsd_df = pd.DataFrame(rms_output['rmsd_complex'], columns=[f'RMSD_pose-{ix+1}'])
+            rmsd_df['Frame'] = rmsd_df.index + 1
+            rmsd_df = rmsd_df[['Frame', f'RMSD_pose-{ix+1}']]
+            rmsd_df['Simulation_Path'] = args.sim_output_path
+            rmsd_df.rename(columns={'Simulation_Path': f'Simulation_Path_pose-{ix+1}'}, inplace=True)
 
-                # RMSF
-                rmsf_df = pd.DataFrame(rms_output['rmsf_complex'], columns=[f'RMSF_pose-{ix+1}'])
-                rmsf_df['Residue'] = rmsf_df.index + 1
-                rmsf_df = rmsf_df[['Residue', f'RMSF_pose-{ix+1}']]
-                rmsf_df['Simulation_Path'] = args.sim_output_path
-                rmsf_df.rename(columns={'Simulation_Path': f'Simulation_Path_pose-{ix+1}'}, inplace=True)
+            # RMSF
+            rmsf_df = pd.DataFrame(rms_output['rmsf_complex'], columns=[f'RMSF_pose-{ix+1}'])
+            rmsf_df['Residue'] = rmsf_df.index + 1
+            rmsf_df = rmsf_df[['Residue', f'RMSF_pose-{ix+1}']]
+            rmsf_df['Simulation_Path'] = args.sim_output_path
+            rmsf_df.rename(columns={'Simulation_Path': f'Simulation_Path_pose-{ix+1}'}, inplace=True)
 
-                if gbsa_df is not None:
-                    gbsa_df["ligand"] = args.ligand
-                    gbsa_df.to_csv(os.path.join(args.outdir, f'{args.name}_MMGBSA_output.csv'), index=False)
+            if gbsa_df is not None:
+                gbsa_df["ligand"] = args.ligand
+                gbsa_df.to_csv(os.path.join(args.outdir, f'{args.name}_MMGBSA_output.csv'), index=False)
 
-                if prolif_df is not None:
-                    prolif_df["ligand"] = args.ligand
-                    prolif_df.to_csv(os.path.join(args.outdir, f'{args.name}_prolif_output.csv'), index=False)
+            if prolif_df is not None:
+                prolif_df["ligand"] = args.ligand
+                prolif_df.to_csv(os.path.join(args.outdir, f'{args.name}_prolif_output.csv'), index=False)
 
-                return gbsa_df, rmsd_df, rmsf_df, prolif_df
+            return gbsa_df, rmsd_df, rmsf_df, prolif_df
 
-            except Exception as e:
-                logger.warning(f"[Attempt {attempt + 1}] Simulation failed with error:\n{e}")
-                attempt += 1
-                if attempt > max_retries:
-                    logger.error("Maximum retry attempts reached. Aborting.")
-                    return None, None, None, None
+            # except Exception as e:
+            #     logger.warning(f"[Attempt {attempt + 1}] Simulation failed with error:\n{e}")
+            #     attempt += 1
+            #     if attempt > max_retries:
+            #         logger.error("Maximum retry attempts reached. Aborting.")
+            #         return None, None, None, None
 
     if args.ligand.endswith('.pdbqt'):
         args.multi = True
-        patt = run_vina_split(args.ligand)
+        patt, max_model = run_vina_split(args.ligand)
         output_ligs = convert_pdbqt_to_mol2(patt)
-
         for ix, lig in enumerate(output_ligs):
             args.ligand = lig
             if ix == 0:
