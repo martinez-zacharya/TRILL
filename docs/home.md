@@ -48,7 +48,6 @@ pip install torch_geometric -f https://data.pyg.org/whl/torch-2.7.0+cu126.html ;
 pip install git+https://github.com/martinez-zacharya/lightdock.git@03a8bc4888c0ff8c98b7f0df4b3c671e3dbf3b1f git+https://github.com/martinez-zacharya/ECPICK.git git+https://github.com/martinez-zacharya/CaLM.git git+https://github.com/martinez-zacharya/SCASA.git git+https://github.com/chemosim-lab/ProLIF.git setuptools==69.5.1 rna-fm ;
 pip install https://github.com/Dao-AILab/flash-attention/releases/download/v2.7.4.post1/flash_attn-2.7.4.post1+cu12torch2.6cxx11abiTRUE-cp311-cp311-linux_x86_64.whl ;
 micromamba install -c conda-forge openbabel pdbfixer smina fpocket vina openff-toolkit openmmforcefields setuptools=69.5.1 python=3.11 cuda-version=12.6 ;
-pip install OpenMM swig 
 ```
 3. Next, simply install TRILL!
 ```shell
@@ -84,7 +83,7 @@ positional arguments:
     utils               Misc utilities
     lang_gen            Generate proteins using large language models
     fold                Predict monomeric 3D protein structures using ESMFold, protein
-                        complexes with ligands using Boltz-1/Chai-1, and obtain 3Di
+                        complexes with ligands using Boltz-2/Chai-1, and obtain 3Di
                         structure for use with Foldseek to perform remote homology
                         detection
     diff_gen            Generate proteins using Denoising Diffusion models
