@@ -5,7 +5,8 @@ def setup(subparsers):
         "workflow",
         help="Choose workflow which chains together TRILL commands and utilities. ",
         action="store",
-        choices=("foldtune",)
+        choices=("foldtune")
+        # choices=("foldtune", "Bindcraftish")
     )
 
     workflow.add_argument(
@@ -83,5 +84,9 @@ def run(args):
     if args.workflow == 'foldtune':
         logger.info('Beginning Foldtuning')
         foldtune(args)
+
+    # elif args.workflow == 'Bindcraftish':
+    #     logger.info('Beginning Bindcraftish')
+        
 
         

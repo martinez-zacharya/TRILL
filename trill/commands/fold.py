@@ -1,13 +1,13 @@
 def setup(subparsers):
     fold = subparsers.add_parser(
         "fold",
-        help="Predict 3D protein structures using ESMFold or obtain 3Di structure for use with Foldseek to perform "
+        help="Predict monomeric 3D protein structures using ESMFold, protein complexes with ligands using Boltz-1/Chai-1, and obtain 3Di structure for use with Foldseek to perform "
              "remote homology detection")
 
     fold.add_argument(
         "model",
         help="Choose your desired model.",
-        choices=("Chai-1", "Boltz-1", "ESMFold", "ProstT5")
+        choices=("Chai-1", "Boltz-2", "ESMFold", "ProstT5")
     )
     fold.add_argument(
         "--strategy",
@@ -26,7 +26,7 @@ def setup(subparsers):
 
     fold.add_argument(
         "--msa",
-        help="Boltz-1/Chai-1: Use ColabFold Server to generate MSA for input and subsequent inference, may improve results",
+        help="Boltz-2/Chai-1: Use ColabFold Server to generate MSA for input and subsequent inference, may improve results",
         action="store_true",
         default=False,
     )
@@ -68,6 +68,7 @@ def run(args):
     from git import Repo
     import re
     import textwrap
+    # from trill.utils.rarefold import setup_rarefold
     # from trill.utils.rosettafold_aa import rfaa_setup
     from .commands_common import cache_dir, get_logger
 
@@ -143,6 +144,9 @@ def run(args):
                     with open(os.path.join(args.outdir, f"{iden}.pdb"), "w") as f:
                         f.write("".join(out))
 
+    # elif args.model == "RareFold":
+    #     logger.info('Finding RareFold dependencies...')
+    #     setup_rarefold(cache_dir)
     elif args.model == "ProstT5":
         model = ProstT5(args)
         data = esm.data.FastaBatchedDataset.from_file(args.query)
@@ -209,7 +213,7 @@ def run(args):
             # 'default' setup
             num_trunk_recycles=3,
             num_diffn_timesteps=200,
-            msa_server=True if args.msa else False,
+            use_msa_server=True if args.msa else False,
             seed=int(args.RNG_seed),
             # device="cuda:0",
             use_esm_embeddings=True,
@@ -252,7 +256,7 @@ def run(args):
         df = pd.DataFrame(data)
         df.to_csv(os.path.join(npz_dir, f'{args.name}_Chai_scores.csv'), index=False)
 
-    elif args.model == 'Boltz-1':
+    elif args.model == 'Boltz-2':
 
         if not os.path.exists(os.path.join(cache_dir, "boltz")):
             logger.info("Cloning Boltz")

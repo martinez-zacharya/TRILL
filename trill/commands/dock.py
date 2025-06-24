@@ -6,8 +6,8 @@ def setup(subparsers):
 
     dock.add_argument(
         "algorithm",
-        help="LightDock and GeoDock are only able to dock proteins-proteins currently. Vina, Smina and DiffDock allow for docking small molecules to proteins.",
-        choices=["DiffDock", "DiffDock-L", "Vina", "Smina", "LightDock", "GeoDock"]
+        help="LightDock and GeoDock are only able to dock proteins-proteins currently. Vina, Smina, Gnina and DiffDock allow for docking small molecules to proteins.",
+        choices=["DiffDock", "DiffDock-L", "Vina", "Smina", "Gnina", "LightDock", "GeoDock"]
     )
 
     dock.add_argument(
@@ -157,28 +157,28 @@ def setup(subparsers):
         default=None
     )
 
-    dock.add_argument(
-        "--membrane",
-        help="LightDock: If selected, TRILL will insert your protein into a lipid bilary using Insane",
-        action="store_true",
-        default=None
-    )
+    # dock.add_argument(
+    #     "--membrane",
+    #     help="LightDock: If selected, TRILL will insert your protein into a lipid bilary using Insane",
+    #     action="store_true",
+    #     default=None
+    # )
 
-    dock.add_argument(
-        "--lipid_upper",
-        help="LightDock: Use to change the lipid composition for the upper leaflet (format: LIPID:ratio). Can be repeated like --lipid_upper POPC:1 DOPE:1",
-        action="append",
-        nargs="+",
-        default=["POPC:1"]
-    )
+    # dock.add_argument(
+    #     "--lipid_upper",
+    #     help="LightDock: Use to change the lipid composition for the upper leaflet (format: LIPID:ratio). Can be repeated like --lipid_upper POPC:1 DOPE:1",
+    #     action="append",
+    #     nargs="+",
+    #     default=["POPC:1"]
+    # )
 
-    dock.add_argument(
-        "--lipid_lower",
-        help="LightDock: Use to change the lipid composition for the lower leaflet (format: LIPID:ratio). Can be repeated",
-        action="append",
-        nargs="+",
-        default=["POPC:1"]
-    )
+    # dock.add_argument(
+    #     "--lipid_lower",
+    #     help="LightDock: Use to change the lipid composition for the lower leaflet (format: LIPID:ratio). Can be repeated",
+    #     action="append",
+    #     nargs="+",
+    #     default=["POPC:1"]
+    # )
 
 
 def run(args):
@@ -224,7 +224,8 @@ def run(args):
 
         protein_name = os.path.splitext(os.path.basename(args.protein))[0]
 
-    if args.algorithm == "Smina" or args.algorithm == "Vina":
+    if args.algorithm == "Smina" or args.algorithm == "Vina" or args.algorithm == "Gnina":
+        args.cache_dir = cache_dir
         docking_results = perform_docking(args, ligands)
         write_docking_results_to_file(docking_results, args, protein_name, args.algorithm)
     elif args.algorithm == "LightDock":
@@ -275,18 +276,21 @@ def run(args):
             trainer = pl.Trainer(enable_checkpointing=False, callbacks=[pred_writer], logger=ml_logger,
                                  num_nodes=int(args.nodes))
         else:
-            trainer = pl.Trainer(enable_checkpointing=False, precision=16, devices=int(args.GPUs),
+            trainer = pl.Trainer(enable_checkpointing=False, precision='16-mixed', devices=int(args.GPUs),
                                  callbacks=[pred_writer], accelerator="gpu", logger=ml_logger, num_nodes=int(args.nodes))
 
         trainer.predict(model, loader)
         parse_and_save_all_predictions(args)
         master_embs = []
-        emb_file = torch.load(os.path.join(args.outdir, "predictions_0.pt"))
-        for entry in emb_file[0]:
-            emb = entry[0][0][0]
-            master_embs.append(emb)
+        emb_file = torch.load(os.path.join(args.outdir, "predictions_0.pt"), weights_only=False)
+        for entry in emb_file:
+            if len(entry) == 0:
+                continue
+            elif entry[0][0][1] == rec_name:
+                rec_emb = entry[0][0][0]
+            else:
+                master_embs.append(entry[0][0][0])
 
-        rec_emb = master_embs.pop(0)
         for lig_name, lig_seq, lig_coord, lig_emb in zip(lig_names, lig_seqs, lig_coords, master_embs):
             em_geodock = EnMasseGeoDockRunner(args, ckpt_file=weights_path)
             pred = em_geodock.dock(
