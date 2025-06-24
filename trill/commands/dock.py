@@ -276,18 +276,21 @@ def run(args):
             trainer = pl.Trainer(enable_checkpointing=False, callbacks=[pred_writer], logger=ml_logger,
                                  num_nodes=int(args.nodes))
         else:
-            trainer = pl.Trainer(enable_checkpointing=False, precision=16, devices=int(args.GPUs),
+            trainer = pl.Trainer(enable_checkpointing=False, precision='16-mixed', devices=int(args.GPUs),
                                  callbacks=[pred_writer], accelerator="gpu", logger=ml_logger, num_nodes=int(args.nodes))
 
         trainer.predict(model, loader)
         parse_and_save_all_predictions(args)
         master_embs = []
         emb_file = torch.load(os.path.join(args.outdir, "predictions_0.pt"), weights_only=False)
-        for entry in emb_file[0]:
-            emb = entry[0][0][0]
-            master_embs.append(emb)
+        for entry in emb_file:
+            if len(entry) == 0:
+                continue
+            elif entry[0][0][1] == rec_name:
+                rec_emb = entry[0][0][0]
+            else:
+                master_embs.append(entry[0][0][0])
 
-        rec_emb = master_embs.pop(0)
         for lig_name, lig_seq, lig_coord, lig_emb in zip(lig_names, lig_seqs, lig_coords, master_embs):
             em_geodock = EnMasseGeoDockRunner(args, ckpt_file=weights_path)
             pred = em_geodock.dock(

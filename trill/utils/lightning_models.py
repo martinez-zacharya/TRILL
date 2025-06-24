@@ -203,10 +203,13 @@ class ESM(pl.LightningModule):
         if args.command == 'embed' or args.command == 'dock':
             self.per_AA = args.per_AA
             self.avg = args.avg
-        if args.poolparti:
-            self.poolparti = True
-        else:
+        if args.command == 'dock':
             self.poolparti = False
+        else:
+            if args.poolparti:
+                self.poolparti = True
+            else:
+                self.poolparti = False
 
     def training_step(self, batch, batch_idx):
         torch.cuda.empty_cache()
