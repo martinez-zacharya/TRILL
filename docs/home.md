@@ -39,33 +39,15 @@ TRILL (**TR**aining and **I**nference using the **L**anguage of **L**ife) is a s
 ```
 2. Once micromamba is set up, create a new environment with
 ```shell
-micromamba create -n TRILL python=3.10 ; micromamba activate TRILL
-micromamba install -c pytorch -c nvidia pytorch=2.3.0 pytorch-cuda=12.1 torchdata python=3.11
-micromamba install -c conda-forge openbabel pdbfixer swig openmm smina fpocket vina openff-toolkit openmmforcefields setuptools=69.5.1 python=3.11
-micromamba install -c bioconda foldseek pyrsistent python=3.11
-micromamba install -c "dglteam/label/cu121" dgl python=3.11
-micromamba install -c pyg pyg pytorch-cluster pytorch-sparse pytorch-scatter python=3.11 pytorch=2.3.0 pytorch-cuda=12.1
-pip install git+https://github.com/martinez-zacharya/lightdock.git@03a8bc4888c0ff8c98b7f0df4b3c671e3dbf3b1f git+https://github.com/martinez-zacharya/ECPICK.git git+https://github.com/martinez-zacharya/CaLM.git setuptools==69.5.1 rna-fm
-pip install https://github.com/tridao/flash-attention-wheels/releases/download/v2.3.5.post7/flash_attn_wheels_test-2.3.5.post7+cu122torch2.1cxx11abiFALSE-cp311-cp311-linux_x86_64.whl
-```
-2. Once micromamba is set up, create a new environment with
-```shell
-micromamba create -n TRILL python=3.11 ; micromamba activate TRILL
-# micromamba install -c pytorch -c nvidia pytorch=2.3.0 pytorch-cuda=12.1 torchdata python=3.11
-# micromamba install -c conda-forge openbabel pdbfixer swig openmm smina fpocket vina openff-toolkit openmmforcefields setuptools=69.5.1 python=3.11
-# pip install torch==2.7.1 torchdata==0.9.0
-micromamba install -c conda-forge pytorch=2.7.1 compilers
-micromamba install -c bioconda foldseek pyrsistent python=3.11
-micromamba install -c dglteam/label/th24_cu124 dgl
-# micromamba install -c "dglteam/label/cu121" dgl python=3.11
-pip install pyg_lib torch_scatter torch_sparse torch_cluster torch_spline_conv -f https://data.pyg.org/whl/torch-2.7.0+cu126.html
-pip install torch_geometric -f https://data.pyg.org/whl/torch-2.7.0+cu126.html
-# micromamba install -c pyg pyg pytorch-cluster pytorch-sparse pytorch-scatter python=3.11 pytorch=2.3.0 pytorch-cuda=12.1
-pip install git+https://github.com/martinez-zacharya/lightdock.git@03a8bc4888c0ff8c98b7f0df4b3c671e3dbf3b1f git+https://github.com/martinez-zacharya/ECPICK.git git+https://github.com/martinez-zacharya/CaLM.git git+https://github.com/martinez-zacharya/SCASA.git git+https://github.com/chemosim-lab/ProLIF.git setuptools==69.5.1 rna-fm
-pip install https://github.com/Dao-AILab/flash-attention/releases/download/v2.7.4.post1/flash_attn-2.7.4.post1+cu12torch2.6cxx11abiTRUE-cp311-cp311-linux_x86_64.whl
-# micromamba install -c conda-forge openbabel pdbfixer swig openmm smina fpocket vina openff-toolkit openmmforcefields setuptools=69.5.1 python=3.11
-micromamba install -c conda-forge openbabel pdbfixer smina fpocket vina openff-toolkit openmmforcefields setuptools=69.5.1 python=3.11 cuda-version=12.6
-# pip install https://github.com/tridao/flash-attention-wheels/releases/download/v2.3.5.post7/flash_attn_wheels_test-2.3.5.post7+cu122torch2.1cxx11abiFALSE-cp311-cp311-linux_x86_64.whl
+micromamba create -n TRILL python=3.11 ; micromamba activate TRILL ;
+micromamba install -c conda-forge pytorch=2.7.1 compilers ;
+micromamba install -c bioconda foldseek pyrsistent python=3.11 ;
+micromamba install -c dglteam/label/th24_cu124 dgl ;
+pip install pyg_lib torch_scatter torch_sparse torch_cluster torch_spline_conv -f https://data.pyg.org/whl/torch-2.7.0+cu126.html ;
+pip install torch_geometric -f https://data.pyg.org/whl/torch-2.7.0+cu126.html ;
+pip install git+https://github.com/martinez-zacharya/lightdock.git@03a8bc4888c0ff8c98b7f0df4b3c671e3dbf3b1f git+https://github.com/martinez-zacharya/ECPICK.git git+https://github.com/martinez-zacharya/CaLM.git git+https://github.com/martinez-zacharya/SCASA.git git+https://github.com/chemosim-lab/ProLIF.git setuptools==69.5.1 rna-fm ;
+pip install https://github.com/Dao-AILab/flash-attention/releases/download/v2.7.4.post1/flash_attn-2.7.4.post1+cu12torch2.6cxx11abiTRUE-cp311-cp311-linux_x86_64.whl ;
+micromamba install -c conda-forge openbabel pdbfixer smina fpocket vina openff-toolkit openmmforcefields setuptools=69.5.1 python=3.11 cuda-version=12.6 ;
 pip install OpenMM swig 
 ```
 3. Next, simply install TRILL!
@@ -76,27 +58,38 @@ pip install trill-proteins
 ## Use
 
 ```shell
-usage: trill [-h] [--nodes NODES] [--logger LOGGER] [--profiler] [--RNG_seed RNG_SEED] [--outdir OUTDIR] [--n_workers N_WORKERS]
-             name GPUs {dock,classify,inv_fold_gen,embed,score,diff_gen,regress,finetune,simulate,fold,visualize,utils,lang_gen,workflow} ...
+usage: trill [-h] [--nodes NODES] [--logger LOGGER] [--profiler] [--RNG_seed RNG_SEED]
+             [--outdir OUTDIR] [--n_workers N_WORKERS]
+             name GPUs
+             {classify,inv_fold_gen,dock,score,visualize,workflow,regress,embed,utils,lang_gen,fold,diff_gen,finetune,simulate}
+             ...
 
 positional arguments:
   name                  Name of run
   GPUs                  Input total number of GPUs per node
-  {dock,classify,inv_fold_gen,embed,score,diff_gen,regress,finetune,simulate,fold,visualize,utils,lang_gen,workflow}
-    dock                Perform molecular docking with proteins and ligands. Note that you should relax your protein receptor with Simulate or another method before docking.
-    classify            Classify proteins using either pretrained classifiers or train/test your own.
+  {classify,inv_fold_gen,dock,score,visualize,workflow,regress,embed,utils,lang_gen,fold,diff_gen,finetune,simulate}
+    classify            Classify proteins using either pretrained classifiers or train/test
+                        your own.
     inv_fold_gen        Generate proteins using inverse folding
-    embed               Embed sequences of interest
-    score               Use ESM-1v or ESM2 to score protein sequences or ProteinMPNN to score protein structures
-    diff_gen            Generate proteins using RFDiffusion
-    regress             Train you own regressors on input protein sequences and some sort of score.
-    finetune            Finetune protein language models
-    simulate            Use OpenMM to perform molecular dynamics
-    fold                Predict 3D protein structures using ESMFold or obtain 3Di structure for use with Foldseek to perform remote homology detection
+    dock                Perform molecular docking with proteins and ligands. Note that you
+                        should relax your protein receptor with Simulate or another method
+                        before docking.
+    score               Use ESM-1v or ESM2 to score protein sequences, ProteinMPNN to score
+                        protein structures and SC for protein complexes
     visualize           Reduce dimensionality of embeddings to 2D
+    workflow            Perform workflow of interest
+    regress             Train you own regressors on input protein sequences and some sort
+                        of score.
+    embed               Embed sequences/SMILES of interest
     utils               Misc utilities
     lang_gen            Generate proteins using large language models
-    workflow            Perform workflow of interest
+    fold                Predict monomeric 3D protein structures using ESMFold, protein
+                        complexes with ligands using Boltz-1/Chai-1, and obtain 3Di
+                        structure for use with Foldseek to perform remote homology
+                        detection
+    diff_gen            Generate proteins using Denoising Diffusion models
+    finetune            Finetune protein language models
+    simulate            Use OpenMM to perform molecular dynamics
 
 options:
   -h, --help            show this help message and exit
