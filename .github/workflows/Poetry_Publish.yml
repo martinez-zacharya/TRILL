@@ -25,10 +25,18 @@ jobs:
         with:
           poetry-version: ${{ matrix.poetry-version }}
 
-      - name: Set Poetry Python Version
-        run: poetry env use python
+      - name: Set Poetry to Use Setup Python
+        run: |
+          poetry env use $(which python)
 
-      - name: Configure and Publish to PyPI
+      - name: Print Debugging Info
+        run: |
+          which python
+          python --version
+          poetry --version
+          poetry env info
+
+      - name: Publish Package
         env:
           POETRY_PYPI_TOKEN_PYPI: ${{ secrets.PYPI_TOKEN }}
         run: |
