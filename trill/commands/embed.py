@@ -1,5 +1,5 @@
 def setup(subparsers):
-    embed = subparsers.add_parser("embed", help="Embed sequences of interest")
+    embed = subparsers.add_parser("embed", help="Embed sequences/SMILES of interest")
 
     embed.add_argument(
         "model",
