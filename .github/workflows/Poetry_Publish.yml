@@ -9,7 +9,7 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        python-version: ["3.11"]
+        python-version: ["3.11.0"]
         poetry-version: ["1.8.3"]
 
     steps:
@@ -18,7 +18,7 @@ jobs:
       - name: Setup Python
         uses: actions/setup-python@v4
         with:
-          python-version: '3.11'
+          python-version: '3.11.0'
 
       - name: Install Poetry
         uses: abatilo/actions-poetry@v2
