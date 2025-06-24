@@ -1,5 +1,5 @@
 def setup(subparsers):
-    score = subparsers.add_parser("score", help="Use ESM-1v or ESM2 to score protein sequences or ProteinMPNN to score protein structures")
+    score = subparsers.add_parser("score", help="Use ESM-1v or ESM2 to score protein sequences, ProteinMPNN to score protein structures and SC for protein complexes")
 
     score.add_argument(
         "scorer",

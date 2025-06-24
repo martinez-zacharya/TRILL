@@ -484,7 +484,7 @@ def set_simulation_parameters2(platform, properties, args):
     logger.info(f'System has added {args.protein} with {modeller.topology.getNumAtoms()} atoms')
     lig_positions = []
     lig_tops = []
-    if args.ligand:
+    if args.ligand and not args.ligand.endswith('.pdb'):
         for lig in ligs:
             lig_topology = lig.to_topology()
             positions_array = lig_topology.get_positions().magnitude
@@ -492,6 +492,14 @@ def set_simulation_parameters2(platform, properties, args):
             final_positions = Quantity(vec3_positions, unit.nanometer)
             modeller.add(lig_topology.to_openmm(), final_positions)
             logger.info(f'System has added {lig} and with {lig.n_atoms} atoms')
+    else:
+        for lig in ligs:
+            lig_topology = lig.getTopology()
+            positions_array = lig.getPositions()
+            vec3_positions = [Vec3(x, y, z) for x, y, z in positions_array]
+            final_positions = Quantity(vec3_positions, unit.nanometer)
+            modeller.add(lig_topology, final_positions)
+            logger.info(f'System has added {lig} and with {lig_topology.getNumAtoms()} atoms')
     ligand_atom_indices = list(range(initial_atom_count, modeller.topology.getNumAtoms()))
 
     if 'tip' in args.solvent:
