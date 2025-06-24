@@ -27,6 +27,8 @@ jobs:
 
       - name: Set Poetry to Use Setup Python
         run: |
+          which python
+          python --version
           poetry env use $(which python)
 
       - name: Print Debugging Info
