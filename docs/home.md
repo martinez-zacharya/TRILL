@@ -33,7 +33,7 @@ TRILL (**TR**aining and **I**nference using the **L**anguage of **L**ife) is a s
 
 
 ## Set-Up
-1. TRILL has only ever been tested on Linux machines, but it might work on Windows with WSL2. You can use TRILL with Google Colab by using the installation instructions from [this notebook](https://colab.research.google.com/drive/1UK5ULlFAmcjteabgXsfjizqFF35jJlAz?usp=sharing). For regular installations, I recommend using micromamba or mamba. If you don't have mamba installed, use this command
+1. TRILL has only ever been tested on Linux machines, but it might work on Windows with WSL2. You can use TRILL with Google Colab by using the installation instructions from [this notebook](https://colab.research.google.com/drive/1eFJVh4tN3G2mz6w-G5hNUS6jb7JKMiQb?usp=sharing). For regular installations, I recommend using micromamba or mamba. If you don't have mamba installed, use this command
 ```shell
 "${SHELL}" <(curl -L micro.mamba.pm/install.sh)
 ```
