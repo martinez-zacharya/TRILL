@@ -30,19 +30,70 @@ from trill.utils.safe_load import safe_torch_load
 def load_structure(fpath, chain=None):
     """
     Args:
-        fpath: filepath to either pdb or cif file
+        fpath: filepath to pdb/cif file, or RCSB PDB ID (4 characters)
         chain: the chain id or list of chain ids to load
     Returns:
         biotite.structure.AtomArray
     """
-    if fpath.endswith('cif'):
+    import gzip
+    
+    # Handle gzipped files
+    if fpath.endswith('.gz'):
+        if fpath.endswith('.pdb.gz'):
+            with gzip.open(fpath, 'rt') as fin:
+                pdbf = pdb.PDBFile.read(fin)
+            structure = pdb.get_structure(pdbf, model=1)
+        elif fpath.endswith('.cif.gz'):
+            with gzip.open(fpath, 'rt') as fin:
+                pdbxf = pdbx.BinaryCifFile.read(fin)
+            structure = pdbx.get_structure(pdbxf, model=1)
+        else:
+            raise ValueError(f"Unsupported compressed file format: {fpath}")
+    elif fpath.endswith('cif'):
         with open(fpath) as fin:
-            pdbxf = pdbx.PDBxFile.read(fin)
+            pdbxf = pdbx.BinaryCifFile.read(fin)
         structure = pdbx.get_structure(pdbxf, model=1)
     elif fpath.endswith('pdb') or fpath.endswith('3di'):
         with open(fpath) as fin:
             pdbf = pdb.PDBFile.read(fin)
         structure = pdb.get_structure(pdbf, model=1)
+    else:
+        # Check if it's a file without extension or an RCSB PDB ID
+        if os.path.exists(fpath):
+            # Try to treat as PDB file without extension
+            try:
+                with open(fpath) as fin:
+                    pdbf = pdb.PDBFile.read(fin)
+                structure = pdb.get_structure(pdbf, model=1)
+            except Exception as e:
+                raise ValueError(f"Unable to load structure from {fpath}. Error: {e}")
+        else:
+            # Treat as RCSB PDB ID and download
+            import urllib.request
+            import tempfile
+            
+            # Validate PDB ID format (should be 4 characters)
+            pdb_id = os.path.basename(fpath).upper()
+            if len(pdb_id) != 4 or not pdb_id.isalnum():
+                raise ValueError(f"Invalid PDB ID format: {pdb_id}. PDB IDs should be 4 alphanumeric characters.")
+            
+            # Download PDB file
+            pdb_url = f"https://files.rcsb.org/download/{pdb_id}.pdb"
+            try:
+                with tempfile.NamedTemporaryFile(mode='w+t', suffix='.pdb', delete=False) as tmp_file:
+                    print(f"Downloading PDB {pdb_id} from RCSB...")
+                    urllib.request.urlretrieve(pdb_url, tmp_file.name)
+                    
+                    # Read the downloaded file
+                    with open(tmp_file.name) as fin:
+                        pdbf = pdb.PDBFile.read(fin)
+                    structure = pdb.get_structure(pdbf, model=1)
+                    
+                    # Clean up temporary file
+                    os.unlink(tmp_file.name)
+                    
+            except Exception as e:
+                raise ValueError(f"Failed to download or parse PDB {pdb_id} from RCSB. Error: {e}")
     bbmask = filter_peptide_backbone(structure)
     structure = structure[bbmask]
     all_chains = get_chains(structure)
