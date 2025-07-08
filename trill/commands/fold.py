@@ -113,7 +113,7 @@ def run(args):
                             print(e)
                         else:
                             print(e)
-                            pass
+                        continue  # Skip to next iteration when there's an error
                 else:
                     if int(args.batch_size) > 1:
                         tokenized_input = tokenizer(batch_input_ids, return_tensors="pt",
@@ -134,6 +134,7 @@ def run(args):
                             print(e)
                         else:
                             print(e)
+                        continue  # Skip to next iteration when there's an error
                 output = convert_outputs_to_pdb(output)
                 if int(args.batch_size) > 1:
                     start_idx = i
