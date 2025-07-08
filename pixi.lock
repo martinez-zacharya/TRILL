@@ -103,7 +103,10 @@ environments:
       - conda: https://conda.anaconda.org/conda-forge/linux-64/cuda-crt-tools-12.9.86-ha770c72_1.conda
       - conda: https://conda.anaconda.org/conda-forge/linux-64/cuda-cudart-12.9.79-h5888daf_0.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/cuda-cudart_linux-64-12.9.79-h3f2d84a_0.conda
+      - conda: https://conda.anaconda.org/conda-forge/linux-64/cuda-cuobjdump-12.9.82-hbd13f7d_0.conda
+      - conda: https://conda.anaconda.org/conda-forge/linux-64/cuda-cupti-12.9.79-h9ab20c4_0.conda
       - conda: https://conda.anaconda.org/conda-forge/linux-64/cuda-nvcc-tools-12.9.86-he02047a_1.conda
+      - conda: https://conda.anaconda.org/conda-forge/linux-64/cuda-nvdisasm-12.9.88-hbd13f7d_0.conda
       - conda: https://conda.anaconda.org/conda-forge/linux-64/cuda-nvrtc-12.9.86-h5888daf_0.conda
       - conda: https://conda.anaconda.org/conda-forge/linux-64/cuda-nvtx-12.9.79-h5888daf_0.conda
       - conda: https://conda.anaconda.org/conda-forge/linux-64/cuda-nvvm-tools-12.9.86-he02047a_1.conda
@@ -139,6 +142,7 @@ environments:
       - conda: https://conda.anaconda.org/conda-forge/noarch/ffmpy-0.3.0-pyhb6f538c_0.tar.bz2
       - conda: https://conda.anaconda.org/conda-forge/linux-64/fftw-3.3.10-nompi_hf1063bd_110.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/filelock-3.18.0-pyhd8ed1ab_0.conda
+      - conda: https://conda.anaconda.org/conda-forge/linux-64/flash-attn-2.6.1-py311h0e90392_0.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/flask-3.1.1-pyhd8ed1ab_0.conda
       - conda: https://conda.anaconda.org/conda-forge/linux-64/flatbuffers-24.3.25-h59595ed_0.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/flexcache-0.3-pyhd8ed1ab_1.conda
@@ -588,10 +592,12 @@ environments:
       - conda: https://conda.anaconda.org/conda-forge/linux-64/torch-scatter-2.1.1-py311h1d626d3_6.conda
       - conda: https://conda.anaconda.org/conda-forge/linux-64/torchdata-0.11.0-py311hc32fc52_0.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/torchmetrics-1.7.4-pyhd8ed1ab_0.conda
+      - conda: https://conda.anaconda.org/conda-forge/linux-64/torchvision-0.18.1-cuda120py311ha267787_1.conda
       - conda: https://conda.anaconda.org/conda-forge/linux-64/tornado-6.5.1-py311h9ecbd09_0.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/tqdm-4.67.1-pyhd8ed1ab_1.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/traitlets-5.14.3-pyhd8ed1ab_1.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/transformers-4.53.1-pyhd8ed1ab_0.conda
+      - conda: https://conda.anaconda.org/conda-forge/linux-64/triton-3.3.1-cuda126py311h126903f_1.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/typed-argument-parser-1.10.1-pyhd8ed1ab_1.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/typeguard-4.4.4-pyhd8ed1ab_0.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/typer-0.16.0-pyh167b9f4_0.conda
@@ -675,7 +681,6 @@ environments:
       - pypi: git+https://github.com/martinez-zacharya/ECPICK.git#03c04834f40e6cbb084896196ea10f36a4e0cf0a
       - pypi: https://files.pythonhosted.org/packages/90/04/4a730d74fd908daad86d6b313f235cdf8e0cf1c255b392b7174ff63ea81a/einx-0.3.0-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/c1/08/b3334d7b543ac10dcb129cef4f84723ab696725512f18d69ab3a784b0bf5/fairscale-0.4.13.tar.gz
-      - pypi: direct+https://github.com/Dao-AILab/flash-attention/releases/download/v2.7.4.post1/flash_attn-2.7.4.post1+cu12torch2.6cxx11abiTRUE-cp311-cp311-linux_x86_64.whl
       - pypi: https://files.pythonhosted.org/packages/52/fc/1b28f7973952934737387172ef0a40c0ea7cb9a6132264c3e731760f8efa/freesasa-2.2.1.tar.gz
       - pypi: https://files.pythonhosted.org/packages/04/13/d9839089b900fa7b479cce495d62110cddc4bd5630a04d8469916c0e79c5/frozendict-2.4.6-py311-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/61/8c/dce3b1b7593858eba995b2dfdb833f872c7f863e3da92aab7128a6b11af4/furl-2.1.4-py2.py3-none-any.whl
@@ -704,7 +709,6 @@ environments:
       - pypi: direct+https://data.pyg.org/whl/torch-2.7.0%2Bcu126/torch_cluster-1.6.3%2Bpt27cu126-cp311-cp311-linux_x86_64.whl
       - pypi: direct+https://data.pyg.org/whl/torch-2.7.0%2Bcu126/torch_sparse-0.6.18%2Bpt27cu126-cp311-cp311-linux_x86_64.whl
       - pypi: direct+https://data.pyg.org/whl/torch-2.7.0%2Bcu126/torch_spline_conv-1.2.2%2Bpt27cu126-cp311-cp311-linux_x86_64.whl
-      - pypi: https://files.pythonhosted.org/packages/82/d8/fad23c368781b6e6df254287511683b4d151132de64c47a6fea5c3280ba6/torchvision-0.18.1-cp311-cp311-manylinux1_x86_64.whl
       - pypi: https://files.pythonhosted.org/packages/bd/e4/7bbbf0010d85e79e3adda93835433ea93b890452ea643047596ba2537b7e/vit_pytorch-1.10.1-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/47/6a/62e288da7bcda82b935ff0c6cfe542970f04e29c756b0e147251b2fb251f/wget-3.2.zip
       - pypi: https://files.pythonhosted.org/packages/d8/9d/70cd13d4213bd7337e1922a93d7e856321532426f611255dbd67a175a5f0/x_transformers-2.4.9-py3-none-any.whl
@@ -2092,6 +2096,31 @@ packages:
   purls: []
   size: 197249
   timestamp: 1749218394213
+- conda: https://conda.anaconda.org/conda-forge/linux-64/cuda-cuobjdump-12.9.82-hbd13f7d_0.conda
+  sha256: a4f37cd8823d209639bdda1eea3ee0eb01040e44e2480c2f393e684c472c2f0c
+  md5: 667a138d80047e7869f5330087772fd7
+  depends:
+  - __glibc >=2.17,<3.0.a0
+  - cuda-nvdisasm
+  - cuda-version >=12.9,<12.10.0a0
+  - libgcc >=13
+  - libstdcxx >=13
+  license: LicenseRef-NVIDIA-End-User-License-Agreement
+  purls: []
+  size: 243219
+  timestamp: 1749223489014
+- conda: https://conda.anaconda.org/conda-forge/linux-64/cuda-cupti-12.9.79-h9ab20c4_0.conda
+  sha256: 55922005d1b31ba090455ab39d2e5a9b771fe503713d4b7699752a76aedccb2b
+  md5: 229b3cc1f6b6b633923e1c9856ee0d80
+  depends:
+  - __glibc >=2.28,<3.0.a0
+  - cuda-version >=12.9,<12.10.0a0
+  - libgcc >=13
+  - libstdcxx >=13
+  license: LicenseRef-NVIDIA-End-User-License-Agreement
+  purls: []
+  size: 1842820
+  timestamp: 1749218443367
 - conda: https://conda.anaconda.org/conda-forge/linux-64/cuda-nvcc-tools-12.9.86-he02047a_1.conda
   sha256: 7e5ab4ae67254c6d814007708a8183355684c81a917b383a7f042c25149737c3
   md5: a076f1ec812ce8fceacd538d6e672f37
@@ -2108,6 +2137,18 @@ packages:
   purls: []
   size: 27490340
   timestamp: 1749226666055
+- conda: https://conda.anaconda.org/conda-forge/linux-64/cuda-nvdisasm-12.9.88-hbd13f7d_0.conda
+  sha256: 6ef7c122897a9e27bc3aaed1745ea03bfecb5f553d420b0e4bf2ef6f568aab81
+  md5: 7e9e4991e5890f32e8ef3c9a971171df
+  depends:
+  - __glibc >=2.17,<3.0.a0
+  - cuda-version >=12.9,<12.10.0a0
+  - libgcc >=13
+  - libstdcxx >=13
+  license: LicenseRef-NVIDIA-End-User-License-Agreement
+  purls: []
+  size: 5517799
+  timestamp: 1749221325784
 - conda: https://conda.anaconda.org/conda-forge/linux-64/cuda-nvrtc-12.9.86-h5888daf_0.conda
   sha256: 4d339c411c23d40ff3a8671284e476a31b31273b1a4d29c680c01940a559bd95
   md5: 9c52e4389e54d4f5800b23512e479479
@@ -2776,13 +2817,27 @@ packages:
   - pkg:pypi/filelock?source=hash-mapping
   size: 17887
   timestamp: 1741969612334
-- pypi: direct+https://github.com/Dao-AILab/flash-attention/releases/download/v2.7.4.post1/flash_attn-2.7.4.post1+cu12torch2.6cxx11abiTRUE-cp311-cp311-linux_x86_64.whl
-  name: flash-attn
-  version: 2.7.4.post1
-  requires_dist:
-  - torch
+- conda: https://conda.anaconda.org/conda-forge/linux-64/flash-attn-2.6.1-py311h0e90392_0.conda
+  sha256: 6eb7e70e4b3d5bd3a525d3e9e3d2d9d30acb268fe0781f59da547e943dc7f613
+  md5: 8b765e036ed694c19e8c7fdc049b9625
+  depends:
+  - __glibc >=2.17,<3.0.a0
+  - cuda-cudart >=12.0.107,<13.0a0
+  - cuda-version >=12.0,<13
   - einops
-  requires_python: '>=3.9'
+  - libgcc-ng >=12
+  - libstdcxx-ng >=12
+  - libtorch >=2.3.1,<2.4.0a0
+  - python >=3.11,<3.12.0a0
+  - python_abi 3.11.* *_cp311
+  - pytorch * cuda*
+  - pytorch >=2.3.1,<2.4.0a0
+  license: BSD-3-Clause
+  license_family: BSD
+  purls:
+  - pkg:pypi/flash-attn?source=hash-mapping
+  size: 150501207
+  timestamp: 1721015258276
 - conda: https://conda.anaconda.org/conda-forge/noarch/flask-3.1.1-pyhd8ed1ab_0.conda
   sha256: 41c2dc7648acc51a2fd4715b916f04b166e5aa472ac62c5b34f314e0c96146dc
   md5: ffad1a6161226d41e3735b73bae5c71c
@@ -9686,16 +9741,34 @@ packages:
   - pkg:pypi/torchmetrics?source=hash-mapping
   size: 388105
   timestamp: 1751798140872
-- pypi: https://files.pythonhosted.org/packages/82/d8/fad23c368781b6e6df254287511683b4d151132de64c47a6fea5c3280ba6/torchvision-0.18.1-cp311-cp311-manylinux1_x86_64.whl
-  name: torchvision
-  version: 0.18.1
-  sha256: 9077cf590cdb3a5e8fdf5cdb71797f8c67713f974cf0228ecb17fcd670ab42f9
-  requires_dist:
-  - numpy
-  - torch==2.3.1
-  - pillow>=5.3.0,!=8.3.*
-  - scipy ; extra == 'scipy'
-  requires_python: '>=3.8'
+- conda: https://conda.anaconda.org/conda-forge/linux-64/torchvision-0.18.1-cuda120py311ha267787_1.conda
+  sha256: afd0940175deb4eb2d9717e12029dd07ee2d24cd16c04c6ae8555744d945a151
+  md5: ba9402a5b9d6774c59179a2a446138bd
+  depends:
+  - __glibc >=2.17,<3.0.a0
+  - cuda-version >=12.0,<13
+  - cudnn >=8.9.7.29,<9.0a0
+  - libcublas >=12.5.2.13,<13.0a0
+  - libcusolver >=11.6.2.40,<12.0a0
+  - libcusparse >=12.4.1.24,<13.0a0
+  - libgcc-ng >=12
+  - libjpeg-turbo >=3.0.0,<4.0a0
+  - libpng >=1.6.43,<1.7.0a0
+  - libstdcxx-ng >=12
+  - libtorch >=2.3.0,<2.4.0a0
+  - numpy >=1.19,<3
+  - pillow >=5.3.0,!=8.3.0,!=8.3.1
+  - python >=3.11,<3.12.0a0
+  - python_abi 3.11.* *_cp311
+  - pytorch 2.3.* cuda120*
+  - pytorch >=2.3.0,<2.4.0a0
+  - requests
+  license: BSD-3-Clause
+  license_family: BSD
+  purls:
+  - pkg:pypi/torchvision?source=hash-mapping
+  size: 8170552
+  timestamp: 1718092764237
 - conda: https://conda.anaconda.org/conda-forge/linux-64/tornado-6.5.1-py311h9ecbd09_0.conda
   sha256: 66cc98dbf7aafe11a4cb886a8278a559c1616c098ee9f36d41697eaeb0830a4d
   md5: 24e9f474abd101554b7a91313b9dfad6
@@ -9754,6 +9827,30 @@ packages:
   - pkg:pypi/transformers?source=hash-mapping
   size: 3873750
   timestamp: 1751629033273
+- conda: https://conda.anaconda.org/conda-forge/linux-64/triton-3.3.1-cuda126py311h126903f_1.conda
+  sha256: 0aa4627618c19561d14e5a3be26bd639eda2c79d4af3b928b7e40e85e922eb2b
+  md5: cd0b3ccd04afb6a57ba6922c4aff8f4f
+  depends:
+  - python
+  - setuptools
+  - cuda-nvcc-tools
+  - cuda-cuobjdump
+  - cuda-cudart
+  - cuda-cupti
+  - libstdcxx >=13
+  - libgcc >=13
+  - __glibc >=2.17,<3.0.a0
+  - cuda-version >=12.6,<13
+  - libzlib >=1.3.1,<2.0a0
+  - zstd >=1.5.7,<1.6.0a0
+  - cuda-cupti >=12.6.80,<13.0a0
+  - python_abi 3.11.* *_cp311
+  license: MIT
+  license_family: MIT
+  purls:
+  - pkg:pypi/triton?source=hash-mapping
+  size: 163140393
+  timestamp: 1750544115376
 - conda: https://conda.anaconda.org/conda-forge/noarch/typed-argument-parser-1.10.1-pyhd8ed1ab_1.conda
   sha256: 996c714b106b63bf12be4c26079efba7723a33ef65e2e676594ad1c6c911f3a8
   md5: 635f579b7058970d83708c27a2193df1
