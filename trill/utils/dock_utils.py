@@ -839,10 +839,12 @@ def save_complex(receptor_structure, ligand_structure, output_file):
 
 def downgrade_biopython():
     """ Downgrade biopython to version 1.7.9 """
-    # Check if we're in a pixi environment
-    if os.path.exists(os.path.join(os.path.dirname(sys.executable), '..', '..', 'pixi.toml')):
-        print("Warning: Running in pixi environment. Skipping package downgrade for LightDock compatibility.")
+    # Check if we're in a pixi environment or if pip is not available
+    if (os.path.exists(os.path.join(os.path.dirname(sys.executable), '..', '..', 'pixi.toml')) or
+        'pixi' in sys.executable or not shutil.which('pip')):
+        print("Warning: Running in pixi environment or pip not available. Skipping package downgrade for LightDock compatibility.")
         print("LightDock may not work properly with current package versions.")
+        print("Please ensure biopython==1.79, numpy==1.23.5, and pyparsing==3.1.1 are installed.")
         return
     
     # Try pip first
@@ -854,8 +856,9 @@ def downgrade_biopython():
 
 def upgrade_biopython(og_ver_biopython, og_ver_np, pypar_ver):
     """ Upgrade biopython back to the original version """
-    # Check if we're in a pixi environment
-    if os.path.exists(os.path.join(os.path.dirname(sys.executable), '..', '..', 'pixi.toml')):
+    # Check if we're in a pixi environment or if pip is not available
+    if (os.path.exists(os.path.join(os.path.dirname(sys.executable), '..', '..', 'pixi.toml')) or
+        'pixi' in sys.executable or not shutil.which('pip')):
         print("Skipping package upgrade in pixi environment.")
         return
     
@@ -947,7 +950,7 @@ def lightdock(args, ligands):
 def lightdock_setup(args):
     if args.restraints:
       cmd = ["lightdock3_setup.py", args.protein, args.ligand, "--outdir", args.outdir, "--noxt", "--noh", "--now", "-s", str(args.swarms), "--seed_points", str(args.RNG_seed), "--seed_anm", str(args.RNG_seed), "--rst", args.restraints, "-g", str(args.glowworms)]
-    elif args.membrane:
+    elif hasattr(args, 'membrane') and args.membrane:
         cmd = ["lightdock3_setup.py", args.protein, args.ligand, "--outdir", args.outdir, "--noxt", "--noh", "--now", "--membrane", "-s", str(args.swarms), "--seed_points", str(args.RNG_seed), "--seed_anm", str(args.RNG_seed), "-g", str(args.glowworms)]
     else:
       cmd = ["lightdock3_setup.py", args.protein, args.ligand,"--outdir", args.outdir, "--noxt", "--noh", "--now", "-s", str(args.swarms), "--seed_points", str(args.RNG_seed), "--seed_anm", str(args.RNG_seed),"-g", str(args.glowworms)]

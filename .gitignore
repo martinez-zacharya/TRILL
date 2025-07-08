@@ -11,4 +11,9 @@
 *.csv
 *.3di
 *.fasta
-
+*.dat
+*.npy
+*.out
+*.pdbqt
+*.json
+*.info
