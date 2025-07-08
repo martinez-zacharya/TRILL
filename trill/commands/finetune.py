@@ -69,12 +69,12 @@ def setup(subparsers):
 
     finetune.add_argument(
         "--strategy",
-        help="Change training strategy. Default is None. List of strategies can be found at \
+        help="Change training strategy. Default is auto. List of strategies can be found at \
             https://pytorch-lightning.readthedocs.io/en/stable/extensions/strategy.html. \
             For ProGen2 only, you can select either deepspeed_stage_1, deepspeed_stage_2 \
                 deepspeed_stage_2_offload, deepspeed_stage_3 and deepspeed_stage_3_offload.",
         action="store",
-        default=None,
+        default="auto",
         dest="strategy",
     )
 
@@ -136,6 +136,12 @@ def setup(subparsers):
         default=0,
     )
 
+    finetune.add_argument(
+        "--poolparti",
+        help="ESM2: Add this flag to return Pool PaRTI based embeddings during fine-tuning.",
+        action="store_true",
+        default=False,
+    )
 
 
 def run(args):
@@ -156,6 +162,13 @@ def run(args):
     from trill.utils.update_weights import weights_update
     from trill.utils.progen_utils import prepare_data, Protein_dataset, init_new_embeddings, load_data, create_deepspeed_config
     from .commands_common import get_logger, get_profiler
+
+    def get_trainer_kwargs(args, **kwargs):
+        """Helper function to get trainer kwargs with proper strategy handling"""
+        trainer_kwargs = kwargs.copy()
+        if args.strategy and args.strategy != "auto":
+            trainer_kwargs["strategy"] = args.strategy
+        return trainer_kwargs
 
     ml_logger = get_logger(args)
     profiler = get_profiler(args)
@@ -181,8 +194,8 @@ def run(args):
             use_cpu = True
             fp16 = False
 
-        if not args.strategy:
-            args.strategy = ''
+        if not args.strategy or args.strategy == "auto":
+            args.strategy = "auto"
 
         use_cpu = True if int(args.GPUs) == 0 else False
         train_path, eval_path = prepare_data(args, bidirectional=False, ctrl_tag=args.ctrl_tag)
@@ -378,19 +391,23 @@ def run(args):
                                              default_root_dir=f"{os.path.join(args.outdir, args.name)}_ckpt",
                                              logger=ml_logger, num_nodes=int(args.nodes))
                     else:
-                        trainer = pl.Trainer(devices=int(args.GPUs), profiler=profiler, accelerator="gpu",
+                        trainer_kwargs = get_trainer_kwargs(args,
+                                             devices=int(args.GPUs), profiler=profiler, accelerator="gpu",
                                              callbacks=[checkpoint_callback],
                                              default_root_dir=f"{os.path.join(args.outdir, args.name)}_ckpt",
-                                             strategy=args.strategy, max_epochs=int(args.epochs), logger=ml_logger,
+                                             max_epochs=int(args.epochs), logger=ml_logger,
                                              num_nodes=int(args.nodes), precision=16)
+                        trainer = pl.Trainer(**trainer_kwargs)
                 else:
                     if int(args.GPUs) == 0:
                         trainer = pl.Trainer(profiler=profiler, accelerator="cpu", max_epochs=int(args.epochs),
                                              logger=ml_logger, num_nodes=int(args.nodes), enable_checkpointing=False)
                     else:
-                        trainer = pl.Trainer(devices=int(args.GPUs), profiler=profiler, accelerator="gpu",
-                                             strategy=args.strategy, max_epochs=int(args.epochs), logger=ml_logger,
+                        trainer_kwargs = get_trainer_kwargs(args,
+                                             devices=int(args.GPUs), profiler=profiler, accelerator="gpu",
+                                             max_epochs=int(args.epochs), logger=ml_logger,
                                              num_nodes=int(args.nodes), precision=16, enable_checkpointing=False)
+                        trainer = pl.Trainer(**trainer_kwargs)
                 trainer.fit(model=model, train_dataloaders=dataloader)
                 trainer.save_checkpoint(os.path.join(args.outdir, f"{args.name}_{args.model}_{args.epochs}.pt"))
 
