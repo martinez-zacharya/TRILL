@@ -225,7 +225,7 @@ In the examples below the string immediately after `trill` specifies the name of
   ```
   Lightdock: Dock proteins to proteins using physics-based glowworm swarm optimization 
   ```
-  trill  1 dock Lightdock trill/data/4ih9.pdb trill/data/peptide.pdb
+  trill  1 dock LightDock trill/data/4ih9.pdb trill/data/peptide.pdb
   ```
   Autodock Vina: Dock small-molecule(s) to a protein. Not only can you perform blind docking, but in TRILL, you are able to dock multiple ligands at once!
   ```

@@ -839,11 +839,30 @@ def save_complex(receptor_structure, ligand_structure, output_file):
 
 def downgrade_biopython():
     """ Downgrade biopython to version 1.7.9 """
-    subprocess.check_call([sys.executable, '-m', 'pip', 'install', 'biopython==1.79', 'numpy==1.23.5', 'pyparsing==3.1.1'])
+    # Check if we're in a pixi environment
+    if os.path.exists(os.path.join(os.path.dirname(sys.executable), '..', '..', 'pixi.toml')):
+        print("Warning: Running in pixi environment. Skipping package downgrade for LightDock compatibility.")
+        print("LightDock may not work properly with current package versions.")
+        return
+    
+    # Try pip first
+    try:
+        subprocess.check_call([sys.executable, '-m', 'pip', 'install', 'biopython==1.79', 'numpy==1.23.5', 'pyparsing==3.1.1'])
+    except (subprocess.CalledProcessError, FileNotFoundError):
+        print("Warning: Could not downgrade packages. LightDock may not work properly.")
+        print("Please ensure biopython==1.79, numpy==1.23.5, and pyparsing==3.1.1 are installed.")
 
 def upgrade_biopython(og_ver_biopython, og_ver_np, pypar_ver):
     """ Upgrade biopython back to the original version """
-    subprocess.check_call([sys.executable, '-m', 'pip', 'install', f'biopython=={og_ver_biopython}', f'numpy=={og_ver_np}', f'pyparsing=={pypar_ver}'])
+    # Check if we're in a pixi environment
+    if os.path.exists(os.path.join(os.path.dirname(sys.executable), '..', '..', 'pixi.toml')):
+        print("Skipping package upgrade in pixi environment.")
+        return
+    
+    try:
+        subprocess.check_call([sys.executable, '-m', 'pip', 'install', f'biopython=={og_ver_biopython}', f'numpy=={og_ver_np}', f'pyparsing=={pypar_ver}'])
+    except (subprocess.CalledProcessError, FileNotFoundError):
+        print("Warning: Could not upgrade packages back to original versions.")
 
 def get_current_biopython_version():
     """ Get the current version of biopython """
