@@ -21,6 +21,7 @@ import torch
 import torch.nn as nn
 from loguru import logger
 from torch.utils.data import Dataset
+from trill.utils.safe_load import safe_torch_load
 
 
 def print(*args, **kwargs):
@@ -391,7 +392,7 @@ class EpHodModel():
         rlat_path = os.path.join(cache_dir, 'EpHod_Models', 'RLAT', 'RLAT.pt')
         
         # Load RLAT model from path
-        checkpoint = torch.load(rlat_path)
+        checkpoint = safe_torch_load(rlat_path)
         params = read_json(params_path)        
         model = ResidualLightAttention(**params)
         # model = DataParallel(model)

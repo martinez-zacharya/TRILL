@@ -8,6 +8,7 @@ from Bio import SeqIO
 from tqdm import tqdm
 import urllib.request
 from loguru import logger
+from trill.utils.safe_load import safe_torch_load
 
 def download_mionic_checkpoint(cache_dir):
     url = "https://raw.githubusercontent.com/TeamSundar/m-ionic/main/checkpoints/esm2_t33_650M_UR50D_setB_fold1.pt"
@@ -28,7 +29,7 @@ def mionic(args, per_AA, model, mionic_path):
     device = "cuda" if int(args.GPUs) > 0 else "cpu"
     fasta_file = args.query
 
-    model.load_state_dict(torch.load(mionic_path, map_location=device))
+    model.load_state_dict(safe_torch_load(mionic_path, map_location=device))
     model.to(device).eval()
     
     # Prepare sigmoid function and label fields

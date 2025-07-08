@@ -11,6 +11,7 @@ from Bio import SeqIO
 from itertools import product
 import sys
 from loguru import logger
+from trill.utils.safe_load import safe_torch_load
 
 def clone_and_install_psichic(cache_dir):
     repo_url = "https://github.com/martinez-zacharya/PSICHIC"
@@ -82,7 +83,7 @@ def run_psichic(args, cache_dir):
     if not os.path.exists(result_path):
         os.makedirs(result_path)
 
-    degree_dict = torch.load(os.path.join(trained_model_path,'degree.pt'))
+    degree_dict = safe_torch_load(os.path.join(trained_model_path,'degree.pt'))
     param_dict = os.path.join(trained_model_path,'model.pt')
     mol_deg, prot_deg = degree_dict['ligand_deg'],degree_dict['protein_deg']
 
@@ -102,7 +103,7 @@ def run_psichic(args, cache_dir):
                 multiclassification_head=config['tasks']['mclassification_task'],
                 device=device).to(device)
     model.reset_parameters()
-    model.load_state_dict(torch.load(param_dict,map_location=device))
+    model.load_state_dict(safe_torch_load(param_dict,map_location=device))
 
 
     screen_df = pd.read_csv(os.path.join(screenfile))

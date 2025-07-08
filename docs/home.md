@@ -299,6 +299,14 @@ In the examples below the string immediately after `trill` specifies the name of
   ```
 ## Misc. Tips
 
+- **Safetensors Support**: TRILL now supports safer model loading with safetensors format. When loading PyTorch models (.pt files), TRILL will automatically:
+  - Look for a corresponding .safetensors file first (safer format)
+  - Fall back to torch.load with security warnings if only .pt files are available
+  - Recommend upgrading to PyTorch 2.6+ if using .pt files due to security vulnerabilities (CVE-2025-32434)
+  - You can convert existing .pt files to safetensors format using the utils command:
+    ```
+    trill 0 utils convert_to_safetensors --pt_file model.pt
+    ```
 - Make sure there are no "\*" in the protein sequences
 - After finetuning and trying to save a model using deepspeed, if all the CPU RAM is used the application can crash and not finish saving, leaving you a directory similar to "your_model.pt". You can rescue your model by running this python script
   ```  python

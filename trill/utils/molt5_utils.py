@@ -107,7 +107,7 @@ def make_embedding_dataframe(headers, avg_embs):
 def get_molT5_embed(args):
     logger.info(f'Embedding small-molecule SMILES with {args.model}')
     tokenizer = T5Tokenizer.from_pretrained(f'laituan245/{molt5_key[args.model]}')
-    model = T5EncoderModel.from_pretrained(f'laituan245/{molt5_key[args.model]}')
+    model = T5EncoderModel.from_pretrained(f'laituan245/{molt5_key[args.model]}', use_safetensors=True)
     headers_list, smiles_list = prep_input_from_smiles_fasta(args)
     N_smiles = len(smiles_list)
 

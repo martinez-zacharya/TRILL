@@ -161,6 +161,7 @@ def run(args):
     from trill.utils.protgpt2_utils import ProtGPT2_wrangle
     from trill.utils.update_weights import weights_update
     from trill.utils.progen_utils import prepare_data, Protein_dataset, init_new_embeddings, load_data, create_deepspeed_config
+    from trill.utils.safe_load import safe_torch_load, safe_torch_save
     from .commands_common import get_logger, get_profiler
 
     def get_trainer_kwargs(args, **kwargs):
@@ -350,7 +351,7 @@ def run(args):
             model = ESM(eval(model_import_name), float(args.lr), args)
             if args.finetuned:
                 model = weights_update(model=ESM(eval(model_import_name), 0.0001, args),
-                                       checkpoint=torch.load(args.finetuned))
+                                       checkpoint=safe_torch_load(args.finetuned))
             dataloader = torch.utils.data.DataLoader(data, shuffle=True, batch_size=int(args.batch_size), num_workers=0,
                                                      collate_fn=model.alphabet.get_batch_converter())
 
@@ -450,7 +451,7 @@ def run(args):
         model = ESM(eval(model_import_name), float(args.lr), args)
         if args.finetuned:
             model = weights_update(model=ESM(eval(model_import_name), 0.0001, args),
-                                   checkpoint=torch.load(args.finetuned))
+                                   checkpoint=safe_torch_load(args.finetuned))
         dataloader = torch.utils.data.DataLoader(data, shuffle=True, batch_size=int(args.batch_size), num_workers=0,
                                                  collate_fn=model.alphabet.get_batch_converter(masked=True))
         if args.strategy in {"deepspeed_stage_3", "deepspeed_stage_3_offload", "deepspeed_stage_2",

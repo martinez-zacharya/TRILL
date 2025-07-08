@@ -102,6 +102,7 @@ def run(args):
     from loguru import logger
     from trill.utils.lightning_models import ProtGPT2, ESM_Gibbs, ZymCTRL
     from trill.utils.update_weights import weights_update
+    from trill.utils.safe_load import safe_torch_load
 
     if args.model == "ProtGPT2":
         model = ProtGPT2(args)
@@ -147,7 +148,7 @@ def run(args):
 
             if args.finetuned:
                 model = weights_update(model=ESM_Gibbs(eval(model_import_name), args),
-                                       checkpoint=torch.load(args.finetuned))
+                                       checkpoint=safe_torch_load(args.finetuned))
                 tuned_name = os.path.basename(args.finetuned)
             else:
                 tuned_name = f"{args.esm2_arch}___"

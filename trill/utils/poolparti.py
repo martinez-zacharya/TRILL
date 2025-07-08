@@ -9,6 +9,7 @@ import numpy as np
 import networkx as nx
 import math
 from icecream import ic
+from .safe_load import safe_torch_load
 
 def poolparti_gen(perAA_embs, comb_attn):
     """
@@ -64,7 +65,7 @@ class TokenToSequencePooler:
         # If the file does not exist, print an error message and return None.
 
         try:
-            tensors = torch.load(file_path)
+            tensors = safe_torch_load(file_path)
             return tensors
         except:
             print(f"There is no file named {file_path}")

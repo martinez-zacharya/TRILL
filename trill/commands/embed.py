@@ -72,6 +72,7 @@ def run(args):
     from trill.utils.molt5_utils import get_molT5_embed, prep_input_from_smiles_fasta
     from trill.utils.mmelon_utils import clone_and_install_mmelon, run_mmelon
     from trill.utils.materials_utils import clone_and_install_fm4m, run_mat_ted
+    from trill.utils.safe_load import safe_torch_load
     # from trill.utils.dplm import clone_and_install_dplm, downgrade_transformers, upgrade_transformer, get_transformer_version
     from loguru import logger
     import requests
@@ -310,7 +311,7 @@ def run(args):
                                  callbacks=[pred_writer], accelerator="gpu", logger=ml_logger, num_nodes=int(args.nodes))
         if args.finetuned:
             model = weights_update(model=ESM(eval(model_import_name), 0.0001, args),
-                                   checkpoint=torch.load(args.finetuned))
+                                   checkpoint=safe_torch_load(args.finetuned))
         trainer.predict(model, dataloader)
 
         parse_and_save_all_predictions(args)

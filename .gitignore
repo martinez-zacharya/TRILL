@@ -9,4 +9,6 @@
 *.pdb.gz
 *.fa
 *.csv
+*.3di
+*.fasta
 

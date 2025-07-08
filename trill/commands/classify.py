@@ -237,6 +237,7 @@ def run(args):
     from sklearn.metrics import precision_recall_fscore_support
     import trill.utils.ephod_utils as eu
     import pkg_resources
+    from trill.utils.safe_load import safe_torch_load
     from trill.commands.fold import process_sublist
     from trill.utils.MLP import MLP_C2H2, inference_epoch
     from trill.utils.classify_utils import prep_data, setup_esm2_hf, prep_foldseek_dbs, get_3di_embeddings, log_results, sweep, prep_hf_data, custom_esm2mlp_test, train_model, load_model, custom_model_test, predict_and_evaluate
@@ -292,9 +293,9 @@ def run(args):
             )
             logger.info("Extracting embeddings from ESM2-650M...")
             subprocess.run(embed_command, check=True)
-            perAA = torch.load(os.path.join(args.outdir, f"{args.name}_esm2_t33_650M_perAA.pt"), weights_only=False)
+            perAA = safe_torch_load(os.path.join(args.outdir, f"{args.name}_esm2_t33_650M_perAA.pt"), weights_only=False)
         else:
-            perAA = torch.load(args.preComputed_Embs, weights_only=False)
+            perAA = safe_torch_load(args.preComputed_Embs, weights_only=False)
 
         model = IonicProtein(1280)
         preds, peraa_preds = mionic(args, perAA, model, mionic_path)
@@ -588,7 +589,7 @@ def run(args):
                 for seed in SEEDS:
                     model_path = download_model(thresh, seed)
                     clf = MLP_C2H2(1024, 256, 128)
-                    state_dict = torch.load(model_path)['state_dict']
+                    state_dict = safe_torch_load(model_path)['state_dict']
                     for key in list(state_dict.keys()):
                         state_dict[key.replace('model.model.', 'model.')] = state_dict.pop(key)
                     clf.load_state_dict(state_dict)
@@ -967,9 +968,9 @@ def run(args):
             )
             logger.info("Extracting embeddings from ESM2-650M...")
             subprocess.run(embed_command, check=True)
-            perAA = torch.load(os.path.join(args.outdir, f"{args.name}_esm2_t33_650M_perAA.pt"), weights_only=False)
+            perAA = safe_torch_load(os.path.join(args.outdir, f"{args.name}_esm2_t33_650M_perAA.pt"), weights_only=False)
         else:
-            perAA = torch.load(args.preComputed_Embs, weights_only=False)
+            perAA = safe_torch_load(args.preComputed_Embs, weights_only=False)
         device = 'cuda' if int(args.GPUs) > 0 else 'cpu'
         PSALM = psalm(clan_model_name="ProteinSequenceAnnotation/PSALM-1b-clan",
                     fam_model_name="ProteinSequenceAnnotation/PSALM-1b-family",

@@ -23,6 +23,8 @@ from typing import Sequence, Tuple, List
 import os
 from icecream import ic
 from esm.data import BatchConverter
+from trill.utils.safe_load import safe_torch_load
+from trill.utils.safe_load import safe_torch_load
 
 
 def load_structure(fpath, chain=None):
@@ -416,7 +418,7 @@ class CNN(nn.Module):
 def get_T5_model(model_dir):
     print("Loading T5 from: {}".format(model_dir))
     model = T5EncoderModel.from_pretrained(
-        "Rostlab/ProstT5_fp16", cache_dir=model_dir).to(device)
+        "Rostlab/ProstT5_fp16", cache_dir=model_dir, use_safetensors=True).to(device)
     model = model.eval()
     vocab = T5Tokenizer.from_pretrained(
         "Rostlab/ProstT5_fp16", do_lower_case=False, cache_dir=model_dir)
@@ -530,7 +532,7 @@ def load_predictor(cache_dir, weights_link="https://github.com/mheinzinger/Prost
     # to overcome, need to explicitly map to active device
     global device
 
-    state = torch.load(checkpoint_p, map_location=device)
+    state = safe_torch_load(checkpoint_p, map_location=device)
 
     model.load_state_dict(state["state_dict"])
 

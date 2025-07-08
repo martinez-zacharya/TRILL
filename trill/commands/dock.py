@@ -199,6 +199,7 @@ def run(args):
     from trill.utils.dock_utils import perform_docking, write_docking_results_to_file, create_init_file
     from trill.utils.esm_utils import parse_and_save_all_predictions
     from trill.utils.lightning_models import ESM, CustomWriter
+    from trill.utils.safe_load import safe_torch_load
     from .commands_common import cache_dir, get_logger
 
     ml_logger = get_logger(args)
@@ -282,7 +283,7 @@ def run(args):
         trainer.predict(model, loader)
         parse_and_save_all_predictions(args)
         master_embs = []
-        emb_file = torch.load(os.path.join(args.outdir, "predictions_0.pt"), weights_only=False)
+        emb_file = safe_torch_load(os.path.join(args.outdir, "predictions_0.pt"), weights_only=False)
         for entry in emb_file:
             if len(entry) == 0:
                 continue
