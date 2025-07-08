@@ -4,11 +4,11 @@ version = "1.9.0"
 description = "Sandbox for Computational Protein Design"
 authors = ["Zachary Martinez <martinez.zacharya@gmail.com>"]
 license = "MIT"
-channels = ["conda-forge", "pytorch", "nvidia", "bioconda", "dglteam/label/th24_cu124"]
+channels = ["conda-forge", "pytorch", "nvidia", "bioconda", "dglteam/label/th24_cu124", "pyg"]
 platforms = ["linux-64"]
 
 [tasks]
-trill = "python -m trill.trill_main cli"
+trill = { cmd = "python -m trill.trill_main cli", env = { TF_ENABLE_ONEDNN_OPTS = "0", TF_CPP_MIN_LOG_LEVEL = "3", CUDA_VISIBLE_DEVICES = "0" } }
 
 [dependencies]
 python = ">=3.11,<3.12"
@@ -65,7 +65,7 @@ scikit-learn = "*"
 scikit-optimize = "*"
 seaborn = "*"
 selfies = "*"
-sentencepiece = "*"
+sentencepiece = ">=0.1.99,<0.2"
 setuptools = ">=80.9.0,<81"
 skops = "*"
 spyrmsd = "*"
@@ -89,6 +89,8 @@ torchvision = ">=0.18.1,<0.19"
 typer = ">=0.16.0,<0.17"
 flash-attn = ">=2.6.1,<3"
 triton = ">=3.3.1,<4"
+pyg = ">=2.6.1,<3"
+absl-py = ">=2.3.1,<3"
 
 [system-requirements]
 cuda = "12"
@@ -113,10 +115,5 @@ prolif = { git = "https://github.com/chemosim-lab/ProLIF.git" }
 reprint = ">=0.6.0, <0.7"
 rna-fm = ">=0.2.2, <0.3"
 scasa = { git = "https://github.com/martinez-zacharya/SCASA.git" }
-torch-cluster = { url = "https://data.pyg.org/whl/torch-2.7.0%2Bcu126/torch_cluster-1.6.3%2Bpt27cu126-cp311-cp311-linux_x86_64.whl" }
-pyg-lib = { url = "https://data.pyg.org/whl/torch-2.7.0%2Bcu126/pyg_lib-0.4.0%2Bpt27cu126-cp311-cp311-linux_x86_64.whl" }
-#torch-scatter = { url = "https://data.pyg.org/whl/torch-2.7.0%2Bcu126/torch_scatter-2.1.2%2Bpt27cu126-cp311-cp311-linux_x86_64.whl" }
-torch-sparse = { url = "https://data.pyg.org/whl/torch-2.7.0%2Bcu126/torch_sparse-0.6.18%2Bpt27cu126-cp311-cp311-linux_x86_64.whl" }
-torch-spline-conv = { url = "https://data.pyg.org/whl/torch-2.7.0%2Bcu126/torch_spline_conv-1.2.2%2Bpt27cu126-cp311-cp311-linux_x86_64.whl" }
 biotite = "*"
 
