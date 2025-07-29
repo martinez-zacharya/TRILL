@@ -74,7 +74,7 @@ def setup(subparsers):
             For ProGen2 only, you can select either deepspeed_stage_1, deepspeed_stage_2 \
                 deepspeed_stage_2_offload, deepspeed_stage_3 and deepspeed_stage_3_offload.",
         action="store",
-        default=None,
+        default="auto",
         dest="strategy",
     )
 
