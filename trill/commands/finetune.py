@@ -253,7 +253,7 @@ def run(args):
         if args.model == "ProtGPT2":
             model = ProtGPT2(args)
             if args.finetuned:
-                model = model.load_from_checkpoint(args.finetuned, args=args, strict=False)
+                model = ProtGPT2.load_from_checkpoint(args.finetuned, args=args, strict=False)
             tokenizer = AutoTokenizer.from_pretrained("nferruz/ProtGPT2")
             seq_dict_df = ProtGPT2_wrangle(data, tokenizer)
             dataloader = torch.utils.data.DataLoader(seq_dict_df, shuffle=True, batch_size=int(args.batch_size),

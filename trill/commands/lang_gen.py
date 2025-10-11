@@ -107,7 +107,7 @@ def run(args):
     if args.model == "ProtGPT2":
         model = ProtGPT2(args)
         if args.finetuned:
-            model = model.load_from_checkpoint(args.finetuned, args=args, strict=False)
+            model = ProtGPT2.load_from_checkpoint(args.finetuned, args=args, strict=False)
         tokenizer = AutoTokenizer.from_pretrained("nferruz/ProtGPT2")
         generated_output = []
         total_sequences_needed = int(args.num_return_sequences)
