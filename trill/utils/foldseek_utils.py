@@ -12,6 +12,6 @@ def run_foldseek_databases(args):
         return weights_path
 
     command = ["foldseek", "databases", "ProstT5", weights_path, "tmp"]
-    subprocess.run(command, check=True, shell=True)
+    subprocess.run(command, check=True)
     return weights_path
 
