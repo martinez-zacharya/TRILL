@@ -1,5 +1,8 @@
 import os
 import subprocess
+# from trill.utils.externals import ensure_bin
+
+# FOLDSEEK = ensure_bin("foldseek")
 
 def run_foldseek_databases(args):
     weights_path = os.path.join(args.cache_dir, "prostt5_weights")
@@ -11,3 +14,4 @@ def run_foldseek_databases(args):
     command = ["foldseek", "databases", "ProstT5", weights_path, "tmp"]
     subprocess.run(command, check=True)
     return weights_path
+

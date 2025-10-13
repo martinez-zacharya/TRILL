@@ -155,7 +155,7 @@ class SaProt_Dataset(Dataset):
     
 class SaProt_Collator:
     def __init__(self):
-        self.tokenizer = EsmTokenizer.from_pretrained("westlake-repl/SaProt_650M_AF2")
+        self.tokenizer = EsmTokenizer.from_pretrained("westlake-repl/SaProt_650M_AF2", use_safetensors=True)
 
     def __call__(self, batch):
         # Extract sequences from the batch

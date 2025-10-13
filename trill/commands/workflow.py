@@ -5,8 +5,7 @@ def setup(subparsers):
         "workflow",
         help="Choose workflow which chains together TRILL commands and utilities. ",
         action="store",
-        choices=("foldtune")
-        # choices=("foldtune", "Bindcraftish")
+        choices=("foldtune",)
     )
 
     workflow.add_argument(
@@ -20,6 +19,13 @@ def setup(subparsers):
         help="Set the number of foldtuning iterations to perform. The default is 5.",
         action="store",
         default=5,
+    )
+
+    workflow.add_argument(
+        "--num_to_generate_per_round",
+        help="Set the number of proteins generated per round. Default is 1000.",
+        action="store",
+        default=1000,
     )
 
     workflow.add_argument(
@@ -83,10 +89,6 @@ def run(args):
 
     if args.workflow == 'foldtune':
         logger.info('Beginning Foldtuning')
-        foldtune(args)
-
-    # elif args.workflow == 'Bindcraftish':
-    #     logger.info('Beginning Bindcraftish')
-        
+        foldtune(args)  
 
         

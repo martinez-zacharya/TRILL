@@ -23,6 +23,7 @@ from skopt import BayesSearchCV
 from icecream import ic
 from skopt.space import Real, Categorical, Integer
 from trill.utils.logging import setup_logger
+from trill.utils.safe_load import safe_torch_load
 import requests
 from Bio import SeqIO
 from loguru import logger
@@ -100,7 +101,7 @@ def compute_f1(eval_pred):
 def setup_esm2_hf(train, test, args, n_classes):
     if float(args.lr) == 0.2:
         args.lr = 0.0001
-    model = EsmForSequenceClassification.from_pretrained(f"facebook/{args.emb_model}_UR50D", use_safetensors=False, num_labels=n_classes)
+    model = EsmForSequenceClassification.from_pretrained(f"facebook/{args.emb_model}_UR50D", use_safetensors=True, num_labels=n_classes)
     tokenizer = AutoTokenizer.from_pretrained(f"facebook/{args.emb_model}_UR50D")
     train_tokenized = tokenizer(train['Sequence'].to_list())
     test_tokenized = tokenizer(test['Sequence'].to_list())
@@ -158,7 +159,7 @@ def setup_esm2_hf(train, test, args, n_classes):
     return trainer, test_dataset
 
 def custom_esm2mlp_test(args):
-    model = EsmForSequenceClassification.from_pretrained(args.preTrained, use_safetensors=False)
+    model = EsmForSequenceClassification.from_pretrained(args.preTrained, use_safetensors=True)
     tokenizer = AutoTokenizer.from_pretrained(f"facebook/{args.emb_model}_UR50D")
     n_classes = model.config.num_labels
     data = esm.data.FastaBatchedDataset.from_file(args.query)
@@ -565,7 +566,7 @@ class CNN(nn.Module):
 
 def get_T5_model():
     model = T5EncoderModel.from_pretrained(
-        "Rostlab/ProstT5_fp16")
+        "Rostlab/ProstT5_fp16", use_safetensors=True)
     model = model.eval()
     vocab = T5Tokenizer.from_pretrained(
         "Rostlab/ProstT5_fp16", do_lower_case=False)
@@ -669,7 +670,7 @@ def load_predictor(args, cache_dir, weights_link="https://github.com/mheinzinger
         logger.info('Finished downloading ProstT5 3Di CNN weights!')
 
 
-    state = torch.load(checkpoint_p)
+    state = safe_torch_load(checkpoint_p)
 
     model.load_state_dict(state["state_dict"])
 

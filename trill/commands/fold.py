@@ -65,6 +65,7 @@ def run(args):
     from trill.utils.esm_utils import convert_outputs_to_pdb
     from trill.utils.dock_utils import create_init_file
     from trill.utils.lightning_models import CustomWriter, ProstT5
+    from trill.utils.safe_load import safe_torch_load
     from git import Repo
     import re
     import textwrap
@@ -79,10 +80,10 @@ def run(args):
         tokenizer = AutoTokenizer.from_pretrained("facebook/esmfold_v1")
         if int(args.GPUs) == 0:
             model = EsmForProteinFolding.from_pretrained("facebook/esmfold_v1", low_cpu_mem_usage=True,
-                                                         torch_dtype="auto")
+                                                         torch_dtype="auto", use_safetensors=True)
         else:
             model = EsmForProteinFolding.from_pretrained("facebook/esmfold_v1", device_map="sequential",
-                                                         torch_dtype="auto")
+                                                         torch_dtype="auto", use_safetensors=True)
             # model = model.cuda()
             model.esm = model.esm.half()
             # model = model.cuda()
@@ -112,7 +113,7 @@ def run(args):
                             print(e)
                         else:
                             print(e)
-                            pass
+                        continue  # Skip to next iteration when there's an error
                 else:
                     if int(args.batch_size) > 1:
                         tokenized_input = tokenizer(batch_input_ids, return_tensors="pt",
@@ -133,6 +134,7 @@ def run(args):
                             print(e)
                         else:
                             print(e)
+                        continue  # Skip to next iteration when there's an error
                 output = convert_outputs_to_pdb(output)
                 if int(args.batch_size) > 1:
                     start_idx = i
@@ -165,7 +167,7 @@ def run(args):
         pred_embeddings = []
         if args.batch_size == 1 or int(args.GPUs) > 1:
             for pt in pt_files:
-                preds = torch.load(os.path.join(args.outdir, pt))
+                preds = safe_torch_load(os.path.join(args.outdir, pt))
                 for pred in preds:
                     for sublist in pred:
                         if len(sublist) == 2 and args.batch_size == 1:

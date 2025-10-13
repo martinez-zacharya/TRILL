@@ -17,6 +17,22 @@ from trill.utils.logging import setup_logger
 
 os.environ['CUDA_LAUNCH_BLOCKING'] = '1'
 os.environ["TOKENIZERS_PARALLELISM"] = "false"
+# Suppress TensorFlow warnings
+os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
+os.environ['TF_ENABLE_ONEDNN_OPTS'] = '0'
+
+# Suppress TensorFlow logging at Python level
+import warnings
+warnings.filterwarnings('ignore', category=UserWarning)
+warnings.filterwarnings('ignore', category=FutureWarning)
+
+# Try to suppress TensorFlow logging if TensorFlow is imported
+try:
+    import tensorflow as tf
+    tf.get_logger().setLevel('ERROR')
+    tf.autograph.set_verbosity(0)
+except ImportError:
+    pass
 
 commands = {}
 for command in {
@@ -147,4 +163,11 @@ def cli(args=None):
 
 
 if __name__ == '__main__':
-    print("this shouldn't show up...")
+    # # Check if 'cli' is passed as an argument
+    # if len(sys.argv) > 1 and sys.argv[1] == 'cli':
+    #     # Remove 'cli' from args and call cli function
+    #     cli(sys.argv[2:])
+    # else:
+    #     # Fallback to direct main call for backward compatibility
+    #     main(sys.argv[1:])
+    main(sys.argv[1:])

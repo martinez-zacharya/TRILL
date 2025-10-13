@@ -10,6 +10,8 @@ from trill.utils.foldseek_utils import run_foldseek_databases
 
 
 def foldtune(args):
+    ensure_foldseek_cmd = f'pixi run ensure-foldseek'.split(' ')
+    subprocess.run(ensure_foldseek_cmd)
     for i in range(1, int(args.foldtune_rounds) + 1):
         logger.info(f'Foldtuning round {i}:')
         abspath = os.path.abspath(args.outdir)
@@ -22,11 +24,11 @@ def foldtune(args):
         if i == 1:
             logger.info('Embedding input sequences with ESM2-650M')
             embed_cmd = f'trill {args.name}_foldtune_input {args.GPUs} --RNG_seed {args.RNG_seed} --outdir {args.outdir} embed esm2_t33_650M {args.query} --avg'.split(' ')
-            subprocess.run(embed_cmd)
+            subprocess.run(embed_cmd, check=True)
             if not args.fast_folding:
                 logger.info('Folding input sequences with ESMFold')
                 fold_cmd = f'trill {args.name}_foldtune_input {args.GPUs} --RNG_seed {args.RNG_seed} --outdir {abspath}/{args.name}_foldtune_input_structs fold ESMFold {abspath}/{args.query} --batch_size {args.fold_batch_size}'.split(' ')
-                subprocess.run(fold_cmd)
+                subprocess.run(fold_cmd, check=True)
 
         if i == 1:
             logger.info('Finetuning ProtGPT2 for 1 epoch')
@@ -36,7 +38,7 @@ def foldtune(args):
                 finetune_cmd = f'trill {args.name}_round{i} {args.GPUs} --RNG_seed {args.RNG_seed} --outdir {abspath} finetune ProtGPT2 {args.query} --epochs 1 --batch_size {args.finetune_batch_size}'.split(' ')
             subprocess.run(finetune_cmd)
             seqkit_stats_cmd = f'seqkit stats -a -T {args.query}'.split(' ')
-            result = subprocess.run(seqkit_stats_cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+            result = subprocess.run(seqkit_stats_cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, check=True)
             output = result.stdout
 
 
@@ -49,7 +51,7 @@ def foldtune(args):
                 finetune_cmd = f'trill {args.name}_round{i} {args.GPUs} --RNG_seed {args.RNG_seed} --outdir {abspath} finetune ProtGPT2 {output_fasta} --epochs 1 --batch_size {args.finetune_batch_size} --finetuned {abspath}/{args.name}_round{i-1}_ProtGPT2_1_fp32.pt --strategy {args.finetune_strategy}'.split(' ')
             else:
                 finetune_cmd = f'trill {args.name}_round{i} {args.GPUs} --RNG_seed {args.RNG_seed} --outdir {abspath} finetune ProtGPT2 {output_fasta} --epochs 1 --batch_size {args.finetune_batch_size} --finetuned {abspath}/{args.name}_round{i-1}_ProtGPT2_1.pt'.split(' ')
-            subprocess.run(finetune_cmd)
+            subprocess.run(finetune_cmd, check=True)
 
 
 
@@ -74,10 +76,9 @@ def foldtune(args):
             '--max_length', str(int(median[0])),
             '--temp', '1',
             '--seed_seq', '',
-            '--num_return_sequences', '5'
-            # '--num_return_sequences', '1000'
-        ]
-        subprocess.run(gen_cmd)
+            '--num_return_sequences', f'{int(args.num_to_generate_per_round)}'
+            ]
+        subprocess.run(gen_cmd, check=True)
         
         gen_fasta_files = []
 
@@ -105,7 +106,7 @@ def foldtune(args):
 
         logger.info('Embedding generated sequences with ESM2-650M')
         embed_cmd = f'trill {args.name}_round{i} {args.GPUs} --RNG_seed {args.RNG_seed} --outdir {args.outdir} embed esm2_t33_650M {abspath}/cleaned_truncated_{args.name}_foldtune_generated_sequences_round{i}.fasta --avg'.split(' ')
-        subprocess.run(embed_cmd)
+        subprocess.run(embed_cmd, check=True)
 
         if i == 1:
             input_embs = os.path.join(abspath, f'{args.name}_foldtune_input_esm2_t33_650M_AVG.csv')
@@ -120,37 +121,30 @@ def foldtune(args):
         if not args.fast_folding:
             logger.info('Folding generated sequences with ESMFold')
             fold_cmd = f'trill {args.name}_round{i} {args.GPUs} --RNG_seed {args.RNG_seed} --outdir {abspath}/{args.name}_foldtune_generated_structs_round{i} fold ESMFold {abspath}/cleaned_truncated_{args.name}_foldtune_generated_sequences_round{i}.fasta --batch_size {args.fold_batch_size}'.split(' ')
-            subprocess.run(fold_cmd)
+            subprocess.run(fold_cmd, check=True)
 
         # Ranking generated structures by STRUCTURAL similarity to inputs
         logger.info('Assessing structural similarity of generated structures to inputs with foldseek and TM-Align')
         if args.fast_folding:
             foldseek_cmd = f'foldseek createdb {abspath}/cleaned_truncated_{args.name}_foldtune_generated_sequences_round{i}.fasta {abspath}/{args.name}_foldtune_generated_sequences_round{i}_db --prostt5-model {prostt5_weights_path}'
-            if int(args.GPUs) != 0:
-                foldseek_cmd += ' --gpu 1'
-            subprocess.run(foldseek_cmd, shell=True, check=True)
+            # NEED TO FIX
+            # if int(args.GPUs) != 0:
+            #     foldseek_cmd += ' --gpu 1'
+            subprocess.run(foldseek_cmd.split(' '), check=True)
 
             if i == 1:
                 foldseek_cmd = f'foldseek createdb {abspath}/{args.query} {abspath}/{args.name}_foldtune_input_db --prostt5-model {prostt5_weights_path}'
-                if int(args.GPUs) != 0:
-                    foldseek_cmd += ' --gpu 1'
-                subprocess.run(foldseek_cmd, shell=True, check=True)
+                # NEED TO FIX
+                # if int(args.GPUs) != 0:
+                #     foldseek_cmd += ' --gpu 1'
+                subprocess.run(foldseek_cmd.split(' '), check=True)
             
-            foldseek_cmd = (
-            f'foldseek easy-search {abspath}/{args.name}_foldtune_generated_sequences_round{i}_db '
-            f'{abspath}/{args.name}_foldtune_input_db '
-            f'{abspath}/{args.name}_foldtune_foldseek_round{i}.tsv tmp_round{i} '
-            )
+            foldseek_cmd = f'foldseek easy-search {abspath}/{args.name}_foldtune_generated_sequences_round{i}_db {abspath}/{args.name}_foldtune_input_db {abspath}/{args.name}_foldtune_foldseek_round{i}.tsv tmp_round{i}'
         else:
-            foldseek_cmd = (
-                f'foldseek easy-search {abspath}/{args.name}_foldtune_generated_structs_round{i}/ '
-                f'{abspath}/{args.name}_foldtune_input_structs/ '
-                f'{abspath}/{args.name}_foldtune_foldseek_round{i}.tsv tmp_round{i} '
-                '--alignment-type 1 '
-                '--format-output "query,target,fident,bits,alntmscore" '
-            )
+            foldseek_cmd = f'foldseek easy-search {abspath}/{args.name}_foldtune_generated_structs_round{i}/ {abspath}/{args.name}_foldtune_input_structs/ {abspath}/{args.name}_foldtune_foldseek_round{i}.tsv tmp_round{i} --alignment-type 1 --format-output "query,target,fident,bits,alntmscore"'
 
-        subprocess.run(foldseek_cmd, shell=True, check=True)
+        print(foldseek_cmd)
+        subprocess.run(foldseek_cmd.split(' '), check=True)
 
         score_df = highest_avg_score_by_query(f'{abspath}/{args.name}_foldtune_foldseek_round{i}.tsv', f'{abspath}/cleaned_truncated_{args.name}_foldtune_generated_sequences_round{i}.fasta', args)
 
@@ -175,7 +169,7 @@ def foldtune(args):
             f.write("\n".join(most_distant_labels))
 
         seqkit_command = [
-            "seqkit", "grep",
+            'seqkit', "grep",
             "--pattern-file", labels_file,
             f"{abspath}/cleaned_truncated_{args.name}_foldtune_generated_sequences_round{i}.fasta"
         ]

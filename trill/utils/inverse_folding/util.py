@@ -9,7 +9,7 @@ import math
 import biotite.structure
 from biotite.structure.io import pdbx, pdb
 from biotite.structure.residues import get_residues
-from biotite.structure import filter_backbone
+from biotite.structure import filter_peptide_backbone
 from biotite.structure import get_chains
 from biotite.sequence import ProteinSequence
 import numpy as np
@@ -23,25 +23,78 @@ from typing import Sequence, Tuple, List
 import os
 from icecream import ic
 from esm.data import BatchConverter
+from trill.utils.safe_load import safe_torch_load
+from trill.utils.safe_load import safe_torch_load
 
 
 def load_structure(fpath, chain=None):
     """
     Args:
-        fpath: filepath to either pdb or cif file
+        fpath: filepath to pdb/cif file, or RCSB PDB ID (4 characters)
         chain: the chain id or list of chain ids to load
     Returns:
         biotite.structure.AtomArray
     """
-    if fpath.endswith('cif'):
+    import gzip
+    
+    # Handle gzipped files
+    if fpath.endswith('.gz'):
+        if fpath.endswith('.pdb.gz'):
+            with gzip.open(fpath, 'rt') as fin:
+                pdbf = pdb.PDBFile.read(fin)
+            structure = pdb.get_structure(pdbf, model=1)
+        elif fpath.endswith('.cif.gz'):
+            with gzip.open(fpath, 'rt') as fin:
+                pdbxf = pdbx.BinaryCifFile.read(fin)
+            structure = pdbx.get_structure(pdbxf, model=1)
+        else:
+            raise ValueError(f"Unsupported compressed file format: {fpath}")
+    elif fpath.endswith('cif'):
         with open(fpath) as fin:
-            pdbxf = pdbx.PDBxFile.read(fin)
+            pdbxf = pdbx.BinaryCifFile.read(fin)
         structure = pdbx.get_structure(pdbxf, model=1)
     elif fpath.endswith('pdb') or fpath.endswith('3di'):
         with open(fpath) as fin:
             pdbf = pdb.PDBFile.read(fin)
         structure = pdb.get_structure(pdbf, model=1)
-    bbmask = filter_backbone(structure)
+    else:
+        # Check if it's a file without extension or an RCSB PDB ID
+        if os.path.exists(fpath):
+            # Try to treat as PDB file without extension
+            try:
+                with open(fpath) as fin:
+                    pdbf = pdb.PDBFile.read(fin)
+                structure = pdb.get_structure(pdbf, model=1)
+            except Exception as e:
+                raise ValueError(f"Unable to load structure from {fpath}. Error: {e}")
+        else:
+            # Treat as RCSB PDB ID and download
+            import urllib.request
+            import tempfile
+            
+            # Validate PDB ID format (should be 4 characters)
+            pdb_id = os.path.basename(fpath).upper()
+            if len(pdb_id) != 4 or not pdb_id.isalnum():
+                raise ValueError(f"Invalid PDB ID format: {pdb_id}. PDB IDs should be 4 alphanumeric characters.")
+            
+            # Download PDB file
+            pdb_url = f"https://files.rcsb.org/download/{pdb_id}.pdb"
+            try:
+                with tempfile.NamedTemporaryFile(mode='w+t', suffix='.pdb', delete=False) as tmp_file:
+                    print(f"Downloading PDB {pdb_id} from RCSB...")
+                    urllib.request.urlretrieve(pdb_url, tmp_file.name)
+                    
+                    # Read the downloaded file
+                    with open(tmp_file.name) as fin:
+                        pdbf = pdb.PDBFile.read(fin)
+                    structure = pdb.get_structure(pdbf, model=1)
+                    
+                    # Clean up temporary file
+                    os.unlink(tmp_file.name)
+                    
+            except Exception as e:
+                raise ValueError(f"Failed to download or parse PDB {pdb_id} from RCSB. Error: {e}")
+    bbmask = filter_peptide_backbone(structure)
     structure = structure[bbmask]
     all_chains = get_chains(structure)
     if len(all_chains) == 0:
@@ -416,7 +469,7 @@ class CNN(nn.Module):
 def get_T5_model(model_dir):
     print("Loading T5 from: {}".format(model_dir))
     model = T5EncoderModel.from_pretrained(
-        "Rostlab/ProstT5_fp16", cache_dir=model_dir).to(device)
+        "Rostlab/ProstT5_fp16", cache_dir=model_dir, use_safetensors=True).to(device)
     model = model.eval()
     vocab = T5Tokenizer.from_pretrained(
         "Rostlab/ProstT5_fp16", do_lower_case=False, cache_dir=model_dir)
@@ -530,7 +583,7 @@ def load_predictor(cache_dir, weights_link="https://github.com/mheinzinger/Prost
     # to overcome, need to explicitly map to active device
     global device
 
-    state = torch.load(checkpoint_p, map_location=device)
+    state = safe_torch_load(checkpoint_p, map_location=device)
 
     model.load_state_dict(state["state_dict"])
 

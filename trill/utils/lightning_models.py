@@ -17,6 +17,7 @@ from loguru import logger
 from transformers import pipeline, AutoTokenizer, AutoModelForCausalLM, DataCollatorForLanguageModeling, T5EncoderModel, \
     T5Tokenizer, AutoModelForSeq2SeqLM, EsmTokenizer, EsmForMaskedLM, AutoModel
 from .poolparti import poolparti_gen
+from .safe_load import safe_torch_load
 # import rinalmo.model.model
 # from rinalmo.config import model_config
 # import rinalmo.data.alphabet
@@ -135,7 +136,7 @@ class MLP_Classifier(pl.LightningModule):
 class SaProt(pl.LightningModule):
     def __init__(self, args):
         super().__init__()
-        self.model = EsmForMaskedLM.from_pretrained("westlake-repl/SaProt_650M_AF2")
+        self.model = EsmForMaskedLM.from_pretrained("westlake-repl/SaProt_650M_AF2", use_safetensors=True)
         self.reps = []
         if args.command == 'embed' or args.command == 'dock':
             self.per_AA = args.per_AA
@@ -382,7 +383,7 @@ class RiNALMo(pl.LightningModule):
         super().__init__()
         config = model_config('giga')
         self.model = rinalmo.model.model.RiNALMo(config)
-        self.model.load_state_dict(torch.load(weights_file))
+        self.model.load_state_dict(safe_torch_load(weights_file))
         self.alphabet = rinalmo.data.alphabet.Alphabet(**config['alphabet'])
         self.reps = []
         if args.command == 'embed':
@@ -561,11 +562,11 @@ class ProtGPT2(pl.LightningModule):
         super().__init__()
         if int(args.GPUs) == 1:
             device_map = {'transformer.wte': 0, 'lm_head': 0, 'transformer.wpe': 0, 'transformer.drop': 0, 'transformer.h.0': 0, 'transformer.h.1': 0, 'transformer.h.2': 0, 'transformer.h.3': 0, 'transformer.h.4': 0, 'transformer.h.5': 0, 'transformer.h.6': 0, 'transformer.h.7': 0, 'transformer.h.8': 0, 'transformer.h.9': 0, 'transformer.h.10': 0, 'transformer.h.11': 0, 'transformer.h.12': 0, 'transformer.h.13': 0, 'transformer.h.14': 0, 'transformer.h.15': 0, 'transformer.h.16': 0, 'transformer.h.17': 0, 'transformer.h.18': 0, 'transformer.h.19': 0, 'transformer.h.20': 0, 'transformer.h.21': 0, 'transformer.h.22': 0, 'transformer.h.23': 0, 'transformer.h.24': 0, 'transformer.h.25': 0, 'transformer.h.26': 0, 'transformer.h.27': 0, 'transformer.h.28': 0, 'transformer.h.29': 0, 'transformer.h.30': 0, 'transformer.h.31': 0, 'transformer.h.32': 0, 'transformer.h.33': 0, 'transformer.h.34': 0, 'transformer.h.35': 0, 'transformer.ln_f': 0}
-            self.model = AutoModelForCausalLM.from_pretrained("nferruz/ProtGPT2", device_map=device_map)
+            self.model = AutoModelForCausalLM.from_pretrained("nferruz/ProtGPT2", device_map=device_map, use_safetensors=True)
         elif int(args.GPUs) > 1 and args.command == 'lang_gen':
-            self.model = AutoModelForCausalLM.from_pretrained("nferruz/ProtGPT2", device_map="auto")
+            self.model = AutoModelForCausalLM.from_pretrained("nferruz/ProtGPT2", device_map="auto", use_safetensors=True)
         else:
-            self.model = AutoModelForCausalLM.from_pretrained("nferruz/ProtGPT2", low_cpu_mem_usage=True)
+            self.model = AutoModelForCausalLM.from_pretrained("nferruz/ProtGPT2", low_cpu_mem_usage=True, use_safetensors=True)
 
         self.tokenizer = AutoTokenizer.from_pretrained("nferruz/ProtGPT2")
         if 'lr' in args:
@@ -975,9 +976,9 @@ class ProtT5(pl.LightningModule):
         super().__init__()
         device_map = {'shared': 'cpu', 'encoder.embed_tokens': 'cpu', 'encoder.block.0': 'cpu', 'encoder.block.1': 'cpu', 'encoder.block.2': 'cpu', 'encoder.block.3': 'cpu', 'encoder.block.4': 'cpu', 'encoder.block.5': 'cpu', 'encoder.block.6': 'cpu', 'encoder.block.7': 'cpu', 'encoder.block.8': 'cpu', 'encoder.block.9': 'cpu', 'encoder.block.10': 'cpu', 'encoder.block.11': 'cpu', 'encoder.block.12': 'cpu', 'encoder.block.13': 'cpu', 'encoder.block.14': 'cpu', 'encoder.block.15': 'cpu', 'encoder.block.16': 'cpu', 'encoder.block.17': 'cpu', 'encoder.block.18': 'cpu', 'encoder.block.19': 'cpu', 'encoder.block.20': 'cpu', 'encoder.block.21': 'cpu', 'encoder.block.22': 'cpu', 'encoder.block.23': 'cpu', 'encoder.final_layer_norm': 'cpu', 'encoder.dropout': 'cpu'}
         if int(args.GPUs) > 0:
-            self.model = T5EncoderModel.from_pretrained('Rostlab/prot_t5_xl_half_uniref50-enc')
+            self.model = T5EncoderModel.from_pretrained('Rostlab/prot_t5_xl_half_uniref50-enc', use_safetensors=True)
         else:
-            self.model = T5EncoderModel.from_pretrained('Rostlab/prot_t5_xl_half_uniref50-enc', device_map=device_map)
+            self.model = T5EncoderModel.from_pretrained('Rostlab/prot_t5_xl_half_uniref50-enc', device_map=device_map, use_safetensors=True)
         self.tokenizer = T5Tokenizer.from_pretrained('Rostlab/prot_t5_xl_half_uniref50-enc', do_lower_case=False)
         self.reps = []
         if args.command == 'embed':
@@ -1038,11 +1039,11 @@ class ZymCTRL(pl.LightningModule):
         super().__init__()
         if int(args.GPUs) == 1:
             device_map = {'transformer.wte': 0, 'lm_head': 0, 'transformer.wpe': 0, 'transformer.drop': 0, 'transformer.h.0': 0, 'transformer.h.1': 0, 'transformer.h.2': 0, 'transformer.h.3': 0, 'transformer.h.4': 0, 'transformer.h.5': 0, 'transformer.h.6': 0, 'transformer.h.7': 0, 'transformer.h.8': 0, 'transformer.h.9': 0, 'transformer.h.10': 0, 'transformer.h.11': 0, 'transformer.h.12': 0, 'transformer.h.13': 0, 'transformer.h.14': 0, 'transformer.h.15': 0, 'transformer.h.16': 0, 'transformer.h.17': 0, 'transformer.h.18': 0, 'transformer.h.19': 0, 'transformer.h.20': 0, 'transformer.h.21': 0, 'transformer.h.22': 0, 'transformer.h.23': 0, 'transformer.h.24': 0, 'transformer.h.25': 0, 'transformer.h.26': 0, 'transformer.h.27': 0, 'transformer.h.28': 0, 'transformer.h.29': 0, 'transformer.h.30': 0, 'transformer.h.31': 0, 'transformer.h.32': 0, 'transformer.h.33': 0, 'transformer.h.34': 0, 'transformer.h.35': 0, 'transformer.ln_f': 0}
-            self.model = AutoModelForCausalLM.from_pretrained("nferruz/ZymCTRL", device_map=device_map)
+            self.model = AutoModelForCausalLM.from_pretrained("nferruz/ZymCTRL", device_map=device_map, use_safetensors=True)
         elif int(args.GPUs) > 1 and args.command == 'lang_gen':
-            self.model = AutoModelForCausalLM.from_pretrained("nferruz/ZymCTRL", device_map="auto")
+            self.model = AutoModelForCausalLM.from_pretrained("nferruz/ZymCTRL", device_map="auto", use_safetensors=True)
         else:
-            self.model = AutoModelForCausalLM.from_pretrained("nferruz/ZymCTRL", low_cpu_mem_usage=True)
+            self.model = AutoModelForCausalLM.from_pretrained("nferruz/ZymCTRL", low_cpu_mem_usage=True, use_safetensors=True)
 
         self.tokenizer = AutoTokenizer.from_pretrained("nferruz/ZymCTRL")
         self.special_tokens = ['<start>', '<end>', '<|endoftext|>','<pad>',' ', '<sep>']
@@ -1127,14 +1128,14 @@ class ProstT5(pl.LightningModule):
             self.per_AA = args.per_AA
             self.avg = args.avg
             if int(args.GPUs) > 1:
-                self.model = T5EncoderModel.from_pretrained("Rostlab/ProstT5", device_map="auto")
+                self.model = T5EncoderModel.from_pretrained("Rostlab/ProstT5", device_map="auto", use_safetensors=True)
             else:
-                self.model = T5EncoderModel.from_pretrained("Rostlab/ProstT5", low_cpu_mem_usage=True)
+                self.model = T5EncoderModel.from_pretrained("Rostlab/ProstT5", low_cpu_mem_usage=True, use_safetensors=True)
         elif self.command == 'fold' or self.command == 'inv_fold_gen' or self.command == 'classify':
             if int(args.GPUs) > 1:
-                self.model = AutoModelForSeq2SeqLM.from_pretrained("Rostlab/ProstT5", device_map="auto")
+                self.model = AutoModelForSeq2SeqLM.from_pretrained("Rostlab/ProstT5", device_map="auto", use_safetensors=True)
             else:
-                self.model = AutoModelForSeq2SeqLM.from_pretrained("Rostlab/ProstT5", low_cpu_mem_usage=True)
+                self.model = AutoModelForSeq2SeqLM.from_pretrained("Rostlab/ProstT5", low_cpu_mem_usage=True, use_safetensors=True)
         self.tokenizer = T5Tokenizer.from_pretrained('Rostlab/ProstT5', do_lower_case=False)
         if int(args.GPUs) >= 1:
             self.model = self.model.half()

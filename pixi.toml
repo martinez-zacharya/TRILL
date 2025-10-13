@@ -1,0 +1,142 @@
+[project]
+name = "trill-proteins-env"
+version = "1.9.0"
+description = "Sandbox for Computational Protein Design"
+authors = ["Zachary Martinez <martinez.zacharya@gmail.com>"]
+license = "MIT"
+channels = ["conda-forge", "pytorch", "nvidia", "bioconda", "dglteam/label/th24_cu124", "pyg"]
+platforms = ["linux-64"]
+
+[tasks]
+ensure-foldseek = { cmd = "python trill/utils/ensure_foldseek.py" }
+foldseek-help   = { cmd = "sh -lc 'exec foldseek -h'", depends-on = ["ensure-foldseek"] }
+trill = { cmd = "python -m trill.trill_main", env = { TF_ENABLE_ONEDNN_OPTS = "0", TF_CPP_MIN_LOG_LEVEL = "3", CUDA_VISIBLE_DEVICES = "0" } }
+
+[dependencies]
+python = ">=3.11,<3.12"
+accelerate = "*"
+ambertools = "*"
+ase = "*"
+beartype = "*"
+biopython = ">=1.85,<2"
+bokeh = "*"
+chardet = "*"
+chembl_structure_pipeline = "*"
+click = "*"
+datasets = "*"
+deepspeed = "*"
+dm-tree = "*"
+e3nn = "*"
+evaluate = "*"
+fair-esm = "*"
+fpocket = "*"
+gemmi = "*"
+gitpython = "*"
+h5py = "*"
+hydra-core = "*"
+icecream = "*"
+ipdb = "*"
+jaxtyping = "*"
+lifelines = "*"
+lightgbm = "*"
+llvmlite = "*"
+loguru = "*"
+matplotlib = "*"
+mdanalysis = "*"
+meeko = "*"
+ml-collections = "*"
+modelcif = "*"
+numba = "*"
+numpy = ">=1.26.4,<2"
+omegaconf = "*"
+openbabel = "*"
+openff-toolkit-base ="*" 
+openmm = "*"
+optuna = "*"
+pandera = "*"
+pandas = "*"
+pdbfixer = "*"
+plotly = "*"
+pydantic = "*"
+pyfiglet = "*"
+pytest = "*"
+rdkit = "*"
+scikit-learn = "*"
+scikit-optimize = "*"
+seaborn = "*"
+selfies = "*"
+sentencepiece = ">=0.1.99,<0.2"
+setuptools = ">=80.9.0,<81"
+skops = "*"
+spyrmsd = "*"
+smina = "*"
+swig = "*"
+tensorboard = "*"
+tensorboardx = "*"
+transformers = "*"
+typed-argument-parser = "*"
+umap-learn = "*"
+urllib3 = "*"
+vina = "*"
+xgboost = "*"
+dgl = "<=2.4.0"
+compilers = ">=1.10.0,<2"
+pyrsistent = ">=0.20.0,<0.21"
+pytorch = ">=2.3.0,<3"
+torchvision = "*"
+typer = ">=0.16.0,<0.17"
+flash-attn = "*"
+triton = ">=3.3.1,<4"
+# pyg = "*"
+absl-py = "*"
+tf-keras = ">=2.16.0,<3"
+cuda-toolkit = "*"
+cudatoolkit-dev = "*"
+safetensors = ">=0.5.3,<0.6"
+pyparsing = ">=3.2.3,<4"
+foldseek = ">=10.941cd33,<11"
+seqkit = "*"
+
+
+[system-requirements]
+cuda = "12.6"
+
+[tool.pixi.pypi]
+pip-extra-index-urls = [
+    "https://data.pyg.org/whl/torch-2.7.0+cu126.html"
+]
+
+
+[pypi-dependencies]
+antipickle = ">=0.2.0, <0.3"
+biobb-vs = ">=5.1.0, <6"
+calm = { git = "https://github.com/martinez-zacharya/CaLM.git" }
+cuequivariance-ops-cu12 = ">=0.5.1, <0.6"
+cuequivariance-ops-torch-cu12 = ">=0.5.1, <0.6"
+cuequivariance-torch = ">=0.5.1, <0.6"
+ecpick = { git = "https://github.com/martinez-zacharya/ECPICK.git" }
+fairscale = ">=0.4.13, <0.5"
+# lightning = { git = "https://github.com/Lightning-AI/pytorch-lightning.git", rev = "4dc1dbce6365f15d1ec8b42410fc79df86d748fa" }
+# pytorch_lightning = {git="https://github.com/Lightning-AI/pytorch-lightning/tree/master/src/pytorch_lightning.git", rev="main"}
+# lightning = {url="https://github.com/Lightning-AI/lightning/archive/refs/heads/master.zip"}
+pytorch_lightning = "<=2.5.0"
+lightdock = { git = "https://github.com/martinez-zacharya/lightdock.git", rev = "03a8bc4888c0ff8c98b7f0df4b3c671e3dbf3b1f" }
+prolif = { git = "https://github.com/chemosim-lab/ProLIF.git" }
+reprint = ">=0.6.0, <0.7"
+rna-fm = ">=0.2.2, <0.3"
+# torch = { version = ">=2.3.0", index = "https://download.pytorch.org/whl/cu126" }
+# torchvision = { version = ">=0.20.0", index = "https://download.pytorch.org/whl/cu126" }
+# torch_scatter = {url="https://data.pyg.org/whl/torch-2.7.0%2Bcu126/torch_scatter-2.1.2%2Bpt27cu126-cp311-cp311-linux_x86_64.whl"} 
+torch-sparse = {url="https://data.pyg.org/whl/torch-2.7.0%2Bcu126/torch_sparse-0.6.18%2Bpt27cu126-cp311-cp311-linux_x86_64.whl"} 
+torch_cluster = {url="https://data.pyg.org/whl/torch-2.7.0%2Bcu126/torch_cluster-1.6.3%2Bpt27cu126-cp311-cp311-linux_x86_64.whl"} 
+torch_spline_conv = {url="https://data.pyg.org/whl/torch-2.7.0%2Bcu126/torch_spline_conv-1.2.2%2Bpt27cu126-cp311-cp311-linux_x86_64.whl"}
+scasa = { git = "https://github.com/martinez-zacharya/SCASA.git" }
+biotite = "*"
+# pyg = {version = "*", index="https://data.pyg.org/whl/torch-2.7.0+cu126.html"}
+ninja = "*"
+torch-nl = "*"
+pyg_lib = {url="https://data.pyg.org/whl/torch-2.7.0%2Bcu126/pyg_lib-0.4.0%2Bpt27cu126-cp311-cp311-linux_x86_64.whl"}
+trill-proteins = { path = ".", editable = true }
+
+# [tool.pixi.pypi-dependencies]
+# trill-proteins = { path = ".", editable = true }
