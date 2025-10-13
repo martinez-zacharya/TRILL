@@ -163,10 +163,11 @@ def cli(args=None):
 
 
 if __name__ == '__main__':
-    # Check if 'cli' is passed as an argument
-    if len(sys.argv) > 1 and sys.argv[1] == 'cli':
-        # Remove 'cli' from args and call cli function
-        cli(sys.argv[2:])
-    else:
-        # Fallback to direct main call for backward compatibility
-        main(sys.argv[1:])
+    # # Check if 'cli' is passed as an argument
+    # if len(sys.argv) > 1 and sys.argv[1] == 'cli':
+    #     # Remove 'cli' from args and call cli function
+    #     cli(sys.argv[2:])
+    # else:
+    #     # Fallback to direct main call for backward compatibility
+    #     main(sys.argv[1:])
+    main(sys.argv[1:])

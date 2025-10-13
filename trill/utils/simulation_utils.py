@@ -19,8 +19,9 @@ from openff.toolkit import Topology as fftop
 from openmm.vec3 import Vec3
 from openff.toolkit import  Molecule
 from openmm import unit
-from openmmforcefields.generators import SMIRNOFFTemplateGenerator
-from openmmforcefields.generators import SystemGenerator
+# from openmmforcefields.generators import SMIRNOFFTemplateGenerator
+# from openmmforcefields.generators import SystemGenerator
+from openmmforcefields_template_generators import SMIRNOFFTemplateGenerator
 from openff.interchange import Interchange
 from openff.toolkit import ForceField as ff_ff
 from openff.toolkit.utils import get_data_file_path

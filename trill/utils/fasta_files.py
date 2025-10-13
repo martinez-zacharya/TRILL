@@ -1,5 +1,8 @@
 import os
 import subprocess
+# from trill.utils.externals import ensure_bin
+
+# SEQKIT  = ensure_bin("seqkit")
 
 def remove_invalid_seqs_aa(query):
     # Extract base directory and filename
@@ -15,7 +18,7 @@ def remove_invalid_seqs_aa(query):
         query,
         "-o", output_file,
     ]
-    result = subprocess.run(seqkit_cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+    result = subprocess.run(seqkit_cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=True, text=True)
     
 def truncate_seqs(query, trunc_len):
     # Extract base directory and filename
@@ -25,4 +28,4 @@ def truncate_seqs(query, trunc_len):
     
     # Run the seqkit truncate command
     seqkit_truncate_cmd = f'seqkit subseq -r 1:{trunc_len} {query} -o {output_file}'.split(' ')
-    subprocess.run(seqkit_truncate_cmd)
+    subprocess.run(seqkit_truncate_cmd, check=True)
