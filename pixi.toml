@@ -14,6 +14,7 @@ trill = { cmd = "python -m trill.trill_main", env = { TF_ENABLE_ONEDNN_OPTS = "0
 
 [dependencies]
 python = ">=3.11,<3.12"
+pip = "*"
 accelerate = "*"
 ambertools = "*"
 ase = "*"

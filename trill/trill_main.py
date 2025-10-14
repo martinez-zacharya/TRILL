@@ -25,7 +25,14 @@ os.environ['TF_ENABLE_ONEDNN_OPTS'] = '0'
 import warnings
 warnings.filterwarnings('ignore', category=UserWarning)
 warnings.filterwarnings('ignore', category=FutureWarning)
-
+warnings.filterwarnings(
+    "ignore",
+    message=(
+        ".*The pynvml package is deprecated.*"
+    ),
+    category=FutureWarning,
+    module="torch\\.cuda"
+)
 # Try to suppress TensorFlow logging if TensorFlow is imported
 try:
     import tensorflow as tf

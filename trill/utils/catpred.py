@@ -15,7 +15,7 @@ from loguru import logger
 def downgrade_rotary_emb():
     """Downgrade rotary_embedding_torch to version 0.6.5 silently"""
     subprocess.check_call(
-        [sys.executable, '-m', 'pip', 'install', 'rotary_embedding_torch==0.6.5'],
+        ['pip', 'install', 'rotary_embedding_torch==0.6.5'],
         stdout=subprocess.DEVNULL,
         stderr=subprocess.DEVNULL
     )
@@ -23,7 +23,7 @@ def downgrade_rotary_emb():
 def upgrade_rotary_emb(og_ver_rotary):
     """Upgrade rotary_embedding_torch back to the original version silently"""
     subprocess.check_call(
-        [sys.executable, '-m', 'pip', 'install', f'rotary_embedding_torch=={og_ver_rotary}'],
+        ['pip', 'install', f'rotary_embedding_torch=={og_ver_rotary}'],
         stdout=subprocess.DEVNULL,
         stderr=subprocess.DEVNULL
     )
@@ -33,6 +33,28 @@ def get_rotary_emb_version():
     rotary_ver = pkg_resources.get_distribution("rotary_embedding_torch").version
 
     return rotary_ver
+
+def downgrade_pandas():
+    """Downgrade rotary_embedding_torch to version 2.0.0 silently"""
+    subprocess.check_call(
+        ['pip', 'install', 'pandas==2.0.0'],
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL
+    )
+
+def upgrade_pandas(og_ver_pandas):
+    """Upgrade pandas back to the original version silently"""
+    subprocess.check_call(
+        ['pip', 'install', f'pandas=={og_ver_pandas}'],
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL
+    )
+
+def get_pandas_version():
+    """ Get the current version of pandas """
+    pandas_ver = pkg_resources.get_distribution("pandas").version
+
+    return pandas_ver    
 
 def tupulize_fasta_smiles(args):
     fasta_path = args.query

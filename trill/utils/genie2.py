@@ -55,7 +55,7 @@ def clone_and_install_genie2(cache_dir):
     try:
         logger.info(f"Installing Genie2 from {target_path}...")
         subprocess.run(
-            [sys.executable, "-m", "pip", "install", "-e", ".", "--no-deps"],
+            ["pip", "install", "-e", ".", "--no-deps"],
             cwd=target_path,
             check=True,
             stdout=subprocess.DEVNULL,

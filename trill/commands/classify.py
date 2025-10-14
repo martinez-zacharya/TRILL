@@ -249,7 +249,7 @@ def run(args):
     from torch.utils.data import DataLoader, Dataset
     from trill.utils.dock_utils import downgrade_biopython, upgrade_biopython, get_current_biopython_version
     from trill.utils.mionic_utils import mionic, IonicProtein, download_mionic_checkpoint
-    from trill.utils.catpred import clone_and_install_catpred, download_catpred_weights, tupulize_fasta_smiles, create_csv_sh, get_rotary_emb_version, upgrade_rotary_emb, downgrade_rotary_emb, get_predictions
+    from trill.utils.catpred import clone_and_install_catpred, download_catpred_weights, tupulize_fasta_smiles, create_csv_sh, get_rotary_emb_version, upgrade_rotary_emb, downgrade_rotary_emb, get_predictions, get_pandas_version, upgrade_pandas, downgrade_pandas
     from trill.utils.catapro import clone_and_install_catapro, fetch_molt5, fetch_prott5, run_catapro_prediction
     import trill.utils.catapro
     from trill.utils.psichic import clone_and_install_psichic, fasta_smiles_to_dataframe, run_psichic
@@ -363,6 +363,8 @@ def run(args):
 
         og_ver_rotary = get_rotary_emb_version()
         downgrade_rotary_emb()
+        og_ver_pandas = get_pandas_version()
+        downgrade_pandas()
 
         pairs_list = tupulize_fasta_smiles(args)
         args.cache_dir = cache_dir
@@ -463,6 +465,7 @@ def run(args):
 
             
         upgrade_rotary_emb(og_ver_rotary)
+        upgrade_pandas(og_ver_pandas)
         # with open(args.smiles, 'r') as f:
         #     content = f.read()
         # rxn_counts = content.count('.')
