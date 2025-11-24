@@ -27,7 +27,10 @@ def foldtune(args):
             subprocess.run(embed_cmd, check=True)
             if not args.fast_folding:
                 logger.info('Folding input sequences with ESMFold')
-                fold_cmd = f'trill {args.name}_foldtune_input {args.GPUs} --RNG_seed {args.RNG_seed} --outdir {abspath}/{args.name}_foldtune_input_structs fold ESMFold {abspath}/{args.query} --batch_size {args.fold_batch_size}'.split(' ')
+                if not os.path.isabs(path_str):
+                    fold_cmd = f'trill {args.name}_foldtune_input {args.GPUs} --RNG_seed {args.RNG_seed} --outdir {abspath}/{args.name}_foldtune_input_structs fold ESMFold {abspath}/{args.query} --batch_size {args.fold_batch_size}'.split(' ')
+                else:
+                    fold_cmd = f'trill {args.name}_foldtune_input {args.GPUs} --RNG_seed {args.RNG_seed} --outdir {abspath}/{args.name}_foldtune_input_structs fold ESMFold {args.query} --batch_size {args.fold_batch_size}'.split(' ')
                 subprocess.run(fold_cmd, check=True)
 
         if i == 1:
