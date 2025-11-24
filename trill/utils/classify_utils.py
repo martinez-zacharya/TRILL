@@ -82,7 +82,10 @@ def prep_hf_data(args):
     train_df, test_df, n_classes = prep_data(seq_df, args)
     le = LabelEncoder()
     train_df["NewLab"] = le.fit_transform(train_df["NewLab"])
-    test_df["NewLab"] = le.transform(test_df["NewLab"])
+    if not float(args.train_split) == 1 or not float(args.train_split) == 1.0:
+        test_df["NewLab"] = le.transform(test_df["NewLab"])
+    else:
+        test_df["NewLab"] = train_df["NewLab"]
 
     return train_df, test_df, n_classes, le
 

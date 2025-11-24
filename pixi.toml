@@ -121,7 +121,7 @@ fairscale = ">=0.4.13, <0.5"
 # pytorch_lightning = {git="https://github.com/Lightning-AI/pytorch-lightning/tree/master/src/pytorch_lightning.git", rev="main"}
 # lightning = {url="https://github.com/Lightning-AI/lightning/archive/refs/heads/master.zip"}
 pytorch_lightning = "<=2.5.0"
-lightdock = { git = "https://github.com/martinez-zacharya/lightdock.git", rev = "03a8bc4888c0ff8c98b7f0df4b3c671e3dbf3b1f" }
+lightdock = { git = "https://github.com/martinez-zacharya/lightdock.git", rev = "7472aea30bae7f18cf4570ad5ec559196f3b5752" }
 prolif = { git = "https://github.com/chemosim-lab/ProLIF.git" }
 reprint = ">=0.6.0, <0.7"
 rna-fm = ">=0.2.2, <0.3"

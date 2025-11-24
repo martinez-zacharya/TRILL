@@ -139,12 +139,19 @@ def foldtune(args):
                 #     foldseek_cmd += ' --gpu 1'
                 subprocess.run(foldseek_cmd.split(' '), check=True)
             
-            foldseek_cmd = f'foldseek easy-search {abspath}/{args.name}_foldtune_generated_sequences_round{i}_db {abspath}/{args.name}_foldtune_input_db {abspath}/{args.name}_foldtune_foldseek_round{i}.tsv tmp_round{i}'
+            foldseek_cmd = f'foldseek easy-search {abspath}/{args.name}_foldtune_generated_sequences_round{i}_db {abspath}/{args.name}_foldtune_input_db {abspath}/{args.name}_foldtune_foldseek_round{i}.tsv tmp_round{i}'.split(' ')
         else:
-            foldseek_cmd = f'foldseek easy-search {abspath}/{args.name}_foldtune_generated_structs_round{i}/ {abspath}/{args.name}_foldtune_input_structs/ {abspath}/{args.name}_foldtune_foldseek_round{i}.tsv tmp_round{i} --alignment-type 1 --format-output "query,target,fident,bits,alntmscore"'
+            foldseek_cmd = [
+                'foldseek', 'easy-search',
+                f'{abspath}/{args.name}_foldtune_generated_structs_round{i}/',
+                f'{abspath}/{args.name}_foldtune_input_structs/',
+                f'{abspath}/{args.name}_foldtune_foldseek_round{i}.tsv',
+                f'tmp_round{i}',
+                '--alignment-type', '1',
+                '--format-output', 'query,target,fident,bits,alntmscore',
+            ]
 
-        print(foldseek_cmd)
-        subprocess.run(foldseek_cmd.split(' '), check=True)
+        subprocess.run(foldseek_cmd, check=True)
 
         score_df = highest_avg_score_by_query(f'{abspath}/{args.name}_foldtune_foldseek_round{i}.tsv', f'{abspath}/cleaned_truncated_{args.name}_foldtune_generated_sequences_round{i}.fasta', args)
 

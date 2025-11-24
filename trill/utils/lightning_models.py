@@ -607,9 +607,9 @@ class ProtGPT2(pl.LightningModule):
             optimizer = torch.optim.Adam(self.model.parameters(), lr=self.lr)
         return optimizer
     
-    def generate(self, seed_seq = "M", max_length = 100, do_sample = True, temperature = 1.0, top_k = 950, repetition_penalty = 1.2, num_return_sequences = 1, eos_token_id=0):
+    def generate(self, seed_seq = "M", max_new_tokens = 100, do_sample = True, temperature = 1.0, top_k = 950, repetition_penalty = 1.2, num_return_sequences = 1, eos_token_id=0):
         generator = pipeline('text-generation', model = self.model, tokenizer=self.tokenizer, device_map='auto')
-        outseqs = generator(seed_seq, max_length=max_length, temperature = temperature, do_sample =do_sample, top_k=top_k, repetition_penalty=repetition_penalty, num_return_sequences=num_return_sequences, pad_token_id=eos_token_id, eos_token_id=eos_token_id)
+        outseqs = generator(seed_seq, max_new_tokens=max_new_tokens, temperature = temperature, do_sample =do_sample, top_k=top_k, repetition_penalty=repetition_penalty, num_return_sequences=num_return_sequences, pad_token_id=eos_token_id, eos_token_id=eos_token_id)
         outseqs = [samp['generated_text'].replace('\n','') for samp in outseqs]
         return outseqs
 
