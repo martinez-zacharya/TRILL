@@ -1,6 +1,6 @@
 [project]
 name = "trill-proteins-env"
-version = "1.9.0"
+version = "1.10.0"
 description = "Sandbox for Computational Protein Design"
 authors = ["Zachary Martinez <martinez.zacharya@gmail.com>"]
 license = "MIT"
