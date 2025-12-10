@@ -1,4 +1,4 @@
-[project]
+[workspace]
 name = "trill-proteins-env"
 version = "1.10.0"
 description = "Sandbox for Computational Protein Design"
