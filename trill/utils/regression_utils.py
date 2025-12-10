@@ -61,7 +61,7 @@ def load_reg_model(args):
     if args.regressor == 'Linear':
         model = sio.load(args.preTrained, trusted=True)
     elif args.regressor == 'LightGBM':
-        model = sio.load(args.preTrained, trusted=True)  
+        model = sio.load(args.preTrained, trusted=['collections.OrderedDict','lightgbm.basic.Booster','lightgbm.sklearn.LGBMRegressor'])  
     else:
         logger.error("Unsupported model type. Please specify 'Linear' or 'LightGBM'.")
         raise ValueError("Unsupported model type. Please specify 'Linear' or 'LightGBM'.")
