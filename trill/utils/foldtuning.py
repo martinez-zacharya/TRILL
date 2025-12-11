@@ -10,7 +10,11 @@ from trill.utils.foldseek_utils import run_foldseek_databases
 
 
 def foldtune(args):
-    ensure_foldseek_cmd = f'pixi run ensure-foldseek'.split(' ')
+    if "COLAB_GPU" in os.environ or "COLAB_JUPYTER_TOKEN" in os.environ:
+        pixi_path = os.path.expanduser("~/.pixi/bin/pixi")
+        ensure_foldseek_cmd = [pixi_path, "run", "ensure-foldseek"]
+    else:
+        ensure_foldseek_cmd = f'pixi run ensure-foldseek'.split(' ')
     subprocess.run(ensure_foldseek_cmd)
     for i in range(1, int(args.foldtune_rounds) + 1):
         logger.info(f'Foldtuning round {i}:')
