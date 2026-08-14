@@ -1,6 +1,6 @@
 [workspace]
 name = "trill-proteins-env"
-version = "1.10.0"
+version = "1.10.1"
 description = "Sandbox for Computational Protein Design"
 authors = ["Zachary Martinez <martinez.zacharya@gmail.com>"]
 license = "MIT"
@@ -108,10 +108,9 @@ einx = "*"
 [system-requirements]
 cuda = "12.6"
 
-[tool.pixi.pypi]
-pip-extra-index-urls = [
-    "https://data.pyg.org/whl/torch-2.7.0+cu126.html"
-]
+[pypi-options]
+index-url = "https://pypi.org/simple"
+find-links = [{ path = "vendor/pyg_wheels" }]
 
 
 [pypi-dependencies]
@@ -133,16 +132,14 @@ reprint = ">=0.6.0, <0.7"
 rna-fm = ">=0.2.2, <0.3"
 # torch = { version = ">=2.3.0", index = "https://download.pytorch.org/whl/cu126" }
 # torchvision = { version = ">=0.20.0", index = "https://download.pytorch.org/whl/cu126" }
-# torch_scatter = {url="https://data.pyg.org/whl/torch-2.7.0%2Bcu126/torch_scatter-2.1.2%2Bpt27cu126-cp311-cp311-linux_x86_64.whl"} 
-torch-sparse = {url="https://data.pyg.org/whl/torch-2.7.0%2Bcu126/torch_sparse-0.6.18%2Bpt27cu126-cp311-cp311-linux_x86_64.whl"} 
-torch_cluster = {url="https://data.pyg.org/whl/torch-2.7.0%2Bcu126/torch_cluster-1.6.3%2Bpt27cu126-cp311-cp311-linux_x86_64.whl"} 
-torch_spline_conv = {url="https://data.pyg.org/whl/torch-2.7.0%2Bcu126/torch_spline_conv-1.2.2%2Bpt27cu126-cp311-cp311-linux_x86_64.whl"}
+torch-sparse = "==0.6.18"
+torch-cluster = "==1.6.3"
+torch-spline-conv = "==1.2.2"
 scasa = { git = "https://github.com/martinez-zacharya/SCASA.git", rev = "a4f82b20f767b6c0fafea84754ac27ec965ad980" }
 biotite = "*"
 # pyg = {version = "*", index="https://data.pyg.org/whl/torch-2.7.0+cu126.html"}
 ninja = "*"
 torch-nl = "*"
-pyg_lib = {url="https://data.pyg.org/whl/torch-2.7.0%2Bcu126/pyg_lib-0.4.0%2Bpt27cu126-cp311-cp311-linux_x86_64.whl"}
 trill-proteins = { path = ".", editable = true }
 
 # [tool.pixi.pypi-dependencies]

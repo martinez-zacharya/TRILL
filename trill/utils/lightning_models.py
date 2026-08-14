@@ -561,8 +561,7 @@ class ProtGPT2(pl.LightningModule):
     def __init__(self, args):
         super().__init__()
         if int(args.GPUs) == 1:
-            device_map = {'transformer.wte': 0, 'lm_head': 0, 'transformer.wpe': 0, 'transformer.drop': 0, 'transformer.h.0': 0, 'transformer.h.1': 0, 'transformer.h.2': 0, 'transformer.h.3': 0, 'transformer.h.4': 0, 'transformer.h.5': 0, 'transformer.h.6': 0, 'transformer.h.7': 0, 'transformer.h.8': 0, 'transformer.h.9': 0, 'transformer.h.10': 0, 'transformer.h.11': 0, 'transformer.h.12': 0, 'transformer.h.13': 0, 'transformer.h.14': 0, 'transformer.h.15': 0, 'transformer.h.16': 0, 'transformer.h.17': 0, 'transformer.h.18': 0, 'transformer.h.19': 0, 'transformer.h.20': 0, 'transformer.h.21': 0, 'transformer.h.22': 0, 'transformer.h.23': 0, 'transformer.h.24': 0, 'transformer.h.25': 0, 'transformer.h.26': 0, 'transformer.h.27': 0, 'transformer.h.28': 0, 'transformer.h.29': 0, 'transformer.h.30': 0, 'transformer.h.31': 0, 'transformer.h.32': 0, 'transformer.h.33': 0, 'transformer.h.34': 0, 'transformer.h.35': 0, 'transformer.ln_f': 0}
-            self.model = AutoModelForCausalLM.from_pretrained("nferruz/ProtGPT2", device_map=device_map, use_safetensors=True)
+            self.model = AutoModelForCausalLM.from_pretrained("nferruz/ProtGPT2", use_safetensors=True).to("cuda:0")
         elif int(args.GPUs) > 1 and args.command == 'lang_gen':
             self.model = AutoModelForCausalLM.from_pretrained("nferruz/ProtGPT2", device_map="auto", use_safetensors=True)
         else:
@@ -643,9 +642,6 @@ class ESM_Gibbs(pl.LightningModule):
         returns:
             tensor containing the selected amino acid index
         """
-        #TODO: repetition penalty.
-        #TODO: this could be vectorized a lot better, but I think this isn't the rate limiting step (inferrence is), so it probably doesn't matter.
-
         logits = out[gen_idx] # 1 x vocab_size
         if temperature is not None:
             logits = logits / temperature
@@ -670,8 +666,7 @@ class ESM_Gibbs(pl.LightningModule):
 
         return torch.tensor(valid_idx[idx])
     
-    def untokenize_batch(self, batch, bos, eos): #TODO: maybe should be moved to the model class, or a model superclass?
-        #convert tokens to AAs, but skip the first one, because that one is <cls>
+    def untokenize_batch(self, batch, bos, eos):
         start_offset = 0
         end_offset = 0
         if bos:
@@ -691,18 +686,24 @@ class ESM_Gibbs(pl.LightningModule):
         return cleaned_seq
 
     def get_init_seq(self, seed_seq, max_len, batch_size = 1):
-        """ Get initial sequence by padding seed_seq with masks """
+        """ Get initial sequence by padding seed_seq with masks.
 
+        The seed is truncated to max_len so the generated sequence always has length
+        max_len. When the (truncated) seed already fills max_len there are no padding
+        masks; generate() then re-masks the target region so generation still runs
+        (otherwise max_len <= len(seed_seq) would return the seed unchanged).
+        """
 
         if isinstance(seed_seq, list): # input is an array, convert it to a string
             batch = random.choices(seed_seq, k=batch_size)
             for i, seed in enumerate(batch):
+                seed = self.clean_seed_seq(seed)[:max_len]
                 remaining_len = max_len - len(seed)
-                batch[i] = (str(i), self.clean_seed_seq(seed) + "<mask>" * remaining_len)
+                batch[i] = (str(i), seed + "<mask>" * remaining_len)
 
         elif isinstance(seed_seq, str):
+            seed_seq = self.clean_seed_seq(seed_seq)[:max_len]
             remaining_len = max_len - len(seed_seq)
-            seed_seq = self.clean_seed_seq(seed_seq)
             batch = [(str(i), seed_seq + "<mask>" * remaining_len) for i in range(batch_size)]
 
         else:
@@ -792,10 +793,14 @@ class ESM_Gibbs(pl.LightningModule):
                 if num_positions > len(indexes):
                     num_positions = len(indexes)
 
+                prime_targets = [list(indexes) if self.alphabet.mask_idx not in batch[bi] else []
+                                 for bi in range(batch_size)]
+                self.mask_target_indexes(batch, prime_targets)
+
                 flag = True
                 while flag == True:
                 # for ii in range(num_iters):
-                    if 32 not in batch:
+                    if self.alphabet.mask_idx not in batch:
                         flag = False
                         break
                     if num_positions > 0: #do some subset of positions

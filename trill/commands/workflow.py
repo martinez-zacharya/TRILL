@@ -29,6 +29,34 @@ def setup(subparsers):
     )
 
     workflow.add_argument(
+        "--foldtune_generator",
+        help="Language model used to generate/finetune each foldtuning round. Default protgpt2. "
+             "zymctrl requires --ctrl_tag (an EC number). progen2 uses --progen2_model.",
+        action="store",
+        default="protgpt2",
+        choices=("protgpt2", "zymctrl", "progen2"),
+    )
+
+    workflow.add_argument(
+        "--ctrl_tag",
+        help="ZymCTRL only: Enzyme Commission (EC) control tag (e.g. 4.2.1.1) that conditions "
+             "ZymCTRL generation and finetuning every round. REQUIRED with --foldtune_generator "
+             "zymctrl; the tag must match every enzyme in the input fasta.",
+        action="store",
+        default=None,
+    )
+
+    workflow.add_argument(
+        "--progen2_model",
+        help="ProGen2 size for --foldtune_generator progen2. progen2-large and progen2-BFD90 are "
+             "excluded (broken HF config). "
+             "Default progen2-small.",
+        action="store",
+        default="progen2-small",
+        choices=("progen2-small", "progen2-medium", "progen2-oas", "progen2-xlarge"),
+    )
+
+    workflow.add_argument(
         "--finetune_strategy",
         help="Change the training strategy for finetuning. Use this is running out of vRAM!.",
         action="store",
@@ -69,6 +97,38 @@ def setup(subparsers):
         help="Use ProstT5 to speed up foldtuning by extracting 3di tokens from amino acid sequences directly instead of folding with ESMFold",
         action="store_true",
         default=False,
+    )
+
+    workflow.add_argument(
+        "--selection_distance",
+        help="How to rank structurally-valid generated sequences by embedding distance "
+             "to the natural training set each round. 'min' (default) = nearest-neighbor "
+             "L1 distance (the paper's 'semantic change'); 'max' = L1 distance to the "
+             "farthest training point.",
+        action="store",
+        default="min",
+        choices=("min", "max"),
+    )
+
+    workflow.add_argument(
+        "--fold_tmscore_threshold",
+        help="Keep a generated structure only if min(qtmscore, ttmscore) "
+             "to its best-matching input is >= this global TM-score (default 0.5, the "
+             "same-fold threshold).",
+        action="store",
+        type=float,
+        default=0.5,
+    )
+
+    workflow.add_argument(
+        "--fast_fold_evalue",
+        help="Fast foldtuning (--fast_folding): keep a generated sequence if its best 3Di "
+             "alignment E-value to any input is <= this value (default 1e-3). This is a "
+             "structural-alphabet proxy, NOT a TM-score fold guarantee (ProstT5 3Di "
+             "databases have no coordinates, so no TM-score is available).",
+        action="store",
+        type=float,
+        default=1e-3,
     )
 
 def run(args):

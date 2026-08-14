@@ -201,7 +201,9 @@ def run(args):
         use_cpu = True if int(args.GPUs) == 0 else False
         train_path, eval_path = prepare_data(args, bidirectional=False, ctrl_tag=args.ctrl_tag)
         
-        model = AutoModelForCausalLM.from_pretrained(f"hugohrban/{args.model}", trust_remote_code=True)
+
+        progen_src = args.finetuned if args.finetuned else f"hugohrban/{args.model}"
+        model = AutoModelForCausalLM.from_pretrained(progen_src, trust_remote_code=True)
         tokenizer = Tokenizer.from_pretrained(f"hugohrban/{args.model}")
         tokenizer.enable_padding(
             direction="right", pad_id=0, pad_token="<|pad|>", length=1024
@@ -220,7 +222,7 @@ def run(args):
         if len(test_data) == 0:
             training_args = TrainingArguments(output_dir=args.outdir, per_device_train_batch_size=int(args.batch_size),
                             num_train_epochs=int(args.epochs), save_strategy=args.save_on_epoch, logging_strategy="epoch", log_level='debug',
-                            learning_rate=float(args.lr), lr_scheduler_type=args.scheduler, save_only_model=True, use_cpu=use_cpu, seed=args.RNG_seed,
+                            learning_rate=float(args.lr), lr_scheduler_type=args.scheduler, save_only_model=True, use_cpu=use_cpu, seed=int(args.RNG_seed),
                             fp16=fp16, bf16=bf16, deepspeed=ds_config, gradient_accumulation_steps=int(args.grad_accum_steps))
             
             trainer = Trainer(
@@ -234,7 +236,7 @@ def run(args):
         else:
             training_args = TrainingArguments(output_dir=args.outdir, eval_strategy="epoch", per_device_train_batch_size=int(args.batch_size),per_device_eval_batch_size=int(args.batch_size),
                                     num_train_epochs=int(args.epochs), save_strategy=args.save_on_epoch, logging_strategy="epoch", log_level='debug',
-                                    learning_rate=float(args.lr), lr_scheduler_type=args.scheduler, save_only_model=True, use_cpu=use_cpu, seed=args.RNG_seed,
+                                    learning_rate=float(args.lr), lr_scheduler_type=args.scheduler, save_only_model=True, use_cpu=use_cpu, seed=int(args.RNG_seed),
                                     fp16=fp16, fsdp=args.strategy, deepspeed=ds_config, gradient_accumulation_steps=int(args.grad_accum_steps))
             trainer = Trainer(
                 model=model,
@@ -302,6 +304,8 @@ def run(args):
 
         elif args.model == "ZymCTRL":
             model = ZymCTRL(args)
+            if args.finetuned:
+                model = ZymCTRL.load_from_checkpoint(args.finetuned, args=args, strict=False)
             seq_dict_df = ProtGPT2_wrangle(data, model.tokenizer)
             dataloader = torch.utils.data.DataLoader(seq_dict_df, shuffle=True, batch_size=int(args.batch_size),
                                                      num_workers=0)
