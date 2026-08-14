@@ -61,7 +61,7 @@ plotly = "*"
 pydantic = "*"
 pyfiglet = "*"
 pytest = "*"
-rdkit = "*"
+rdkit = ">=2024.3.2"
 scikit-learn = "*"
 scikit-optimize = "*"
 seaborn = "*"
@@ -70,11 +70,14 @@ sentencepiece = ">=0.1.99,<0.2"
 setuptools = ">=80.9.0,<81"
 skops = "*"
 spyrmsd = "*"
-smina = "*"
+# smina = "*"
 swig = "*"
 tensorboard = "*"
 tensorboardx = "*"
-transformers = "*"
+# Pinned < 4.50 (zam, 2026-07-20): transformers >= 4.50 loads models on the meta
+# device by default, which breaks ProtGPT2 .to("cuda:0") with torch 2.3.1
+# ("Cannot copy out of meta tensor"). 4.49 is the newest pre-refactor release.
+transformers = ">=4.49,<4.50"
 typed-argument-parser = "*"
 umap-learn = "*"
 urllib3 = "*"
@@ -84,6 +87,7 @@ dgl = "<=2.4.0"
 compilers = ">=1.10.0,<2"
 pyrsistent = ">=0.20.0,<0.21"
 pytorch = ">=2.3.0,<3"
+torchdata = "<=0.9.0"
 torchvision = "*"
 typer = ">=0.16.0,<0.17"
 flash-attn = "*"
@@ -97,6 +101,8 @@ safetensors = ">=0.5.3,<0.6"
 pyparsing = ">=3.2.3,<4"
 foldseek = ">=10.941cd33,<11"
 seqkit = "*"
+mashumaro = "*"
+einx = "*"
 
 
 [system-requirements]
@@ -111,18 +117,18 @@ pip-extra-index-urls = [
 [pypi-dependencies]
 antipickle = ">=0.2.0, <0.3"
 biobb-vs = ">=5.1.0, <6"
-calm = { git = "https://github.com/martinez-zacharya/CaLM.git" }
+calm = { git = "https://github.com/martinez-zacharya/CaLM.git", rev = "2b3a9b8985b0940ed8277e4d11d21e530b6aaf34" }
 cuequivariance-ops-cu12 = ">=0.5.1, <0.6"
 cuequivariance-ops-torch-cu12 = ">=0.5.1, <0.6"
 cuequivariance-torch = ">=0.5.1, <0.6"
-ecpick = { git = "https://github.com/martinez-zacharya/ECPICK.git" }
+ecpick = { git = "https://github.com/martinez-zacharya/ECPICK.git", rev = "03c04834f40e6cbb084896196ea10f36a4e0cf0a" }
 fairscale = ">=0.4.13, <0.5"
 # lightning = { git = "https://github.com/Lightning-AI/pytorch-lightning.git", rev = "4dc1dbce6365f15d1ec8b42410fc79df86d748fa" }
 # pytorch_lightning = {git="https://github.com/Lightning-AI/pytorch-lightning/tree/master/src/pytorch_lightning.git", rev="main"}
 # lightning = {url="https://github.com/Lightning-AI/lightning/archive/refs/heads/master.zip"}
 pytorch_lightning = "<=2.5.0"
 lightdock = { git = "https://github.com/martinez-zacharya/lightdock.git", rev = "7472aea30bae7f18cf4570ad5ec559196f3b5752" }
-prolif = { git = "https://github.com/chemosim-lab/ProLIF.git" }
+prolif = { git = "https://github.com/chemosim-lab/ProLIF.git", rev = "b016f0917f62fc9f5396b62bb21d678a8ee0cbb7" }
 reprint = ">=0.6.0, <0.7"
 rna-fm = ">=0.2.2, <0.3"
 # torch = { version = ">=2.3.0", index = "https://download.pytorch.org/whl/cu126" }
@@ -131,7 +137,7 @@ rna-fm = ">=0.2.2, <0.3"
 torch-sparse = {url="https://data.pyg.org/whl/torch-2.7.0%2Bcu126/torch_sparse-0.6.18%2Bpt27cu126-cp311-cp311-linux_x86_64.whl"} 
 torch_cluster = {url="https://data.pyg.org/whl/torch-2.7.0%2Bcu126/torch_cluster-1.6.3%2Bpt27cu126-cp311-cp311-linux_x86_64.whl"} 
 torch_spline_conv = {url="https://data.pyg.org/whl/torch-2.7.0%2Bcu126/torch_spline_conv-1.2.2%2Bpt27cu126-cp311-cp311-linux_x86_64.whl"}
-scasa = { git = "https://github.com/martinez-zacharya/SCASA.git" }
+scasa = { git = "https://github.com/martinez-zacharya/SCASA.git", rev = "a4f82b20f767b6c0fafea84754ac27ec965ad980" }
 biotite = "*"
 # pyg = {version = "*", index="https://data.pyg.org/whl/torch-2.7.0+cu126.html"}
 ninja = "*"

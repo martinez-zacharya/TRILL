@@ -113,7 +113,7 @@ def run(args):
     from loguru import logger
     from trill.utils.genie2 import clone_and_install_genie2, download_genie2_weights, sample_genie2_unconditional, sample_genie2_conditional, add_remark_to_pdb
     from .commands_common import cache_dir
-    from trill.utils.setup_dgl import setup_dgl, downgrade_pytorch, restore_pytorch
+    # from trill.utils.setup_dgl import setup_dgl, downgrade_pytorch, restore_pytorch
 
     # command = "conda install -c dglteam dgl-cuda11.7 -y -S -q".split(" ")
     # subprocess.run(command, check=True)

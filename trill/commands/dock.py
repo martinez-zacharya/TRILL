@@ -191,7 +191,7 @@ def run(args):
     import pytorch_lightning as pl
     import requests
     import torch
-    from esm.inverse_folding.util import load_coords
+    from trill.utils.inverse_folding.util import load_coords
     from git import Repo
     import pandas as pd
     from icecream import ic

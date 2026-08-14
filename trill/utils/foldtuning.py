@@ -43,7 +43,7 @@ def foldtune(args):
                 finetune_cmd = f'trill {args.name}_round{i} {args.GPUs} --RNG_seed {args.RNG_seed} --outdir {abspath} finetune ProtGPT2 {args.query} --epochs 1 --batch_size {args.finetune_batch_size} --strategy {args.finetune_strategy}'.split(' ')
             else:
                 finetune_cmd = f'trill {args.name}_round{i} {args.GPUs} --RNG_seed {args.RNG_seed} --outdir {abspath} finetune ProtGPT2 {args.query} --epochs 1 --batch_size {args.finetune_batch_size}'.split(' ')
-            subprocess.run(finetune_cmd)
+            subprocess.run(finetune_cmd, check=True)
             seqkit_stats_cmd = f'seqkit stats -a -T {args.query}'.split(' ')
             result = subprocess.run(seqkit_stats_cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, check=True)
             output = result.stdout

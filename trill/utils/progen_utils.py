@@ -245,7 +245,7 @@ def create_deepspeed_config(args):
             }
         }
     
-    elif not args.strategy:
+    else:
         config = None
 
     return config

@@ -193,7 +193,11 @@ def run(args):
         if args.batch_size == 1:
             logger.warning('--batch_size is set to 1, the default. Unless this is on purpose, you can speed up generation with a larger batch_size.')
         pipe = pipeline('text-generation', model=model, tokenizer=f"hugohrban/{args.model}", trust_remote_code=True, device=device, torch_dtype="float16" if device == "cuda" else "float32")
-        
+
+        # ProGenConfig exposes layer count as n_layer; newer transformers' DynamicCache needs num_hidden_layers
+        if not hasattr(pipe.model.config, "num_hidden_layers"):
+            pipe.model.config.num_hidden_layers = pipe.model.config.n_layer
+
         if args.ctrl_tag and args.ctrl_tag != "":
             args.ctrl_tag = f'<|{args.ctrl_tag}|>'
 
@@ -210,6 +214,7 @@ def run(args):
                 repetition_penalty=float(args.repetition_penalty),
                 num_return_sequences=min(args.batch_size, args.num_return_sequences - len(all_outseqs)), 
                 temperature=float(args.temp), 
+                max_new_tokens=int(args.max_length),
                 truncation=True, 
                 eos_token_id=2
             )

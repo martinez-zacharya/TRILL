@@ -21,8 +21,8 @@ from openff.toolkit import  Molecule
 from openmm import unit
 # from openmmforcefields.generators import SMIRNOFFTemplateGenerator
 # from openmmforcefields.generators import SystemGenerator
-from openmmforcefields_template_generators import SMIRNOFFTemplateGenerator
-from openff.interchange import Interchange
+from trill.utils.openmmforcefields_template_generators import SMIRNOFFTemplateGenerator
+# from openff.interchange import Interchange
 from openff.toolkit import ForceField as ff_ff
 from openff.toolkit.utils import get_data_file_path
 from openmm.unit.quantity import Quantity
@@ -31,12 +31,11 @@ from icecream import ic
 from loguru import logger
 import numpy as np
 import copy
-from openff.interchange import Interchange
 from openmm import app
 from rdkit import Chem
 import parmed as pmd
 import subprocess
-from openff.interchange.components._packmol import RHOMBIC_DODECAHEDRON, pack_box
+# from openff.interchange.components._packmol import RHOMBIC_DODECAHEDRON, pack_box
 from .cuda_utils import set_platform_properties
 import os
 import pandas as pd
